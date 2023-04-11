@@ -30,6 +30,13 @@ pub struct EQC_Sign {
     pub csc_scheme: CrossSetCommitment,
 }
 
+pub struct EQC_Signature {
+    pub sigma: Sigma,
+    pub update_key: UpdateKey,
+    pub commitment_vector: Vec<G1>,
+    pub opening_vector: Vec<FieldElement>,
+}
+
 impl EQC_Sign {
     /// New constructor. Initializes the EQC_Sign
     ///
@@ -103,7 +110,7 @@ impl EQC_Sign {
         sk: &Vec<FieldElement>,
         messages_vector: &Vec<Vec<String>>,
         k_prime: Option<usize>,
-    ) -> (Sigma, UpdateKey, Vec<G1>, Vec<FieldElement>) {
+    ) -> EQC_Signature {
         // encode all messagse sets of the messages vector as set commitments
         let mut commitment_vector = Vec::new();
         let mut opening_vector = Vec::new();
@@ -157,7 +164,13 @@ impl EQC_Sign {
             }
             update_key = Some(uk);
         }
-        (sigma, update_key, commitment_vector, opening_vector)
+
+        EQC_Signature {
+            sigma,
+            update_key,
+            commitment_vector,
+            opening_vector,
+        }
     }
 
     /// Verifies a signature for a given message set
@@ -192,10 +205,6 @@ impl EQC_Sign {
             left_side = GT::mul(left_side, &pair);
         }
 
-        // return whether the signature is valid
-        // (group.pair(Y, g_2) == group.pair(g_1, Y_hat)) and
-        // (group.pair(T, g_2) == group.pair(Y, vk[2]) * group.pair(pk_u, vk[1])) and
-        // (right_side == left_side)
         if let VK::G2(vk2) = &vk[2] {
             if let VK::G2(vk1) = &vk[1] {
                 GT::ate_pairing(Y, g_2) == GT::ate_pairing(g_1, Y_hat)
@@ -208,10 +217,93 @@ impl EQC_Sign {
         } else {
             panic!("Invalid verification key");
         }
-        // GT::ate_pairing(&Y, &g_2) == GT::ate_pairing(&g_1, &Y_hat)
-        //     && GT::ate_pairing(&T, &g_2)
-        //         == GT::ate_pairing(&Y, &vk[2]) * GT::ate_pairing(&pk_u, &vk[1])
-        //     && right_side == left_side
+    }
+
+    /// Change representation of the signature message pair to a new commitment vector and user public key.
+    /// This is used to update the signature message pair to a new user public key.
+    /// The new commitment vector is computed using the old commitment vector and the new user public key.
+    /// The new user public key is computed using the old user public key and the update key.
+    /// The update key is computed during the signing process.
+    ///
+    /// # Arguments
+    /// vk: the verification key
+    /// pk_u: the user public key
+    /// commitment_vector: the commitment vector
+    /// opening_vector: opening information vector related to commitment vector
+    /// sigma: the signature
+    /// mu: randomness is used to randomize commitment vector and signature accordingly
+    /// psi: randomness is used to randomize commitment vector and signature accordingly
+    /// b: a flag to determine if it needs to randomize update_key as well or not
+    /// update_key: it can be none, in which case there is no need for randomization
+    ///
+    /// # Returns
+    /// a randomization of message-signature pair
+    pub fn change_rep(
+        &self,
+        vk: &Vec<VK>,
+        pk_u: &G1,
+        orig_sig: &EQC_Signature,
+        mu: &FieldElement,
+        psi: &FieldElement,
+        randomize_update_key: bool,
+    ) -> (G1, EQC_Signature) {
+        // pick randomness, chi
+        let chi = FieldElement::random();
+
+        // randomize Commitment and opening vectors and user public key with randomness mu, chi
+        let mut rndmz_commit_vector = Vec::new();
+        for i in 0..orig_sig.commitment_vector.len() {
+            let rndmz_commit_vector_i = mu * &orig_sig.commitment_vector[i];
+            rndmz_commit_vector.push(rndmz_commit_vector_i);
+        }
+
+        let mut rndmz_opening_vector = Vec::new();
+        for i in 0..orig_sig.opening_vector.len() {
+            let rndmz_opening_vector_i = mu * &orig_sig.opening_vector[i];
+            rndmz_opening_vector.push(rndmz_opening_vector_i);
+        }
+
+        // Randomize public key with two given randomness psi and chi.
+        // rndmz_pk_u = psi * (pk_u + chi * g_1)
+        let rndmz_pk_u = psi * &(pk_u + &chi * &self.csc_scheme.param_sc.g_1);
+
+        // adapt the signiture for the randomized coomitment vector and PK_u_prime
+        let Sigma { Z, Y, Y_hat, T } = &orig_sig.sigma;
+
+        if let VK::G1(vk0) = &vk[0] {
+            let sigma_prime = Sigma {
+                Z: mu * &psi.inverse() * Z,
+                Y: psi * Y,
+                Y_hat: psi * Y_hat,
+                T: psi * &(T + &chi * vk0),
+            };
+
+            // randomize update key with randomness mu
+            let mut rndmz_update_key = None;
+            if randomize_update_key {
+                if let Some(update_key) = &orig_sig.update_key {
+                    let mut rndmz_update_key_vec = Vec::new();
+                    for key in update_key.iter() {
+                        let rndmz_update_key_vec_i = mu * key;
+                        rndmz_update_key_vec.push(rndmz_update_key_vec_i);
+                    }
+                    rndmz_update_key = Some(rndmz_update_key_vec);
+                }
+            }
+
+            // return public key and Signature
+            (
+                rndmz_pk_u,
+                EQC_Signature {
+                    sigma: sigma_prime,
+                    update_key: rndmz_update_key,
+                    commitment_vector: rndmz_commit_vector,
+                    opening_vector: rndmz_opening_vector,
+                },
+            )
+        } else {
+            panic!("Invalid verification key");
+        }
     }
 }
 
@@ -279,7 +371,7 @@ mod tests {
         // Generate a signature and verify it
         // create a signing keys for 10 messagses
         let max_cardinal = 5;
-        let sign_scheme = EQC_Sign::new(max_cardinal); // (pp, alpha)
+        let sign_scheme = EQC_Sign::new(max_cardinal);
 
         let l_message = 10;
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
@@ -290,17 +382,56 @@ mod tests {
         let messages_vectors = setup_tests();
 
         // create a signature sigma for user pk_u, without update_key
-        let (sigma, update_key, commitment_vector, opening_vector) = sign_scheme.sign(
+        let signature = sign_scheme.sign(
             &pk_u,
             &sk,
             &vec![messages_vectors.message1_str, messages_vectors.message2_str],
             None,
         );
 
-        assert!(sign_scheme.verify(&vk, &pk_u, &commitment_vector, &sigma));
+        assert!(sign_scheme.verify(&vk, &pk_u, &signature.commitment_vector, &signature.sigma));
     }
 
     // Generate a signature, run changrep function and verify it
     #[test]
-    fn test_changerep() {}
+    fn test_changerep() {
+        //create a signing keys for 10 messagses
+        let max_cardinal = 5;
+        let sign_scheme = EQC_Sign::new(max_cardinal);
+
+        let l_message = 10;
+        let (sk, vk) = sign_scheme.sign_keygen(l_message);
+
+        // create a user key pair
+        let (sk_u, pk_u) = sign_scheme.user_keygen();
+
+        let messages_vectors = setup_tests();
+
+        // create a signature for pk_u, (C1, C2) related to (message1_str, message2_str) with k = 2, and
+        // also output update_key for k_prime = 4,
+        // allow adding 2 more commitments for range k = 2 to k' = 4
+        let k_prime = Some(4);
+        let signature_original = sign_scheme.sign(
+            &pk_u,
+            &sk,
+            &vec![messages_vectors.message1_str, messages_vectors.message2_str],
+            k_prime,
+        );
+
+        // run changerep function (without randomizing update_key) to
+        // randomize the sign, pk_u and commitment vector
+        let b = false;
+        let mu = FieldElement::random();
+        let psi = FieldElement::random();
+
+        let (rndmz_pk_u, signature) =
+            sign_scheme.change_rep(&vk, &pk_u, &signature_original, &mu, &psi, b);
+
+        assert!(sign_scheme.verify(
+            &vk,
+            &rndmz_pk_u,
+            &signature.commitment_vector,
+            &signature.sigma
+        ));
+    }
 }
