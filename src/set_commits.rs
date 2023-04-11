@@ -461,11 +461,15 @@ mod test {
     #[test]
     fn test_commit_and_open() {
         let max_cardinal = 5;
-        let set_str: InputType = InputType::VecString(vec![
-            "age = 30".to_string(),
-            "name = Alice".to_string(),
-            "driver license = 12".to_string(),
-        ]);
+
+        // Set 1
+        let age = "age = 30";
+        let name = "name = Alice";
+        let drivers = "driver license = 12";
+
+        let set_str: InputType =
+            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+
         let (pp, alpha) = SetCommitment::new(max_cardinal);
         let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str);
         // assrt open_set with pp, commitment, O, set_str
@@ -480,13 +484,16 @@ mod test {
     #[test]
     fn test_open_verify_subset() {
         let max_cardinal = 5;
-        let set_str: InputType = InputType::VecString(vec![
-            "age = 30".to_string(),
-            "name = Alice".to_string(),
-            "driver license = 12".to_string(),
-        ]);
-        let subset_str_1: InputType =
-            InputType::VecString(vec!["age = 30".to_string(), "name = Alice".to_string()]);
+
+        // Set 1
+        let age = "age = 30";
+        let name = "name = Alice";
+        let drivers = "driver license = 12";
+
+        let set_str: InputType =
+            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+
+        let subset_str_1: InputType = InputType::VecString(vec![age.to_owned(), name.to_owned()]);
         let (pp, alpha) = SetCommitment::new(max_cardinal);
         let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str);
         let witness_subset =
@@ -508,18 +515,24 @@ mod test {
     #[test]
     fn test_aggregate_verify_cross() {
         // check aggregation of witnesses using cross set commitment scheme
-        // set_str = ["age = 30", "name = Alice ", "driver license = 12"]
-        // set_str2 = ["Gender = male", "componey = XX ", "driver license type = B"]
-        let set_str: InputType = InputType::VecString(vec![
-            "age = 30".to_string(),
-            "name = Alice".to_string(),
-            "driver license = 12".to_string(),
-        ]);
+
+        // Set 1
+        let age = "age = 30";
+        let name = "name = Alice";
+        let drivers = "driver license = 12";
+
+        // Set 2
+        let gender = "Gender = male";
+        let company = "company = ACME Inc.";
+        let alt_drivers = "driver license type = B";
+
+        let set_str: InputType =
+            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
         let set_str2: InputType = InputType::VecString(vec![
-            "Gender = male".to_string(),
-            "company = ACME Inc.".to_string(),
-            "driver license type = B".to_string(),
+            gender.to_owned(),
+            company.to_owned(),
+            alt_drivers.to_owned(),
         ]);
 
         // create two set commitments for two sets set_str and set_str2
@@ -529,13 +542,10 @@ mod test {
         let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2);
 
         // create a witness for each subset -> W1 and W2
-        let subset_str_1: InputType =
-            InputType::VecString(vec!["age = 30".to_string(), "name = Alice".to_string()]);
+        let subset_str_1: InputType = InputType::VecString(vec![age.to_owned(), name.to_owned()]);
 
-        let subset_str_2: InputType = InputType::VecString(vec![
-            "Gender = male".to_string(),
-            "company = ACME Inc.".to_string(),
-        ]);
+        let subset_str_2: InputType =
+            InputType::VecString(vec![gender.to_owned(), company.to_owned()]);
 
         let witness_1 =
             CrossSetCommitment::open_subset(&pp, &set_str, &opening_info_1, &subset_str_1)
