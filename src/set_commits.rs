@@ -9,6 +9,7 @@ use amcl_wrapper::univar_poly::UnivarPolynomial; // Univariate polynomial repres
 use sha2::{Digest, Sha256, Sha512};
 use std::collections::HashSet;
 use std::str::Bytes;
+
 /// First tuple is the public parameters commitment for G2, type we get returned from the Python code: [g_2.mul(alpha_trapdoor.pow(i)) for i in range(max_cardinality)] # This loops through the range of max_cardinality and multiplies g_2 by alpha_trapdoor raised to the power of i. Which is a list of G2 elements, or in Rust a Vec<G2>.
 /// Second tuple is the public parameters commitment for G1, type we get returned from the Rust code: [g_1.mul(alpha_trapdoor.pow(i)) for i in range(max_cardinality)] # This loops through the range of max_cardinality and multiplies g_1 by alpha_trapdoor raised to the power of i.
 /// Third entry in the tuple is the type returned from the G1 generator.
@@ -18,8 +19,8 @@ use std::str::Bytes;
 pub struct ParamSetCommitment {
     pp_commit_G1: Vec<G1>,
     pp_commit_G2: Vec<G2>,
-    g_2: G2,
-    g_1: G1,
+    pub g_2: G2,
+    pub g_1: G1,
 }
 
 impl ParamSetCommitment {
@@ -60,7 +61,7 @@ impl ParamSetCommitment {
 /// ParamSetCommitment: public parameters for the commitment scheme
 /// AlphaTrapdoor: Pederson trapdoor, which is a secret key generated from the setup function as a random order of the Group
 pub trait Commitment {
-    fn new(max_cardinality: usize) -> (ParamSetCommitment, FieldElement) {
+    fn setup(max_cardinality: usize) -> (ParamSetCommitment, FieldElement) {
         let alpha_trapdoor = FieldElement::random();
 
         (
@@ -292,7 +293,10 @@ pub struct SetCommitment {}
 impl Commitment for SetCommitment {}
 
 /// Here is CrossSetCommitment that extends the Set Commitment to provide aggregation witness and a batch verification
-pub struct CrossSetCommitment {}
+pub struct CrossSetCommitment {
+    pub param_sc: ParamSetCommitment,
+    alpha_trapdoor: FieldElement,
+}
 
 // impl all default traits for CrossSetCommitment
 impl Commitment for CrossSetCommitment {}
@@ -306,9 +310,13 @@ impl CrossSetCommitment {
     ///
     /// # Returns
     /// CrossSet Commitment scheme
-    // pub fn new(t: usize) -> CrossSetCommitment {
-    //     CrossSetCommitment {}
-    // }
+    pub fn new(t: usize) -> Self {
+        let (param_sc, alpha_trapdoor) = CrossSetCommitment::setup(t);
+        Self {
+            param_sc: param_sc.clone(),
+            alpha_trapdoor: alpha_trapdoor.clone(),
+        }
+    }
 
     /// Computes an aggregate proof of valid subsets of a set of messages.
     ///
@@ -470,7 +478,7 @@ mod test {
         let set_str: InputType =
             InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
-        let (pp, alpha) = SetCommitment::new(max_cardinal);
+        let (pp, alpha) = SetCommitment::setup(max_cardinal);
         let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str);
         // assrt open_set with pp, commitment, O, set_str
         assert!(SetCommitment::open_set(
@@ -494,7 +502,7 @@ mod test {
             InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
         let subset_str_1: InputType = InputType::VecString(vec![age.to_owned(), name.to_owned()]);
-        let (pp, alpha) = SetCommitment::new(max_cardinal);
+        let (pp, alpha) = SetCommitment::setup(max_cardinal);
         let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str);
         let witness_subset =
             SetCommitment::open_subset(&pp, &set_str, &opening_info, &subset_str_1);
@@ -537,7 +545,7 @@ mod test {
 
         // create two set commitments for two sets set_str and set_str2
         let max_cardinal = 5;
-        let (pp, alpha) = CrossSetCommitment::new(max_cardinal);
+        let (pp, alpha) = CrossSetCommitment::setup(max_cardinal);
         let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str);
         let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2);
 
