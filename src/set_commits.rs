@@ -204,9 +204,6 @@ pub trait Commitment {
         // print len of coeff_witn
         println!("len of coeff_witn: {}", coeff_witn.coefficients().len());
 
-        // print len of pp_commit_G1
-        println!("len of pp_commit_G1: {}", param_sc.pp_commit_G1.len());
-
         // multiply each G1 in pp_commit_G1 Vec<G1> by each coefficient witness in the polynomial (FieldElementVector)
         let mut witn_groups = Vec::with_capacity(coeff_witn.coefficients().len());
         for i in 0..coeff_witn.coefficients().len() {
@@ -309,9 +306,9 @@ impl CrossSetCommitment {
     ///
     /// # Returns
     /// CrossSet Commitment scheme
-    pub fn new(t: usize) -> CrossSetCommitment {
-        CrossSetCommitment {}
-    }
+    // pub fn new(t: usize) -> CrossSetCommitment {
+    //     CrossSetCommitment {}
+    // }
 
     /// Computes an aggregate proof of valid subsets of a set of messages.
     ///
@@ -321,19 +318,14 @@ impl CrossSetCommitment {
     ///
     /// # Returns
     /// a proof which is a aggregate of witnesses and shows all subsets are valid for respective sets
-    pub fn aggregate_cross(witness_vector: Vec<G1>, commit_vector: Vec<G1>) -> G1 {
+    pub fn aggregate_cross(witness_vector: &Vec<G1>, commit_vector: &Vec<G1>) -> G1 {
         let mut proof = G1::identity();
 
         for i in 0..witness_vector.len() {
             // generate a BigNumber challenge t_i by hashing a number of EC points
             // join all the commit_vector elements into a single vector of hex
             let Cstring = commit_vector[i].to_hex();
-
-            //  get the sha256 hash of the Cstring
-            let chash = Sha256::digest(Cstring.as_bytes());
-
-            // get BigNum from chash binary. FieldElement is a BigNum, which is a miracl_core::big::Big
-            let hash_i = FieldElement::from_msg_hash(&chash);
+            let hash_i: FieldElement = FieldElement::from_msg_hash(&Cstring.as_bytes());
 
             // append witnessness_group_elements
             // add to existing proof
@@ -352,10 +344,10 @@ impl CrossSetCommitment {
     /// # Returns
     /// true if the proof is valid, false otherwise
     pub fn verify_cross(
-        param_sc: ParamSetCommitment,
-        commit_vector: Vec<G1>,
+        param_sc: &ParamSetCommitment,
+        commit_vector: &Vec<G1>,
         subsets_vector_str: &Vec<InputType>,
-        proof: G1,
+        proof: &G1,
     ) -> bool {
         // Steps:
         // 1. convert message str into the BN
@@ -413,8 +405,8 @@ impl CrossSetCommitment {
                 .fold(G2::identity(), |acc, x| acc + x);
 
             let Cstring = commit_vector[j].to_hex();
-            let chash = Sha256::digest(Cstring.as_bytes());
-            let hash_i = FieldElement::from_bytes(&chash[..]).unwrap();
+            let hash_i: FieldElement = FieldElement::from_msg_hash(&Cstring.as_bytes());
+
             let GT_element = GT::ate_pairing(&commit_vector[j], &(hash_i * temp_sum));
             vector_GT.push(GT_element);
         }
@@ -443,10 +435,6 @@ pub fn mul_and_fold(monypol_coeff: Vec<FieldElement>, param_sc: ParamSetCommitme
     folded
 }
 
-// # In python, creates a set that is not intersection of two other sets
-// def not_intersection(list_S, list_T):
-// set_s_not_t = [value for value in list_S if value not in list_T]
-// return set_s_not_t
 pub fn not_intersection(
     list_S: &Vec<FieldElement>,
     list_T: Vec<FieldElement>,
@@ -459,62 +447,6 @@ pub fn not_intersection(
     }
     set_s_not_t
 }
-
-// Equivalent Rust test for these Python tests:
-// """
-// This is a Test (and example of how it works) of set commitment and cross set commitment: set_commit.py
-// This file contains unit tests for the functions in set_commit.py
-// It tests the functions with different inputs and verifies that they produce the expected outputs.
-// """
-
-// from core.set_commit import SetCommitment, CrossSetCommitment
-
-// ## messagses
-// set_str = ["age = 30", "name = Alice ", "driver license = 12"]
-// set_str2 = ["Gender = male", "componey = XX ", "driver license type = B"]
-// ## subsets of messagses
-// subset_str_1 = ["age = 30", "name = Alice "]
-// subset_str_2 = ["Gender = male", "componey = XX "]
-
-// def setup_module(module):
-//     print("__________Setup__test set commitment___________")
-//     global sc_scheme, cssc_scheme, pp
-//     # create SC and cssc objects
-//     sc_scheme = SetCommitment(max_cardinal =5)
-//     cssc_scheme = CrossSetCommitment(max_cardinal = 5)
-//     # create public parameters for SC schemes
-//     pp, alpha = sc_scheme.setup()
-
-// def test_commit_and_open():
-//     # create set commitment and opening for message set:  set_str
-//     (Commitment, O) = sc_scheme.commit_set(param_sc=pp, mess_set_str=set_str)
-//     # check if set commitment is correct with opening information
-//     assert(sc_scheme.open_set(pp, Commitment, O, set_str)), ValueError("set is not match with commit and opening info")
-
-// def test_open_verify_subset():
-//     # create set commitment and opening for message set:  set_str
-//     (commitment, O) = sc_scheme.commit_set(param_sc=pp, mess_set_str=set_str)
-//     # create witness for subset message subset str_1 due to commitment and opening
-//     witness = sc_scheme.open_subset(pp, set_str, O, subset_str_1)
-//     # check if subset is match with witness and commitment
-//     assert sc_scheme.verify_subset(pp, commitment, subset_str_1, witness), "subset is not match with witness"
-
-// def test_aggregate_verify_cross():
-//     """check aggregation of witnesses using cross set commitment scheme"""
-//     # create two set commitments for two sets set_str and set_str2
-//     C1, O1 = cssc_scheme.commit_set(pp, set_str)
-//     C2, O2 = cssc_scheme.commit_set(pp, set_str2)
-
-//     ## create a witness for each subset -> W1 and W2
-//     W1 = cssc_scheme.open_subset(pp, set_str, O1, subset_str_1)
-//     W2 = cssc_scheme.open_subset(pp, set_str2, O2, subset_str_2)
-
-//     ## aggregate all witnesses for a subset is correct-> proof
-//     proof = cssc_scheme.aggregate_cross(witness_vector=[W1, W2], commit_vector=[C1, C2])
-
-//     ## verification aggregated witnesses
-//     assert( cssc_scheme.verify_cross(pp, commit_vector=[C1, C2],
-//                                   subsets_vector_str=[subset_str_1, subset_str_2], proof=proof)), ValueError("verification aggegated witnesses fails")
 
 #[cfg(test)]
 mod test {
@@ -562,11 +494,69 @@ mod test {
 
         // assert that there is some witness_subset
         assert!(witness_subset.is_some());
+
+        let witness_subset = witness_subset.expect("Some witness");
+
         assert!(SetCommitment::verify_subset(
             &pp,
             &commitment,
             &subset_str_1,
-            &witness_subset.expect("Some witness")
+            &witness_subset
+        ));
+    }
+
+    #[test]
+    fn test_aggregate_verify_cross() {
+        // check aggregation of witnesses using cross set commitment scheme
+        // set_str = ["age = 30", "name = Alice ", "driver license = 12"]
+        // set_str2 = ["Gender = male", "componey = XX ", "driver license type = B"]
+        let set_str: InputType = InputType::VecString(vec![
+            "age = 30".to_string(),
+            "name = Alice".to_string(),
+            "driver license = 12".to_string(),
+        ]);
+
+        let set_str2: InputType = InputType::VecString(vec![
+            "Gender = male".to_string(),
+            "company = ACME Inc.".to_string(),
+            "driver license type = B".to_string(),
+        ]);
+
+        // create two set commitments for two sets set_str and set_str2
+        let max_cardinal = 5;
+        let (pp, alpha) = CrossSetCommitment::new(max_cardinal);
+        let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str);
+        let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2);
+
+        // create a witness for each subset -> W1 and W2
+        let subset_str_1: InputType =
+            InputType::VecString(vec!["age = 30".to_string(), "name = Alice".to_string()]);
+
+        let subset_str_2: InputType = InputType::VecString(vec![
+            "Gender = male".to_string(),
+            "company = ACME Inc.".to_string(),
+        ]);
+
+        let witness_1 =
+            CrossSetCommitment::open_subset(&pp, &set_str, &opening_info_1, &subset_str_1)
+                .expect("Some Witness");
+
+        let witness_2 =
+            CrossSetCommitment::open_subset(&pp, &set_str2, &opening_info_2, &subset_str_2)
+                .expect("Some Witness");
+
+        // aggregate all witnesses for a subset is correct-> proof
+        let proof = CrossSetCommitment::aggregate_cross(
+            &vec![witness_1, witness_2],
+            &vec![commitment_1.clone(), commitment_2.clone()],
+        );
+
+        // verification aggregated witnesses
+        assert!(CrossSetCommitment::verify_cross(
+            &pp,
+            &vec![commitment_1, commitment_2],
+            &vec![subset_str_1, subset_str_2],
+            &proof
         ));
     }
 }
