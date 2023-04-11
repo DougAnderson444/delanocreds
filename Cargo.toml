@@ -1,0 +1,8 @@
+[package]
+name = "delanocreds"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+amcl_wrapper = { version = "0.4.0", features = ["bls381"] }
+sha2 = { version = "0.10" }
