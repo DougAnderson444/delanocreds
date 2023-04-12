@@ -436,6 +436,66 @@ impl EQC_Sign {
             panic!("No update key, cannot update");
         }
     }
+
+    /// Convert Signature
+    /// Creates a temporary (orphan) signature for use in the convert signature algorithm.
+    ///
+    /// # Arguments
+    /// vk: Verification Key
+    /// sk_u: Secret Key
+    /// sigma: Sigma {Z, Y, Y_hat, T} signature
+    ///
+    /// # Returns
+    /// temporary orphan signature
+    pub fn send_convert_sig(&self, vk: &[VK], sk_u: &FieldElement, sigma: &Sigma) -> Sigma {
+        let Sigma { Z, Y, Y_hat, T } = sigma;
+
+        // update component T of signature to remove the old key
+        if let VK::G1(vk0) = &vk[0] {
+            let t_new = T + (vk0 * sk_u).negation();
+            Sigma {
+                Z: Z.clone(),
+                Y: Y.clone(),
+                Y_hat: Y_hat.clone(),
+                T: t_new,
+            }
+        } else {
+            panic!("Invalid verification key");
+        }
+    }
+
+    /// Receive Converted Signature
+    /// On input a temporary (orphan) sigma signature and returns a new signature for the new public key.
+    ///
+    /// # Arguments
+    ///
+    /// vk: Verification Key
+    /// sk_r: Secret Key
+    /// sigma_orphan: Sigma {Z, Y, Y_hat, T} signature
+    ///
+    /// # Returns
+    /// new signature for the new public key
+    pub fn receive_convert_sig(
+        &self,
+        vk: &[VK],
+        sk_r: &FieldElement,
+        sigma_orphan: &Sigma,
+    ) -> Sigma {
+        let Sigma { Z, Y, Y_hat, T } = sigma_orphan;
+
+        // update component T of signature to remove the old key
+        if let VK::G1(vk0) = &vk[0] {
+            let t_new = T + (vk0 * sk_r);
+            Sigma {
+                Z: Z.clone(),
+                Y: Y.clone(),
+                Y_hat: Y_hat.clone(),
+                T: t_new,
+            }
+        } else {
+            panic!("Invalid verification key");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -761,6 +821,47 @@ mod tests {
             &rndmz_pk_u,
             &signature_tilde.commitment_vector,
             &signature_tilde.sigma
+        ));
+    }
+
+    /// run convert protocol (send_convert_sig, receive_convert_sig) to switch a pk_u to new pk_u and verify it
+    #[test]
+    fn test_convert() {
+        // 1. sign_keygen
+        let max_cardinal = 5;
+        let sign_scheme = EQC_Sign::new(max_cardinal);
+
+        let l_message = 10;
+        let (sk, vk) = sign_scheme.sign_keygen(l_message);
+
+        // 2. user_keygen
+        let (sk_u, pk_u) = sign_scheme.user_keygen();
+
+        // 3. sign
+        let messages_vectors = setup_tests();
+        let k_prime = Some(4);
+        let messages_vector = &vec![
+            InputType::VecString(messages_vectors.message1_str),
+            InputType::VecString(messages_vectors.message2_str),
+        ];
+
+        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime);
+
+        // 4. create second user_keygen pk_u_new, sk_new
+        let (sk_new, pk_u_new) = sign_scheme.user_keygen();
+
+        // 5. send_convert_sig to create sigma_orphan
+        let sigma_orphan = sign_scheme.send_convert_sig(&vk, &sk_u, &signature_original.sigma);
+
+        // 6. receive_convert_sig takes sigma_orphan to create sk_new and sigma_orphan
+        let sigma_new = sign_scheme.receive_convert_sig(&vk, &sk_new, &sigma_orphan);
+
+        // 7. verify the signature using sigma_new
+        assert!(sign_scheme.verify(
+            &vk,
+            &pk_u_new,
+            &signature_original.commitment_vector,
+            &sigma_new
         ));
     }
 }
