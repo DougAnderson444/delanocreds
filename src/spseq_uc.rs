@@ -2,20 +2,19 @@ use crate::set_commits::convert_mess_to_bn;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
 use crate::set_commits::InputType;
-use crate::set_commits::ParamSetCommitment;
 use crate::utils::polyfromroots;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
-use std::collections::HashMap;
 use std::ops::Mul;
+
 pub struct Sigma {
-    Z: G1,
-    Y: G1,
-    Y_hat: G2,
-    T: G1,
+    z: G1,
+    y_g1: G1,
+    y_hat: G2,
+    t: G1,
 }
 
 pub enum VK {
@@ -26,30 +25,30 @@ pub enum VK {
 pub type UpdateKey = Option<Vec<Vec<G1>>>;
 
 /// This is implementation of delegatable anonymous credential using SPSQE-UC signatures and set commitment.
-pub struct EQC_Sign {
+pub struct EqcSign {
     // public_parameters: ParamSetCommitment,
     // alpha_trapdoor: FieldElement,
     pub csc_scheme: CrossSetCommitment,
 }
 
-pub struct EQC_Signature {
+pub struct EqcSignature {
     pub sigma: Sigma,
     pub update_key: UpdateKey,
     pub commitment_vector: Vec<G1>,
     pub opening_vector: Vec<FieldElement>,
 }
 
-impl EQC_Sign {
-    /// New constructor. Initializes the EQC_Sign
+impl EqcSign {
+    /// New constructor. Initializes the EqcSign
     ///
     /// # Arguments
     /// t: max cardinality of the set. Cardinality of the set is in [1, t]. t is a public parameter.
     ///
     /// # Returns
-    /// EQC_Sign
-    pub fn new(t: usize) -> EQC_Sign {
+    /// EqcSign
+    pub fn new(t: usize) -> EqcSign {
         let csc_scheme = CrossSetCommitment::new(t);
-        EQC_Sign { csc_scheme }
+        EqcSign { csc_scheme }
     }
 
     /// Setup. Sets up the signature scheme by creating public parameters and a secret key
@@ -72,7 +71,7 @@ impl EQC_Sign {
         let mut sk = Vec::new();
         let mut vk: Vec<VK> = Vec::new();
         // sk has to be at least 2 longer than l_message, to compute `list_z` in `sign()` function which adds +2
-        for i in 0..l_message + 2 {
+        for _ in 0..l_message + 2 {
             let sk_i = FieldElement::random();
             // compute public keys
             let vk_i = sk_i.clone() * &self.csc_scheme.param_sc.g_2;
@@ -80,14 +79,14 @@ impl EQC_Sign {
             vk.push(VK::G2(vk_i));
         }
         // compute X_0 keys that is used for delegation
-        let X_0 = sk[0].clone() * &self.csc_scheme.param_sc.g_1;
-        vk.insert(0, VK::G1(X_0));
+        let x_0 = sk[0].clone() * &self.csc_scheme.param_sc.g_1;
+        vk.insert(0, VK::G1(x_0));
         (sk, vk) // vk is now of length l_message + 1 (or sk + 1)
     }
 
     /// Generates user key pair given the public parameters
     /// # Arguments
-    fn user_keygen(&self) -> (FieldElement, G1) {
+    pub fn user_keygen(&self) -> (FieldElement, G1) {
         let sk_u = FieldElement::random();
         let pk_u = sk_u.clone() * &self.csc_scheme.param_sc.g_1;
         (sk_u, pk_u)
@@ -107,13 +106,13 @@ impl EQC_Sign {
     ///
     /// # Returns
     /// signature, opening information, update key
-    fn sign(
+    pub fn sign(
         &self,
         pk_u: &G1,
         sk: &[FieldElement],
         messages_vector: &Vec<InputType>,
         k_prime: Option<usize>,
-    ) -> EQC_Signature {
+    ) -> EqcSignature {
         // encode all messagse sets of the messages vector as set commitments
         let mut commitment_vector = Vec::new();
         let mut opening_vector = Vec::new();
@@ -124,9 +123,9 @@ impl EQC_Sign {
         }
 
         // pick randomness y
-        let y = FieldElement::random();
+        let y_rand = FieldElement::random();
 
-        // compute sign -> sigma = (Z, Y, hat Ym T)
+        // compute sign -> sigma = (Z, Y, hat Ym t)
         let mut list_z = Vec::new();
         for i in 0..commitment_vector.len() {
             let z_i = sk[i + 2].clone() * commitment_vector[i].clone();
@@ -135,23 +134,28 @@ impl EQC_Sign {
 
         // temp_point = sum of all ec points in list_Z
         let mut temp_point = G1::identity();
-        for Z_i in list_z {
-            temp_point += Z_i;
+        for z_i in list_z {
+            temp_point += z_i;
         }
 
         // Z is y mod_inverse(order) times temp_point
-        let Z = y.inverse() * temp_point;
+        let z = y_rand.inverse() * temp_point;
 
         // Y = y* g_1
-        let Y = y.clone() * &self.csc_scheme.param_sc.g_1;
+        let y = y_rand.clone() * &self.csc_scheme.param_sc.g_1;
 
         // Y_hat = y * g_2
-        let Y_hat = y.clone() * &self.csc_scheme.param_sc.g_2;
+        let y_hat = y_rand.clone() * &self.csc_scheme.param_sc.g_2;
 
-        // T = sk[1] * Y + sk[0] * pk_u
-        let T = sk[1].clone() * Y.clone() + sk[0].clone() * pk_u;
+        // t = sk[1] * Y + sk[0] * pk_u
+        let t = sk[1].clone() * y.clone() + sk[0].clone() * pk_u;
 
-        let sigma = Sigma { Z, Y, Y_hat, T };
+        let sigma = Sigma {
+            z,
+            y_g1: y,
+            y_hat,
+            t,
+        };
 
         // check if the update key is requested
         // then compute update key using k_prime,
@@ -161,12 +165,12 @@ impl EQC_Sign {
             let mut k_prime = k_prime;
 
             if k_prime > messages_vector.len() {
-                // ensure k_prime is within range between k < k' < l, the max length of messages_vector
-                // k_prime = k_prime.clamp(messages_vector.len(), sk.len());
+                // enusre k_prime is maximum sk.len() - 2, which is l_message length from sign_keygen()
+                k_prime = k_prime.min(sk.len() - 2);
 
                 // usign = {}
                 // for item in range(len(messages_vector) + 1, k_prime + 1): # In Python, this syntax means "from len(messages_vector) + 1 to k_prime + 1". In rust, the equiv would be "len(messages_vector) + 1..k_prime + 1"
-                //     UK = [(y.mod_inverse(order) * sk[item + 1]) * pp_commit_G1[i] for i in range(max_cardinality)]
+                //     UK = [(y.mod_inverse(order) * sk[item + 1]) * pp_commit_g1[i] for i in range(max_cardinality)]
                 //     usign[item] = UK
                 //     update_key = usign
 
@@ -177,15 +181,15 @@ impl EQC_Sign {
                 for k in messages_vector.len() + 1..k_prime + 1 {
                     let mut uk = Vec::new();
                     for i in 0..self.csc_scheme.param_sc.max_cardinality {
-                        let uk_i = y.inverse()
+                        let uk_i = y_rand.inverse()
                             * sk[k + 1].clone()
-                            * &self.csc_scheme.param_sc.pp_commit_G1[i];
+                            * &self.csc_scheme.param_sc.pp_commit_g1[i];
                         uk.push(uk_i);
                     }
                     usign[k - 1] = uk.clone(); // first element is index 0 (message m is index m-1)
                 }
                 update_key = Some(usign);
-                return EQC_Signature {
+                return EqcSignature {
                     sigma,
                     update_key,
                     commitment_vector,
@@ -196,7 +200,7 @@ impl EQC_Sign {
             }
         }
 
-        EQC_Signature {
+        EqcSignature {
             sigma,
             update_key,
             commitment_vector,
@@ -205,25 +209,19 @@ impl EQC_Sign {
     }
 
     /// Verifies a signature for a given message set
-    pub fn verify(
-        &self,
-        vk: &Vec<VK>,
-        pk_u: &G1,
-        commitment_vector: &Vec<G1>,
-        sigma: &Sigma,
-    ) -> bool {
+    pub fn verify(&self, vk: &[VK], pk_u: &G1, commitment_vector: &Vec<G1>, sigma: &Sigma) -> bool {
         let g_1 = &self.csc_scheme.param_sc.g_1;
         let g_2 = &self.csc_scheme.param_sc.g_2;
-        let Sigma { Z, Y, Y_hat, T } = sigma;
+        let Sigma { z, y_g1, y_hat, t } = sigma;
 
-        let right_side = GT::ate_pairing(&Z, &Y_hat);
+        let right_side = GT::ate_pairing(z, y_hat);
 
         // pairing_op = [group.pair(commitment_vector[j], vk[j + 3]) for j in range(len(commitment_vector))]
         let mut pairing_op = Vec::new();
         for j in 0..commitment_vector.len() {
             // the only VK that is not G2 is the first elem we inserted at 0 back in sign_keygen()
             if let VK::G2(vkj3) = &vk[j + 3] {
-                let pair = GT::ate_pairing(&commitment_vector[j], &vkj3);
+                let pair = GT::ate_pairing(&commitment_vector[j], vkj3);
                 pairing_op.push(pair);
             } else {
                 panic!("Invalid verification key");
@@ -238,9 +236,9 @@ impl EQC_Sign {
 
         if let VK::G2(vk2) = &vk[2] {
             if let VK::G2(vk1) = &vk[1] {
-                GT::ate_pairing(Y, g_2) == GT::ate_pairing(g_1, Y_hat)
-                    && GT::ate_pairing(T, g_2)
-                        == GT::ate_pairing(Y, vk2) * GT::ate_pairing(pk_u, vk1)
+                GT::ate_pairing(y_g1, g_2) == GT::ate_pairing(g_1, y_hat)
+                    && GT::ate_pairing(t, g_2)
+                        == GT::ate_pairing(y_g1, vk2) * GT::ate_pairing(pk_u, vk1)
                     && right_side == left_side
             } else {
                 panic!("Invalid verification key");
@@ -271,13 +269,13 @@ impl EQC_Sign {
     /// returns an updated signature σ for a new commitment vector and corresponding openings
     pub fn change_rep(
         &self,
-        vk: &Vec<VK>,
+        vk: &[VK],
         pk_u: &G1,
-        orig_sig: &EQC_Signature,
+        orig_sig: &EqcSignature,
         mu: &FieldElement,
         psi: &FieldElement,
         b: bool,
-    ) -> (G1, EQC_Signature) {
+    ) -> (G1, EqcSignature) {
         // pick randomness, chi
         let chi = FieldElement::random();
 
@@ -299,14 +297,14 @@ impl EQC_Sign {
         let rndmz_pk_u = psi * &(pk_u + &chi * &self.csc_scheme.param_sc.g_1);
 
         // adapt the signiture for the randomized coomitment vector and PK_u_prime
-        let Sigma { Z, Y, Y_hat, T } = &orig_sig.sigma;
+        let Sigma { z, y_g1, y_hat, t } = &orig_sig.sigma;
 
         if let VK::G1(vk0) = &vk[0] {
             let sigma_prime = Sigma {
-                Z: mu * &psi.inverse() * Z,
-                Y: psi * Y,
-                Y_hat: psi * Y_hat,
-                T: psi * &(T + &chi * vk0),
+                z: mu * &psi.inverse() * z,
+                y_g1: psi * y_g1,
+                y_hat: psi * y_hat,
+                t: psi * &(t + &chi * vk0),
             };
 
             // randomize update key with randomness mu
@@ -328,8 +326,11 @@ impl EQC_Sign {
                     for k in orig_sig.commitment_vector.len() + 1..usign.len() {
                         let mut mainop = Vec::new();
                         let update_keylist = usign.get(k - 1).expect("Valid");
-                        for i in 0..self.csc_scheme.param_sc.max_cardinality {
-                            let mainop_i = mu * &psi.inverse() * &update_keylist[i];
+                        for item in update_keylist
+                            .iter()
+                            .take(self.csc_scheme.param_sc.max_cardinality)
+                        {
+                            let mainop_i = mu * &psi.inverse() * item;
                             mainop.push(mainop_i);
                         }
                         usign_prime[k - 1] = mainop;
@@ -340,7 +341,7 @@ impl EQC_Sign {
 
             (
                 rndmz_pk_u,
-                EQC_Signature {
+                EqcSignature {
                     sigma: sigma_prime,
                     update_key: rndmz_update_key,
                     commitment_vector: rndmz_commit_vector,
@@ -358,7 +359,7 @@ impl EQC_Sign {
     /// # Arguments
     /// message_l: message set at index l that will be added in message vector
     /// index_l: index l denotes the next position of message vector that needs to be fixed
-    /// signature: EQC_Signature {sigma, update_key, commitment_vector, opening_vector}
+    /// signature: EqcSignature {sigma, update_key, commitment_vector, opening_vector}
     /// mu: optional randomness, default to 1. Only applies when same randomness is used previosuly in changerep
     ///
     /// # Returns
@@ -367,10 +368,10 @@ impl EQC_Sign {
         &self,
         message_l: &InputType,
         index_l: usize,
-        orig_sig: &EQC_Signature,
+        orig_sig: &EqcSignature,
         mu: &FieldElement,
-    ) -> (EQC_Signature, FieldElement) {
-        let Sigma { Z, Y, Y_hat, T } = &orig_sig.sigma;
+    ) -> (EqcSignature, FieldElement) {
+        let Sigma { z, y_g1, y_hat, t } = &orig_sig.sigma;
         let (commitment_l, opening_l) = self.encode(message_l);
 
         let rndmz_commitment_l = mu * &commitment_l;
@@ -405,13 +406,13 @@ impl EQC_Sign {
                 }
 
                 let gama_l = sum_points_uk_i.mul(opening_l.clone());
-                let z_tilde = Z + &gama_l;
+                let z_tilde = z + &gama_l;
 
                 let sigma_tilde = Sigma {
-                    Z: z_tilde,
-                    Y: Y.clone(),
-                    Y_hat: Y_hat.clone(),
-                    T: T.clone(),
+                    z: z_tilde,
+                    y_g1: y_g1.clone(),
+                    y_hat: y_hat.clone(),
+                    t: t.clone(),
                 };
                 let mut commitment_vector_tilde = orig_sig.commitment_vector.clone();
                 commitment_vector_tilde.push(rndmz_commitment_l);
@@ -420,7 +421,7 @@ impl EQC_Sign {
                 opening_vector_tilde.push(rndmz_opening_l);
 
                 (
-                    EQC_Signature {
+                    EqcSignature {
                         sigma: sigma_tilde,
                         update_key: orig_sig.update_key.clone(),
                         commitment_vector: commitment_vector_tilde,
@@ -443,21 +444,21 @@ impl EQC_Sign {
     /// # Arguments
     /// vk: Verification Key
     /// sk_u: Secret Key
-    /// sigma: Sigma {Z, Y, Y_hat, T} signature
+    /// sigma: Sigma {Z, Y, Y_hat, t} signature
     ///
     /// # Returns
     /// temporary orphan signature
     pub fn send_convert_sig(&self, vk: &[VK], sk_u: &FieldElement, sigma: &Sigma) -> Sigma {
-        let Sigma { Z, Y, Y_hat, T } = sigma;
+        let Sigma { z, y_g1, y_hat, t } = sigma;
 
-        // update component T of signature to remove the old key
+        // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
-            let t_new = T + (vk0 * sk_u).negation();
+            let t_new = t + (vk0 * sk_u).negation();
             Sigma {
-                Z: Z.clone(),
-                Y: Y.clone(),
-                Y_hat: Y_hat.clone(),
-                T: t_new,
+                z: z.clone(),
+                y_g1: y_g1.clone(),
+                y_hat: y_hat.clone(),
+                t: t_new,
             }
         } else {
             panic!("Invalid verification key");
@@ -471,7 +472,7 @@ impl EQC_Sign {
     ///
     /// vk: Verification Key
     /// sk_r: Secret Key
-    /// sigma_orphan: Sigma {Z, Y, Y_hat, T} signature
+    /// sigma_orphan: Sigma {Z, Y, Y_hat, t} signature
     ///
     /// # Returns
     /// new signature for the new public key
@@ -481,16 +482,16 @@ impl EQC_Sign {
         sk_r: &FieldElement,
         sigma_orphan: &Sigma,
     ) -> Sigma {
-        let Sigma { Z, Y, Y_hat, T } = sigma_orphan;
+        let Sigma { z, y_g1, y_hat, t } = sigma_orphan;
 
-        // update component T of signature to remove the old key
+        // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
-            let t_new = T + (vk0 * sk_r);
+            let t_new = t + (vk0 * sk_r);
             Sigma {
-                Z: Z.clone(),
-                Y: Y.clone(),
-                Y_hat: Y_hat.clone(),
-                T: t_new,
+                z: z.clone(),
+                y_g1: y_g1.clone(),
+                y_hat: y_hat.clone(),
+                t: t_new,
             }
         } else {
             panic!("Invalid verification key");
@@ -505,18 +506,18 @@ mod tests {
         message1_str: Vec<String>,
         message2_str: Vec<String>,
         message3_str: Vec<String>,
-        attributes: Attributes,
+        _attributes: Attributes,
     }
 
     struct Attributes {
-        age: String,
-        name: String,
-        drivers: String,
-        gender: String,
-        company: String,
-        drivers_type_b: String,
-        insurance: String,
-        car_type: String,
+        _age: String,
+        _name: String,
+        _drivers: String,
+        _gender: String,
+        _company: String,
+        _drivers_type_b: String,
+        _insurance: String,
+        _car_type: String,
     }
 
     // make a setup fn that generates message_strs
@@ -538,22 +539,22 @@ mod tests {
         ];
         let message3_str = vec![insurance.to_owned(), car_type.to_owned()];
 
-        let attributes = Attributes {
-            age: age.to_owned(),
-            name: name.to_owned(),
-            drivers: drivers.to_owned(),
-            gender: gender.to_owned(),
-            company: company.to_owned(),
-            drivers_type_b: drivers_type_b.to_owned(),
-            insurance: insurance.to_owned(),
-            car_type: car_type.to_owned(),
+        let _attributes = Attributes {
+            _age: age.to_owned(),
+            _name: name.to_owned(),
+            _drivers: drivers.to_owned(),
+            _gender: gender.to_owned(),
+            _company: company.to_owned(),
+            _drivers_type_b: drivers_type_b.to_owned(),
+            _insurance: insurance.to_owned(),
+            _car_type: car_type.to_owned(),
         };
 
         TestMessages {
             message1_str,
             message2_str,
             message3_str,
-            attributes,
+            _attributes,
         }
     }
 
@@ -562,13 +563,13 @@ mod tests {
         // Generate a signature and verify it
         // create a signing keys for 10 messagses
         let max_cardinal = 5;
-        let sign_scheme = EQC_Sign::new(max_cardinal);
+        let sign_scheme = EqcSign::new(max_cardinal);
 
         let l_message = 10;
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
-        let (sk_u, pk_u) = sign_scheme.user_keygen();
+        let (_sk_u, pk_u) = sign_scheme.user_keygen();
 
         let messages_vectors = setup_tests();
 
@@ -591,13 +592,13 @@ mod tests {
     fn test_changerep() {
         //create a signing keys for 10 messagses
         let max_cardinal = 5;
-        let sign_scheme = EQC_Sign::new(max_cardinal);
+        let sign_scheme = EqcSign::new(max_cardinal);
 
         let l_message = 10;
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
-        let (sk_u, pk_u) = sign_scheme.user_keygen();
+        let (_sk_u, pk_u) = sign_scheme.user_keygen();
 
         let messages_vectors = setup_tests();
 
@@ -639,13 +640,13 @@ mod tests {
     fn test_changerep_update_key() {
         //create a signing keys for 10 messagses
         let max_cardinal = 5;
-        let sign_scheme = EQC_Sign::new(max_cardinal);
+        let sign_scheme = EqcSign::new(max_cardinal);
 
         let l_message = 10;
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
-        let (sk_u, pk_u) = sign_scheme.user_keygen();
+        let (_sk_u, pk_u) = sign_scheme.user_keygen();
 
         let messages_vectors = setup_tests();
 
@@ -694,13 +695,13 @@ mod tests {
 
         //create a signing keys for 10 messages
         let max_cardinal = 5;
-        let sign_scheme = EQC_Sign::new(max_cardinal);
+        let sign_scheme = EqcSign::new(max_cardinal);
 
         let l_message = 3;
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
-        let (sk_u, pk_u) = sign_scheme.user_keygen();
+        let (_sk_u, pk_u) = sign_scheme.user_keygen();
 
         let messages_vectors = setup_tests();
 
@@ -754,13 +755,6 @@ mod tests {
         let (signature_chged, _opening_l) =
             sign_scheme.change_rel(&message_l, 3, &signature_original, &mu);
 
-        let res = sign_scheme.verify(
-            &vk,
-            &pk_u,
-            &signature_chged.commitment_vector,
-            &signature_chged.sigma,
-        );
-
         assert!(sign_scheme.verify(
             &vk,
             &pk_u,
@@ -774,13 +768,13 @@ mod tests {
     fn test_changerel_from_rep() {
         //create a signing keys for 10 messages
         let max_cardinal = 5;
-        let sign_scheme = EQC_Sign::new(max_cardinal);
+        let sign_scheme = EqcSign::new(max_cardinal);
 
         let l_message = 10;
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
-        let (sk_u, pk_u) = sign_scheme.user_keygen();
+        let (_sk_u, pk_u) = sign_scheme.user_keygen();
 
         let messages_vectors = setup_tests();
 
@@ -829,7 +823,7 @@ mod tests {
     fn test_convert() {
         // 1. sign_keygen
         let max_cardinal = 5;
-        let sign_scheme = EQC_Sign::new(max_cardinal);
+        let sign_scheme = EqcSign::new(max_cardinal);
 
         let l_message = 10;
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
