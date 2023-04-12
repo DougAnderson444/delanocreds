@@ -17,10 +17,11 @@ use std::str::Bytes;
 /// Last is the type of the group order
 #[derive(Clone, Debug)]
 pub struct ParamSetCommitment {
-    pp_commit_G1: Vec<G1>,
-    pp_commit_G2: Vec<G2>,
+    pub pp_commit_G1: Vec<G1>,
+    pub pp_commit_G2: Vec<G2>,
     pub g_2: G2,
     pub g_1: G1,
+    pub max_cardinality: usize,
 }
 
 impl ParamSetCommitment {
@@ -50,6 +51,7 @@ impl ParamSetCommitment {
             pp_commit_G1,
             g_2,
             g_1,
+            max_cardinality: t,
         }
     }
 }
@@ -265,6 +267,7 @@ pub trait Commitment {
 // Then there's a function that checks the input against that enum
 // and if it's just a string input type, enocdes and converts from binary to a BigNum (amcl_wrapper FieldElement)
 // if it's a Vec of Strings type, converts it to a group element in G1 like we would in Python: list(map(lambda item: Bn.from_binary(str.encode(item)), messages))
+#[derive(Eq, Hash, PartialEq)]
 pub enum InputType {
     String(String),
     VecString(Vec<String>),
