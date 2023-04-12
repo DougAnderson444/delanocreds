@@ -359,7 +359,7 @@ impl EQC_Sign {
     /// message_l: message set at index l that will be added in message vector
     /// index_l: index l denotes the next position of message vector that needs to be fixed
     /// signature: EQC_Signature {sigma, update_key, commitment_vector, opening_vector}
-    /// mu: randomness
+    /// mu: optional randomness, default to 1. Only applies when same randomness is used previosuly in changerep
     ///
     /// # Returns
     /// new signature including the message set at index l
@@ -688,6 +688,7 @@ mod tests {
 
         // run changerel function (with update_key) to add commitment C3 (for message3_str) to the sign where index L = 3
         let message_l = InputType::VecString(messages_vectors.message3_str);
+        // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         let mu = FieldElement::one();
 
         let (signature_chged, _opening_l) =
@@ -705,6 +706,61 @@ mod tests {
             &pk_u,
             &signature_chged.commitment_vector,
             &signature_chged.sigma
+        ));
+    }
+
+    /// run changrel on the signature that is coming from changerep (that is already randomized) and verify it
+    #[test]
+    fn test_changerel_from_rep() {
+        //create a signing keys for 10 messages
+        let max_cardinal = 5;
+        let sign_scheme = EQC_Sign::new(max_cardinal);
+
+        let l_message = 10;
+        let (sk, vk) = sign_scheme.sign_keygen(l_message);
+
+        // create a user key pair
+        let (sk_u, pk_u) = sign_scheme.user_keygen();
+
+        let messages_vectors = setup_tests();
+
+        // create a signature for pk_u on (C1, C2) related to (message1_str, message2_str)) and aslo output update_key for k_prime = 4, allow adding 2 more commitments like C3 and C4
+        let k_prime = Some(4);
+        let messages_vector = &vec![
+            InputType::VecString(messages_vectors.message1_str),
+            InputType::VecString(messages_vectors.message2_str),
+        ];
+        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime);
+
+        // run changerep function (without randomizing update_key) to
+        // randomize the sign, pk_u and commitment vector
+        let b = true;
+        let mu = FieldElement::random();
+        let psi = FieldElement::random();
+
+        let (rndmz_pk_u, signature_prime) =
+            sign_scheme.change_rep(&vk, &pk_u, &signature_original, &mu, &psi, b);
+
+        // verify the signature_prime
+        assert!(sign_scheme.verify(
+            &vk,
+            &rndmz_pk_u,
+            &signature_prime.commitment_vector,
+            &signature_prime.sigma
+        ));
+
+        // change_rel
+        let message_l = InputType::VecString(messages_vectors.message3_str);
+        // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
+        let (signature_tilde, _opening_l) =
+            sign_scheme.change_rel(&message_l, 3, &signature_prime, &mu);
+
+        // verify the signature
+        assert!(sign_scheme.verify(
+            &vk,
+            &rndmz_pk_u,
+            &signature_tilde.commitment_vector,
+            &signature_tilde.sigma
         ));
     }
 }
