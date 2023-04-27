@@ -1,14 +1,11 @@
 use crate::utils::polyfromroots;
+use crate::utils::InputType;
 use amcl_wrapper::extension_field_gt::GT;
-use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
+use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
-use amcl_wrapper::types::BigNum; // Curve Order is a amcl_wrapper::types::BigNum, which is a wrapper around miracl_core::bls12381::big::BIG
-use amcl_wrapper::univar_poly::UnivarPolynomial; // Univariate polynomial represented with coefficients in a vector. The ith element of the vector is the coefficient of the ith degree term.
-use sha2::{Digest, Sha256, Sha512};
 use std::collections::HashSet;
-use std::str::Bytes;
 
 /// First tuple is the public parameters commitment for G2, type we get returned from the Python code: [g_2.mul(alpha_trapdoor.pow(i)) for i in range(max_cardinality)] # This loops through the range of max_cardinality and multiplies g_2 by alpha_trapdoor raised to the power of i. Which is a list of G2 elements, or in Rust a Vec<G2>.
 /// Second tuple is the public parameters commitment for G1, type we get returned from the Rust code: [g_1.mul(alpha_trapdoor.pow(i)) for i in range(max_cardinality)] # This loops through the range of max_cardinality and multiplies g_1 by alpha_trapdoor raised to the power of i.
@@ -17,8 +14,8 @@ use std::str::Bytes;
 /// Last is the type of the group order
 #[derive(Clone, Debug)]
 pub struct ParamSetCommitment {
-    pub pp_commit_G1: Vec<G1>,
-    pub pp_commit_G2: Vec<G2>,
+    pub pp_commit_g1: Vec<G1>,
+    pub pp_commit_g2: Vec<G2>,
     pub g_2: G2,
     pub g_1: G1,
     pub max_cardinality: usize,
@@ -38,17 +35,17 @@ impl ParamSetCommitment {
         let g_1 = G1::generator();
 
         // take length of t as size by using
-        let mut pp_commit_G1: Vec<G1> = Vec::with_capacity(t);
-        let mut pp_commit_G2: Vec<G2> = Vec::with_capacity(t);
+        let mut pp_commit_g1: Vec<G1> = Vec::with_capacity(t);
+        let mut pp_commit_g2: Vec<G2> = Vec::with_capacity(t);
 
         for i in 0..t {
-            pp_commit_G1.push(g_1.clone() * base.pow(&FieldElement::from(i as u64)));
-            pp_commit_G2.push(g_2.clone() * base.pow(&FieldElement::from(i as u64)));
+            pp_commit_g1.push(g_1.clone() * base.pow(&FieldElement::from(i as u64)));
+            pp_commit_g2.push(g_2.clone() * base.pow(&FieldElement::from(i as u64)));
         }
 
         ParamSetCommitment {
-            pp_commit_G2,
-            pp_commit_G1,
+            pp_commit_g2,
+            pp_commit_g1,
             g_2,
             g_1,
             max_cardinality: t,
@@ -95,7 +92,7 @@ pub trait Commitment {
         for i in 0..monypol_coeff.coefficients().len() {
             // G1 times a FieldElementVector is of type G1Vector?
             coef_points
-                .push(param_sc.pp_commit_G1[i].clone() * monypol_coeff.coefficients()[i].clone());
+                .push(param_sc.pp_commit_g1[i].clone() * monypol_coeff.coefficients()[i].clone());
         }
 
         // use amcl_wrapper to sum all the elements in coef_points as FieldElements into a pre_commit
@@ -138,7 +135,7 @@ pub trait Commitment {
         for i in 0..monypol_coeff.coefficients().len() {
             // G1 times a FieldElementVector is of type G1Vector?
             coef_points
-                .push(param_sc.pp_commit_G1[i].clone() * monypol_coeff.coefficients()[i].clone());
+                .push(param_sc.pp_commit_g1[i].clone() * monypol_coeff.coefficients()[i].clone());
         }
 
         // sum all coef_points
@@ -181,7 +178,7 @@ pub trait Commitment {
 
         // check to ensure all messages in mess_subset_t are in mess_set
         for item in &mess_subset_t {
-            if !mess_set.contains(&item) {
+            if !mess_set.contains(item) {
                 checker = false;
                 break;
             }
@@ -207,12 +204,12 @@ pub trait Commitment {
         // print len of coeff_witn
         println!("len of coeff_witn: {}", coeff_witn.coefficients().len());
 
-        // multiply each G1 in pp_commit_G1 Vec<G1> by each coefficient witness in the polynomial (FieldElementVector)
+        // multiply each G1 in pp_commit_g1 Vec<G1> by each coefficient witness in the polynomial (FieldElementVector)
         let mut witn_groups = Vec::with_capacity(coeff_witn.coefficients().len());
         for i in 0..coeff_witn.coefficients().len() {
             // G1 times a FieldElementVector is of type G1Vector?
             witn_groups
-                .push(param_sc.pp_commit_G1[i].clone() * coeff_witn.coefficients()[i].clone());
+                .push(param_sc.pp_commit_g1[i].clone() * coeff_witn.coefficients()[i].clone());
         }
 
         //print len of witn_groups
@@ -250,7 +247,7 @@ pub trait Commitment {
         for i in 0..coeff_t.coefficients().len() {
             // G1 times a FieldElementVector is of type G1Vector?
             subset_group_elements
-                .push(param_sc.pp_commit_G2[i].clone() * coeff_t.coefficients()[i].clone());
+                .push(param_sc.pp_commit_g2[i].clone() * coeff_t.coefficients()[i].clone());
         }
 
         // sum all points
@@ -258,19 +255,8 @@ pub trait Commitment {
             .iter()
             .fold(G2::identity(), |acc, x| acc + x);
 
-        GT::ate_pairing(&witness, &subset_elements_sum)
-            == GT::ate_pairing(&commitment, &param_sc.g_2)
+        GT::ate_pairing(witness, &subset_elements_sum) == GT::ate_pairing(commitment, &param_sc.g_2)
     }
-}
-
-// The code block below is an enum of types, either string or Vec of Strings.
-// Then there's a function that checks the input against that enum
-// and if it's just a string input type, enocdes and converts from binary to a BigNum (amcl_wrapper FieldElement)
-// if it's a Vec of Strings type, converts it to a group element in G1 like we would in Python: list(map(lambda item: Bn.from_binary(str.encode(item)), messages))
-#[derive(Eq, Hash, PartialEq)]
-pub enum InputType {
-    String(String),
-    VecString(Vec<String>),
 }
 
 pub fn convert_mess_to_bn(input: &InputType) -> Vec<FieldElement> {
@@ -298,7 +284,7 @@ impl Commitment for SetCommitment {}
 /// Here is CrossSetCommitment that extends the Set Commitment to provide aggregation witness and a batch verification
 pub struct CrossSetCommitment {
     pub param_sc: ParamSetCommitment,
-    alpha_trapdoor: FieldElement,
+    _alpha_trapdoor: FieldElement,
 }
 
 // impl all default traits for CrossSetCommitment
@@ -316,8 +302,8 @@ impl CrossSetCommitment {
     pub fn new(t: usize) -> Self {
         let (param_sc, alpha_trapdoor) = CrossSetCommitment::setup(t);
         Self {
-            param_sc: param_sc.clone(),
-            alpha_trapdoor: alpha_trapdoor.clone(),
+            param_sc,
+            _alpha_trapdoor: alpha_trapdoor,
         }
     }
 
@@ -329,14 +315,14 @@ impl CrossSetCommitment {
     ///
     /// # Returns
     /// a proof which is a aggregate of witnesses and shows all subsets are valid for respective sets
-    pub fn aggregate_cross(witness_vector: &Vec<G1>, commit_vector: &Vec<G1>) -> G1 {
+    pub fn aggregate_cross(witness_vector: &Vec<G1>, commit_vector: &[G1]) -> G1 {
         let mut proof = G1::identity();
 
         for i in 0..witness_vector.len() {
             // generate a BigNumber challenge t_i by hashing a number of EC points
             // join all the commit_vector elements into a single vector of hex
-            let Cstring = commit_vector[i].to_hex();
-            let hash_i: FieldElement = FieldElement::from_msg_hash(&Cstring.as_bytes());
+            let c_string = commit_vector[i].to_hex();
+            let hash_i: FieldElement = FieldElement::from_msg_hash(c_string.as_bytes());
 
             // append witnessness_group_elements
             // add to existing proof
@@ -357,14 +343,14 @@ impl CrossSetCommitment {
     pub fn verify_cross(
         param_sc: &ParamSetCommitment,
         commit_vector: &Vec<G1>,
-        subsets_vector_str: &Vec<InputType>,
+        subsets_vector_str: &[InputType],
         proof: &G1,
     ) -> bool {
         // Steps:
         // 1. convert message str into the BN
         let subsets_vector = subsets_vector_str
             .iter()
-            .map(|x| convert_mess_to_bn(x))
+            .map(convert_mess_to_bn)
             .collect::<Vec<Vec<FieldElement>>>();
         // create a union of sets
         let set_s = subsets_vector
@@ -380,11 +366,11 @@ impl CrossSetCommitment {
 
         let coeff_set_s = polyfromroots(set_s.clone());
 
-        // 2. compute right side of verification, pp_commit_G2
+        // 2. compute right side of verification, pp_commit_g2
         let mut set_s_group_element = Vec::with_capacity(coeff_set_s.coefficients().len());
         for i in 0..coeff_set_s.coefficients().len() {
             set_s_group_element
-                .push(param_sc.pp_commit_G2[i].clone() * coeff_set_s.coefficients()[i].clone());
+                .push(param_sc.pp_commit_g2[i].clone() * coeff_set_s.coefficients()[i].clone());
         }
 
         let set_s_elements_sum = set_s_group_element
@@ -392,38 +378,37 @@ impl CrossSetCommitment {
             .fold(G2::identity(), |acc, x| acc + x);
 
         // right_side is the pairing of proof and set_s_elements_sum
-        let right_side = GT::ate_pairing(&proof, &set_s_elements_sum);
-        // in Python: set_s_not_t = [not_intersection(set_s, subsets_vector[i]) for i in range(len(subsets_vector))]
+        let right_side = GT::ate_pairing(proof, &set_s_elements_sum);
         let set_s_not_t = subsets_vector
             .iter()
             .map(|x| not_intersection(&set_s, x.clone()))
             .collect::<Vec<Vec<FieldElement>>>();
         // 3. compute left side of verification, such as this Python code:
-        let mut vector_GT = Vec::with_capacity(commit_vector.len());
+        let mut vector_gt = Vec::with_capacity(commit_vector.len());
         let mut left_side = GT::one();
         for j in 0..commit_vector.len() {
             let coeff_s_not_t = polyfromroots(set_s_not_t[j].clone());
-            // use amcl_wrapper to multiply FieldElementVector by a FieldElement: `&coeff_s_not_t * param_sc.pp_commit_G2`
-            // len of pp_commit_G2
+            // use amcl_wrapper to multiply FieldElementVector by a FieldElement: `&coeff_s_not_t * param_sc.pp_commit_g2`
+            // len of pp_commit_g2
             let mut listpoints_s_not_t = Vec::with_capacity(coeff_s_not_t.coefficients().len());
             for i in 0..coeff_s_not_t.coefficients().len() {
                 listpoints_s_not_t.push(
-                    param_sc.pp_commit_G2[i].clone() * coeff_s_not_t.coefficients()[i].clone(),
+                    param_sc.pp_commit_g2[i].clone() * coeff_s_not_t.coefficients()[i].clone(),
                 );
             }
             let temp_sum = listpoints_s_not_t
                 .iter()
                 .fold(G2::identity(), |acc, x| acc + x);
 
-            let Cstring = commit_vector[j].to_hex();
-            let hash_i: FieldElement = FieldElement::from_msg_hash(&Cstring.as_bytes());
+            let c_string = commit_vector[j].to_hex();
+            let hash_i: FieldElement = FieldElement::from_msg_hash(c_string.as_bytes());
 
-            let GT_element = GT::ate_pairing(&commit_vector[j], &(hash_i * temp_sum));
-            vector_GT.push(GT_element);
+            let gt_element = GT::ate_pairing(&commit_vector[j], &(hash_i * temp_sum));
+            vector_gt.push(gt_element);
         }
 
-        for i in 0..vector_GT.len() {
-            left_side = left_side * vector_GT[i].clone();
+        for item in &vector_gt {
+            left_side = left_side * item.clone();
         }
 
         // 4. compare left and right side of verification to see if they are equal
@@ -432,14 +417,11 @@ impl CrossSetCommitment {
 }
 
 pub fn mul_and_fold(monypol_coeff: Vec<FieldElement>, param_sc: ParamSetCommitment) -> G1 {
-    // multiply each pp_commit_G1 by each monypol_coeff and put result in a vector
+    // multiply each pp_commit_g1 by each monypol_coeff and put result in a vector
     let mut coef_points: Vec<G1> = Vec::with_capacity(monypol_coeff.len());
     for (i, coeff) in monypol_coeff.iter().enumerate() {
-        coef_points.push(param_sc.pp_commit_G1[i].clone() * coeff);
+        coef_points.push(param_sc.pp_commit_g1[i].clone() * coeff);
     }
-
-    // get a random element in Zp
-    let rho = FieldElement::random();
 
     // use amcl_wrapper to sum all the elements in coef_points as FieldElements into a pre_commit
     let folded = coef_points.iter().fold(G1::identity(), |acc, x| acc + x);
@@ -447,12 +429,12 @@ pub fn mul_and_fold(monypol_coeff: Vec<FieldElement>, param_sc: ParamSetCommitme
 }
 
 pub fn not_intersection(
-    list_S: &Vec<FieldElement>,
-    list_T: Vec<FieldElement>,
+    list_s: &Vec<FieldElement>,
+    list_t: Vec<FieldElement>,
 ) -> Vec<FieldElement> {
     let mut set_s_not_t = Vec::new();
-    for value in list_S {
-        if !list_T.contains(&value) {
+    for value in list_s {
+        if !list_t.contains(value) {
             set_s_not_t.push(value.clone());
         }
     }
@@ -462,12 +444,6 @@ pub fn not_intersection(
 #[cfg(test)]
 mod test {
     use super::*;
-    use amcl_wrapper::commitment;
-    use amcl_wrapper::extension_field_gt::GT;
-    use amcl_wrapper::field_elem::FieldElement;
-    use amcl_wrapper::group_elem::GroupElement;
-    use amcl_wrapper::group_elem_g1::G1;
-    use amcl_wrapper::group_elem_g2::G2;
 
     #[test]
     fn test_commit_and_open() {
@@ -481,7 +457,7 @@ mod test {
         let set_str: InputType =
             InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
-        let (pp, alpha) = SetCommitment::setup(max_cardinal);
+        let (pp, _alpha) = SetCommitment::setup(max_cardinal);
         let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str);
         // assrt open_set with pp, commitment, O, set_str
         assert!(SetCommitment::open_set(
@@ -505,7 +481,7 @@ mod test {
             InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
         let subset_str_1: InputType = InputType::VecString(vec![age.to_owned(), name.to_owned()]);
-        let (pp, alpha) = SetCommitment::setup(max_cardinal);
+        let (pp, _alpha) = SetCommitment::setup(max_cardinal);
         let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str);
         let witness_subset =
             SetCommitment::open_subset(&pp, &set_str, &opening_info, &subset_str_1);
@@ -548,7 +524,7 @@ mod test {
 
         // create two set commitments for two sets set_str and set_str2
         let max_cardinal = 5;
-        let (pp, alpha) = CrossSetCommitment::setup(max_cardinal);
+        let (pp, _alpha) = CrossSetCommitment::setup(max_cardinal);
         let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str);
         let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2);
 
@@ -576,7 +552,7 @@ mod test {
         assert!(CrossSetCommitment::verify_cross(
             &pp,
             &vec![commitment_1, commitment_2],
-            &vec![subset_str_1, subset_str_2],
+            &[subset_str_1, subset_str_2],
             &proof
         ));
     }
