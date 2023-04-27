@@ -1,16 +1,36 @@
-use amcl_wrapper::constants::CurveOrder;
+use std::fmt::{Display, Formatter};
+
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g2::G2;
 use amcl_wrapper::types::BigNum;
+use amcl_wrapper::{constants::CurveOrder, group_elem_g1::G1};
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 
+use crate::dac::NymProof;
+use crate::utils::{self, Pedersen, PedersenCommit, PedersenOpen};
+
+#[derive(Clone, Debug)]
+pub enum Generator {
+    G1(G1),
+    G2(G2),
+}
+
+impl Display for Generator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Generator::G1(g) => write!(f, "{}", g),
+            Generator::G2(g) => write!(f, "{}", g),
+        }
+    }
+}
+
 pub struct ChallengeState {
-    name: String,
-    g_2: G2,
-    statement: Vec<G2>,
-    hash: [u8; 32],
+    pub name: String,
+    pub g: Generator,
+    pub statement: Vec<Generator>,
+    pub hash: [u8; 32],
 }
 
 pub type Challenge = FieldElement;
@@ -23,12 +43,6 @@ impl ZkpSchnorrFiatShamir {
     fn new() -> Self {
         ZkpSchnorrFiatShamir {}
     }
-    /// Setup for the Schnorr proof (non-interactive using FS heuristic) of the statement ZK(x ; h = g^x)
-    /// How you make a Schnorr proof (Step by step):
-    /// 1. Setup: (g, h) = setup()
-    /// 2. Prover: (c, s) = prove((g, h), x)
-    /// 3. Verifier: verify((g, h), c, s)
-    ///
     pub fn setup() -> G2 {
         G2::generator()
     }
@@ -38,7 +52,7 @@ impl ZkpSchnorrFiatShamir {
         // transform the state into a byte array
         let mut state_bytes = Vec::new();
         state_bytes.extend_from_slice(state.name.as_bytes());
-        state_bytes.extend_from_slice(state.g_2.to_string().as_bytes());
+        state_bytes.extend_from_slice(state.g.to_string().as_bytes());
 
         for stmt in &state.statement {
             state_bytes.extend_from_slice(stmt.to_string().as_bytes());
@@ -70,11 +84,16 @@ impl ZkpSchnorrFiatShamir {
 
         // SHAKE3 hash the &announcement.to_bytes(false)
         let hash: [u8; 32] = Sha256::digest(announcement.to_bytes(false)).into();
+        // cast stms to Generator::G2
+        let stms = stms
+            .iter()
+            .map(|x| Generator::G2(x.clone()))
+            .collect::<Vec<Generator>>();
 
         let state = ChallengeState {
             name: "schnorr".to_string(),
-            g_2: g_2.clone(),
-            statement: stms.clone(),
+            g: Generator::G2(g_2.clone()),
+            statement: stms,
             hash,
         };
 
@@ -113,16 +132,113 @@ impl ZkpSchnorrFiatShamir {
             .collect::<Vec<G2>>();
         // sum all w_list items into announcement
         let announcement = w_list.iter().fold(G2::identity(), |acc, x| acc + x);
+
+        // cast stms to Generator::G2
+        let stms = stms
+            .iter()
+            .map(|x| Generator::G2(x.clone()))
+            .collect::<Vec<Generator>>();
+
         let state = ChallengeState {
             name: "schnorr".to_string(),
-            g_2: g_2.clone(),
-            statement: stms.to_vec(),
+            g: Generator::G2(g_2.clone()),
+            statement: stms,
             hash: Sha256::digest(announcement.to_bytes(false)).into(),
         };
         let mut hash = Self::challenge(&state).to_bignum();
         hash.rmod(&CurveOrder);
 
         FieldElement::from_hex(hash.tostring()).unwrap() == *c
+    }
+}
+
+/// Schnorr (interactive) proof of the statement ZK(x ; h = g^x)
+pub trait Schnorr {
+    fn new() -> Self;
+
+    // In rust, the implemented default traits are:
+    fn setup() -> G2 {
+        G2::generator()
+    }
+    fn challenge(state: &ChallengeState) -> Challenge {
+        let mut elem_str = vec![state.statement.len().to_string()];
+        elem_str.extend(state.statement.iter().map(|x| x.to_string()));
+
+        // The length of each element in the list is added to the element
+        let elem_len = elem_str.iter().map(|x| format!("{}||{}", x.len(), x));
+        let state = elem_len.collect::<Vec<String>>().join("|");
+
+        let hash = Sha256::digest(state.as_bytes());
+
+        FieldElement::from_hex(format!("{:X}", hash)).unwrap()
+    }
+
+    fn response(
+        challenge: &Challenge,
+        announce_randomness: &FieldElement,
+        stm: &G1,
+        secret_wit: &FieldElement,
+    ) -> FieldElement {
+        assert!(secret_wit * G1::generator() == *stm);
+        let mut res = BigNum::frombytes(&(announce_randomness + challenge * secret_wit).to_bytes());
+        res.rmod(&CurveOrder);
+        res.into()
+    }
+}
+
+pub struct ZKPSchnorr {}
+
+// use defaults
+impl Schnorr for ZKPSchnorr {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+impl ZKPSchnorr {
+    /// Verify the statement ZK(x ; h = g^x)
+    pub fn verify(
+        &self,
+        challenge: &Challenge,
+        announce_element: &G1,
+        stm: &G1,
+        response: &FieldElement,
+    ) -> bool {
+        let left_side = response * G1::generator();
+        let right_side = (announce_element + challenge * stm);
+        left_side == right_side
+    }
+}
+
+pub struct DamgardTransform {
+    pub pedersen: Pedersen,
+}
+
+impl DamgardTransform {
+    pub fn announce(&self) -> (PedersenCommit, PedersenOpen) {
+        let w_random = FieldElement::random();
+        let w_element = &w_random * &self.pedersen.g;
+        let (pedersen_commit, mut pedersen_open) = self.pedersen.commit(w_random);
+        pedersen_open.element(w_element);
+        (pedersen_commit, pedersen_open)
+    }
+    pub fn verify(&self, proof_nym_u: &NymProof) -> bool {
+        let left_side = proof_nym_u.response.clone() * &self.pedersen.g;
+        let right_side = (proof_nym_u.pedersen_open.announce_element.as_ref().unwrap()
+            + proof_nym_u.challenge.clone() * proof_nym_u.nym.clone());
+        left_side == right_side
+            && self
+                .pedersen
+                .decommit(&proof_nym_u.pedersen_open, &proof_nym_u.pedersen_commit)
+    }
+}
+
+// implement a trait for Damgard_Transform that has the same functions as ZKP_Schnorr and then you would implement the functions for Damgard_Transform
+
+impl Schnorr for DamgardTransform {
+    fn new() -> Self {
+        let pedersen = Pedersen::new();
+        Self { pedersen }
     }
 }
 
