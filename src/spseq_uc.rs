@@ -1,8 +1,8 @@
 use crate::set_commits::convert_mess_to_bn;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
-use crate::set_commits::InputType;
 use crate::utils::polyfromroots;
+use crate::utils::InputType;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
@@ -497,6 +497,9 @@ impl EqcSign {
             panic!("Invalid verification key");
         }
     }
+}
+pub fn rndmz_pk(pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1) -> G1 {
+    psi * (pk_u + chi * g_1)
 }
 
 #[cfg(test)]
