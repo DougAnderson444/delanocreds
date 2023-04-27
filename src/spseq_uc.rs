@@ -10,19 +10,21 @@ use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
 use std::ops::Mul;
 
+#[derive(Clone)]
 pub struct Sigma {
     z: G1,
     y_g1: G1,
     y_hat: G2,
     t: G1,
 }
-
+#[derive(Debug, Clone)]
 pub enum VK {
     G1(G1),
     G2(G2),
 }
 
 pub type UpdateKey = Option<Vec<Vec<G1>>>;
+pub type SecretWitness = FieldElement;
 
 /// This is implementation of delegatable anonymous credential using SPSQE-UC signatures and set commitment.
 pub struct EqcSign {
@@ -31,6 +33,9 @@ pub struct EqcSign {
     pub csc_scheme: CrossSetCommitment,
 }
 
+pub type OpeningInformation = FieldElement;
+
+#[derive(Clone)]
 pub struct EqcSignature {
     pub sigma: Sigma,
     pub update_key: UpdateKey,
@@ -86,14 +91,14 @@ impl EqcSign {
 
     /// Generates user key pair given the public parameters
     /// # Arguments
-    pub fn user_keygen(&self) -> (FieldElement, G1) {
+    pub fn user_keygen(&self) -> (SecretWitness, G1) {
         let sk_u = FieldElement::random();
         let pk_u = sk_u.clone() * &self.csc_scheme.param_sc.g_1;
         (sk_u, pk_u)
     }
 
     /// Encodes a message set into a set commitment with opening information
-    fn encode(&self, mess_set: &InputType) -> (G1, FieldElement) {
+    fn encode(&self, mess_set: &InputType) -> (G1, OpeningInformation) {
         CrossSetCommitment::commit_set(&self.csc_scheme.param_sc, mess_set)
     }
 
@@ -122,7 +127,7 @@ impl EqcSign {
             opening_vector.push(opening);
         }
 
-        // pick randomness y
+        // pick randomness for y_g1
         let y_rand = FieldElement::random();
 
         // compute sign -> sigma = (Z, Y, hat Ym t)
@@ -138,24 +143,19 @@ impl EqcSign {
             temp_point += z_i;
         }
 
-        // Z is y mod_inverse(order) times temp_point
+        // Z is y_rand mod_inverse(order) times temp_point
         let z = y_rand.inverse() * temp_point;
 
-        // Y = y* g_1
-        let y = y_rand.clone() * &self.csc_scheme.param_sc.g_1;
+        // Y = y_rand * g_1
+        let y_g1 = y_rand.clone() * &self.csc_scheme.param_sc.g_1;
 
-        // Y_hat = y * g_2
+        // Y_hat = y_rand * g_2
         let y_hat = y_rand.clone() * &self.csc_scheme.param_sc.g_2;
 
         // t = sk[1] * Y + sk[0] * pk_u
-        let t = sk[1].clone() * y.clone() + sk[0].clone() * pk_u;
+        let t = sk[1].clone() * y_g1.clone() + sk[0].clone() * pk_u;
 
-        let sigma = Sigma {
-            z,
-            y_g1: y,
-            y_hat,
-            t,
-        };
+        let sigma = Sigma { z, y_g1, y_hat, t };
 
         // check if the update key is requested
         // then compute update key using k_prime,
@@ -170,7 +170,7 @@ impl EqcSign {
 
                 // usign = {}
                 // for item in range(len(messages_vector) + 1, k_prime + 1): # In Python, this syntax means "from len(messages_vector) + 1 to k_prime + 1". In rust, the equiv would be "len(messages_vector) + 1..k_prime + 1"
-                //     UK = [(y.mod_inverse(order) * sk[item + 1]) * pp_commit_g1[i] for i in range(max_cardinality)]
+                //     UK = [(y_g1.mod_inverse(order) * sk[item + 1]) * pp_commit_g1[i] for i in range(max_cardinality)]
                 //     usign[item] = UK
                 //     update_key = usign
 
@@ -209,6 +209,11 @@ impl EqcSign {
     }
 
     /// Verifies a signature for a given message set
+    /// # Arguments
+    /// - `vk`: verification key
+    /// - `pk_u`: user public key
+    /// - `commitment_vector`: vector of commitments
+    /// - `sigma`: signature
     pub fn verify(&self, vk: &[VK], pk_u: &G1, commitment_vector: &Vec<G1>, sigma: &Sigma) -> bool {
         let g_1 = &self.csc_scheme.param_sc.g_1;
         let g_2 = &self.csc_scheme.param_sc.g_2;
@@ -275,18 +280,18 @@ impl EqcSign {
         mu: &FieldElement,
         psi: &FieldElement,
         b: bool,
-    ) -> (G1, EqcSignature) {
+    ) -> (RandomizedPK, EqcSignature, FieldElement) {
         // pick randomness, chi
         let chi = FieldElement::random();
 
         // randomize Commitment and opening vectors and user public key with randomness mu, chi
-        let mut rndmz_commit_vector = Vec::new();
+        let mut rndmz_commit_vector: Vec<G1> = Vec::new();
         for i in 0..orig_sig.commitment_vector.len() {
             let rndmz_commit_vector_i = mu * &orig_sig.commitment_vector[i];
             rndmz_commit_vector.push(rndmz_commit_vector_i);
         }
 
-        let mut rndmz_opening_vector = Vec::new();
+        let mut rndmz_opening_vector: Vec<FieldElement> = Vec::new();
         for i in 0..orig_sig.opening_vector.len() {
             let rndmz_opening_vector_i = mu * &orig_sig.opening_vector[i];
             rndmz_opening_vector.push(rndmz_opening_vector_i);
@@ -295,8 +300,9 @@ impl EqcSign {
         // Randomize public key with two given randomness psi and chi.
         // rndmz_pk_u = psi * (pk_u + chi * g_1)
         let rndmz_pk_u = psi * &(pk_u + &chi * &self.csc_scheme.param_sc.g_1);
+        // let rndmz_pk_u = rndmz_pk(pk_u, &chi, psi, &self.csc_scheme.param_sc.g_1);
 
-        // adapt the signiture for the randomized coomitment vector and PK_u_prime
+        // adapt the signature for the randomized commitment vector and PK_u_prime
         let Sigma { z, y_g1, y_hat, t } = &orig_sig.sigma;
 
         if let VK::G1(vk0) = &vk[0] {
@@ -347,6 +353,7 @@ impl EqcSign {
                     commitment_vector: rndmz_commit_vector,
                     opening_vector: rndmz_opening_vector,
                 },
+                chi,
             )
         } else {
             panic!("Invalid verification key");
@@ -358,7 +365,7 @@ impl EqcSign {
     ///
     /// # Arguments
     /// message_l: message set at index l that will be added in message vector
-    /// index_l: index l denotes the next position of message vector that needs to be fixed
+    /// index_l: index of the element to be added
     /// signature: EqcSignature {sigma, update_key, commitment_vector, opening_vector}
     /// mu: optional randomness, default to 1. Only applies when same randomness is used previosuly in changerep
     ///
@@ -366,11 +373,18 @@ impl EqcSign {
     /// new signature including the message set at index l
     pub fn change_rel(
         &self,
-        message_l: &InputType,
+        message_l: Option<&InputType>,
         index_l: usize,
         orig_sig: &EqcSignature,
         mu: &FieldElement,
-    ) -> (EqcSignature, FieldElement) {
+    ) -> (EqcSignature, Option<OpeningInformation>, Option<G1>) {
+        //    return  (orig_sig, None, None) if message_l.is_none()
+        if message_l.is_none() {
+            return (orig_sig.clone(), None, None);
+        }
+
+        let message_l = message_l.unwrap();
+
         let Sigma { z, y_g1, y_hat, t } = &orig_sig.sigma;
         let (commitment_l, opening_l) = self.encode(message_l);
 
@@ -424,10 +438,11 @@ impl EqcSign {
                     EqcSignature {
                         sigma: sigma_tilde,
                         update_key: orig_sig.update_key.clone(),
-                        commitment_vector: commitment_vector_tilde,
-                        opening_vector: opening_vector_tilde,
+                        commitment_vector: commitment_vector_tilde, // Commitment_vector_new
+                        opening_vector: opening_vector_tilde,       // Opening_vector_new
                     },
-                    opening_l,
+                    Some(opening_l),
+                    Some(commitment_l),
                 )
             } else {
                 panic!("index_l is the out of scope");
@@ -480,13 +495,13 @@ impl EqcSign {
         &self,
         vk: &[VK],
         sk_r: &FieldElement,
-        sigma_orphan: &Sigma,
+        sigma_orpha: &Sigma,
     ) -> Sigma {
-        let Sigma { z, y_g1, y_hat, t } = sigma_orphan;
+        let Sigma { z, y_g1, y_hat, t } = sigma_orpha;
 
         // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
-            let t_new = t + (vk0 * sk_r);
+            let t_new = t + vk0 * sk_r;
             Sigma {
                 z: z.clone(),
                 y_g1: y_g1.clone(),
@@ -498,7 +513,8 @@ impl EqcSign {
         }
     }
 }
-pub fn rndmz_pk(pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1) -> G1 {
+pub type RandomizedPK = G1;
+pub fn rndmz_pk(pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1) -> RandomizedPK {
     psi * (pk_u + chi * g_1)
 }
 
@@ -625,7 +641,7 @@ mod tests {
         let mu = FieldElement::random();
         let psi = FieldElement::random();
 
-        let (rndmz_pk_u, signature) =
+        let (rndmz_pk_u, signature, chi) =
             sign_scheme.change_rep(&vk, &pk_u, &signature_original, &mu, &psi, b);
 
         assert!(sign_scheme.verify(
@@ -673,7 +689,7 @@ mod tests {
         let mu = FieldElement::random();
         let psi = FieldElement::random();
 
-        let (rndmz_pk_u, signature) = sign_scheme.change_rep(
+        let (rndmz_pk_u, signature, chi) = sign_scheme.change_rep(
             &vk,
             &pk_u,
             &signature_original,
@@ -755,8 +771,8 @@ mod tests {
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         let mu = FieldElement::one();
 
-        let (signature_chged, _opening_l) =
-            sign_scheme.change_rel(&message_l, 3, &signature_original, &mu);
+        let (signature_chged, _opening_l, commitment_l) =
+            sign_scheme.change_rel(Some(&message_l), 3, &signature_original, &mu);
 
         assert!(sign_scheme.verify(
             &vk,
@@ -795,7 +811,7 @@ mod tests {
         let mu = FieldElement::random();
         let psi = FieldElement::random();
 
-        let (rndmz_pk_u, signature_prime) =
+        let (rndmz_pk_u, signature_prime, chi) =
             sign_scheme.change_rep(&vk, &pk_u, &signature_original, &mu, &psi, b);
 
         // verify the signature_prime
@@ -809,8 +825,8 @@ mod tests {
         // change_rel
         let message_l = InputType::VecString(messages_vectors.message3_str);
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
-        let (signature_tilde, _opening_l) =
-            sign_scheme.change_rel(&message_l, 3, &signature_prime, &mu);
+        let (signature_tilde, _opening_l, commitment_l) =
+            sign_scheme.change_rel(Some(&message_l), 3, &signature_prime, &mu);
 
         // verify the signature
         assert!(sign_scheme.verify(
@@ -848,10 +864,10 @@ mod tests {
         let (sk_new, pk_u_new) = sign_scheme.user_keygen();
 
         // 5. send_convert_sig to create sigma_orphan
-        let sigma_orphan = sign_scheme.send_convert_sig(&vk, &sk_u, &signature_original.sigma);
+        let sigma_orpha = sign_scheme.send_convert_sig(&vk, &sk_u, &signature_original.sigma);
 
         // 6. receive_convert_sig takes sigma_orphan to create sk_new and sigma_orphan
-        let sigma_new = sign_scheme.receive_convert_sig(&vk, &sk_new, &sigma_orphan);
+        let sigma_new = sign_scheme.receive_convert_sig(&vk, &sk_new, &sigma_orpha);
 
         // 7. verify the signature using sigma_new
         assert!(sign_scheme.verify(
