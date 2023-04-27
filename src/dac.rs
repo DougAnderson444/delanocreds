@@ -3,6 +3,8 @@
 //! - Practical Delegatable Anonymous Credentials From Equivalence Class Signatures, PETS 2023.
 //!    https://eprint.iacr.org/2022/680
 use super::spseq_uc;
+use crate::set_commits::Commitment;
+use crate::set_commits::CrossSetCommitment;
 use crate::spseq_uc::EqcSign;
 use crate::spseq_uc::EqcSignature;
 use crate::spseq_uc::OpeningInformation;
@@ -22,6 +24,7 @@ struct Dac {
     max_cardinal: usize,
     spseq_uc: EqcSign,
     zkp: DamgardTransform,
+    setcommit: CrossSetCommitment,
 }
 
 struct User {
@@ -62,6 +65,13 @@ pub struct NymProof {
     pub nym: G1, // nym === stm
     pub response: FieldElement,
 }
+#[derive(Clone)]
+pub struct CredProof {
+    sigma: Sigma,
+    commitment_vector: Vec<G1>,
+    witness_pi: G1,
+    proof_nym_p: NymProof,
+}
 
 // impl AsRef from Nym
 impl Nym {
@@ -86,6 +96,7 @@ impl Dac {
             max_cardinal: t,
             spseq_uc: EqcSign::new(t),
             zkp: DamgardTransform::new(),
+            setcommit: CrossSetCommitment::new(t),
         }
     }
 
@@ -117,6 +128,7 @@ impl Dac {
         // create a proof for nym
         let (pedersen_commit, pedersen_open) = self.zkp.announce();
 
+        // TODO: create func or Builder for this
         let state = ChallengeState {
             name: "schnorr".to_owned(),
             g: Generator::G1(self.zkp.pedersen.g.clone()),
@@ -263,11 +275,129 @@ impl Dac {
             chi,
         }
     }
+
+    /// Proof of Credentials
+    /// Generates a proof of a credential for a given pseudonym and selective disclosure D.
+    pub fn proof_cred(
+        &self,
+        vk: &[VK],
+        nym_r: &G1,
+        aux_r: &FieldElement,
+        cred: &EqcSignature,
+        all_attributes: &Vec<InputType>,
+        selected_attrs: &Vec<InputType>,
+    ) -> CredProof {
+        let mu = FieldElement::one();
+        let psi = FieldElement::random();
+
+        // run change rep to randomize credential and user pk (i.e., create a new nym)
+        // vk: &[VK], pk_u: &G1, orig_sig: &EqcSignature, mu: &FieldElement, psi: &FieldElement, b: bool
+        let randomize_update_key = false;
+        let (nym_p, cred_p, chi) =
+            self.spseq_uc
+                .change_rep(vk, nym_r, cred, &mu, &psi, randomize_update_key);
+
+        // create a Pedersen zkp announcement
+        let (pedersen_commit, pedersen_open) = self.zkp.announce();
+
+        // get a challenge
+        let state = ChallengeState {
+            name: "schnorr".to_owned(),
+            g: Generator::G1(self.zkp.pedersen.g.clone()),
+            hash: Sha256::digest(pedersen_commit.to_bytes(false)).into(),
+            statement: vec![Generator::G1(self.zkp.pedersen.h.clone())],
+        };
+        let challenge = DamgardTransform::challenge(&state);
+
+        // prover creates a respoonse (or proof)
+        let secret_wit = (aux_r + chi) * psi;
+        let response = DamgardTransform::response(
+            &challenge,
+            &pedersen_open.announce_randomness,
+            &nym_p,
+            &secret_wit,
+        );
+
+        // also check DamgardTransform
+        // pub struct NymProof {
+        //     pub challenge: FieldElement,
+        //     pub pedersen_open: PedersenOpen,
+        //     pub pedersen_commit: G1,
+        //     pub nym: G1, // nym === stm
+        //     pub response: FieldElement,
+        // }
+        // let proof_nym_p = (challenge, pedersen_open, pedersen_commit, nym_p, response);
+        let proof_nym_p = NymProof {
+            challenge,
+            pedersen_open,
+            pedersen_commit,
+            nym: nym_p,
+            response,
+        };
+
+        // create a witness for the attributes set that needed to be disclosed
+        let mut witness = Vec::new();
+        for i in 0..selected_attrs.len() {
+            let opened = CrossSetCommitment::open_subset(
+                &self.spseq_uc.csc_scheme.param_sc,
+                &all_attributes[i],
+                &cred_p.opening_vector[i],
+                &selected_attrs[i],
+            );
+            // if opened is none, skip. Otherwise, push it on
+            if let Some(opened) = opened {
+                witness.push(opened);
+            }
+        }
+
+        let mut commitment_vectors = Vec::new();
+        for i in 0..selected_attrs.len() {
+            commitment_vectors.push(cred_p.commitment_vector[i].clone());
+        }
+
+        // let witness_pi = self.setcommit.aggregate_cross(Witness, list_C)
+        let witness_pi = CrossSetCommitment::aggregate_cross(&witness, &commitment_vectors);
+
+        // output the whole proof = (sigma_prime, rndmz_commitment_vector, nym_P, Witness_pi, proof_nym_p)
+        CredProof {
+            sigma: cred_p.sigma,                         // type: EqcSignature
+            commitment_vector: cred_p.commitment_vector, // type: Vec<G1>
+            witness_pi,                                  // type: G1
+            proof_nym_p, // type: (FieldElement, PedersenOpening, PedersenCommitment, G1, FieldElement)
+        }
+    }
+
+    /// Verify proof of a credential
+    pub fn verify_proof(
+        &self,
+        vk: &[VK],
+        proof: &CredProof,
+        selected_attrs: &Vec<InputType>,
+    ) -> bool {
+        let mut commitment_vectors = Vec::new();
+
+        // filter set commitments regarding the selected attributes
+        for i in 0..selected_attrs.len() {
+            commitment_vectors.push(proof.commitment_vector[i].clone());
+        }
+        // check the proof is valid for each
+        let check_verify_cross = CrossSetCommitment::verify_cross(
+            &self.spseq_uc.csc_scheme.param_sc,
+            &commitment_vectors,
+            selected_attrs,
+            &proof.witness_pi,
+        );
+
+        let check_zkp_verify = self.zkp.verify(&proof.proof_nym_p);
+
+        // assert both check_verify_cross and check_zkp_verify are true
+        check_verify_cross && check_zkp_verify
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::InputType;
+    use crate::{dac, utils::InputType};
 
     use super::*;
 
@@ -441,8 +571,8 @@ mod tests {
         let cred = dac.issue_cred(
             &vk_ca,
             &vec![
-                InputType::VecString(message1_str),
-                InputType::VecString(message2_str),
+                InputType::VecString(message1_str.clone()),
+                InputType::VecString(message2_str.clone()),
             ],
             &sk_ca,
             &nym_u.clone(),
@@ -482,8 +612,25 @@ mod tests {
         // subset of each message set
         let sub_list1_str = vec![age.to_owned(), name.to_owned()];
         let sub_list2_str = vec![gender.to_owned(), company.to_owned()];
+        let all_attributes = vec![
+            InputType::VecString(message1_str),
+            InputType::VecString(message2_str),
+        ];
+        let selected_attrs = vec![
+            InputType::VecString(sub_list1_str),
+            InputType::VecString(sub_list2_str),
+        ];
 
         // prepare a proof
-        // let proof = dac.proof_cred()
+        let proof = dac.proof_cred(
+            &vk_ca,
+            &nym_r.public_key,
+            &nym_r.secret,
+            &cred_r_u.sig,
+            &all_attributes,
+            &selected_attrs,
+        );
+
+        assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs));
     }
 }

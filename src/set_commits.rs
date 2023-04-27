@@ -201,9 +201,6 @@ pub trait Commitment {
         // compute a witness for the subset
         let coeff_witn = polyfromroots(create_witn_elements);
 
-        // print len of coeff_witn
-        println!("len of coeff_witn: {}", coeff_witn.coefficients().len());
-
         // multiply each G1 in pp_commit_g1 Vec<G1> by each coefficient witness in the polynomial (FieldElementVector)
         let mut witn_groups = Vec::with_capacity(coeff_witn.coefficients().len());
         for i in 0..coeff_witn.coefficients().len() {

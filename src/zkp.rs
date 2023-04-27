@@ -9,7 +9,7 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 
 use crate::dac::NymProof;
-use crate::utils::{self, Pedersen, PedersenCommit, PedersenOpen};
+use crate::utils::{Pedersen, PedersenCommit, PedersenOpen};
 
 #[derive(Clone, Debug)]
 pub enum Generator {
@@ -20,8 +20,8 @@ pub enum Generator {
 impl Display for Generator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Generator::G1(g) => write!(f, "{}", g),
-            Generator::G2(g) => write!(f, "{}", g),
+            Generator::G1(g) => write!(f, "{g}"),
+            Generator::G2(g) => write!(f, "{g}"),
         }
     }
 }
@@ -170,7 +170,7 @@ pub trait Schnorr {
 
         let hash = Sha256::digest(state.as_bytes());
 
-        FieldElement::from_hex(format!("{:X}", hash)).unwrap()
+        FieldElement::from_hex(format!("{hash:X}")).unwrap()
     }
 
     fn response(
@@ -205,7 +205,7 @@ impl ZKPSchnorr {
         response: &FieldElement,
     ) -> bool {
         let left_side = response * G1::generator();
-        let right_side = (announce_element + challenge * stm);
+        let right_side = announce_element + challenge * stm;
         left_side == right_side
     }
 }
@@ -224,8 +224,8 @@ impl DamgardTransform {
     }
     pub fn verify(&self, proof_nym_u: &NymProof) -> bool {
         let left_side = proof_nym_u.response.clone() * &self.pedersen.g;
-        let right_side = (proof_nym_u.pedersen_open.announce_element.as_ref().unwrap()
-            + proof_nym_u.challenge.clone() * proof_nym_u.nym.clone());
+        let right_side = proof_nym_u.pedersen_open.announce_element.as_ref().unwrap()
+            + proof_nym_u.challenge.clone() * proof_nym_u.nym.clone();
         left_side == right_side
             && self
                 .pedersen
