@@ -1,4 +1,4 @@
-# Delegatable Anonymous Credentials
+# **Del**egatable **Ano**nymous **Cred**ential**s** (Delanocreds)
 
 Create messages that can be held by third parties, re-delegated, and verified without revealing the identity of the holder.
 

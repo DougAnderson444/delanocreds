@@ -1,3 +1,4 @@
+use crate::spseq_uc::MaxCardinality;
 use crate::utils::polyfromroots;
 use crate::utils::InputType;
 use amcl_wrapper::extension_field_gt::GT;
@@ -18,7 +19,7 @@ pub struct ParamSetCommitment {
     pub pp_commit_g2: Vec<G2>,
     pub g_2: G2,
     pub g_1: G1,
-    pub max_cardinality: usize,
+    pub max_cardinality: MaxCardinality,
 }
 
 impl ParamSetCommitment {
@@ -30,15 +31,15 @@ impl ParamSetCommitment {
     ///
     /// # Returns
     /// ParamSetCommitment
-    pub fn new(t: usize, base: FieldElement) -> ParamSetCommitment {
+    pub fn new(t: MaxCardinality, base: FieldElement) -> ParamSetCommitment {
         let g_2 = G2::generator();
         let g_1 = G1::generator();
 
         // take length of t as size by using
-        let mut pp_commit_g1: Vec<G1> = Vec::with_capacity(t);
-        let mut pp_commit_g2: Vec<G2> = Vec::with_capacity(t);
+        let mut pp_commit_g1: Vec<G1> = Vec::with_capacity(t.0);
+        let mut pp_commit_g2: Vec<G2> = Vec::with_capacity(t.0);
 
-        for i in 0..t {
+        for i in 0..t.0 {
             pp_commit_g1.push(g_1.clone() * base.pow(&FieldElement::from(i as u64)));
             pp_commit_g2.push(g_2.clone() * base.pow(&FieldElement::from(i as u64)));
         }
@@ -60,7 +61,7 @@ impl ParamSetCommitment {
 /// ParamSetCommitment: public parameters for the commitment scheme
 /// AlphaTrapdoor: Pederson trapdoor, which is a secret key generated from the setup function as a random order of the Group
 pub trait Commitment {
-    fn setup(max_cardinality: usize) -> (ParamSetCommitment, FieldElement) {
+    fn setup(max_cardinality: MaxCardinality) -> (ParamSetCommitment, FieldElement) {
         let alpha_trapdoor = FieldElement::random();
 
         (
@@ -209,9 +210,6 @@ pub trait Commitment {
                 .push(param_sc.pp_commit_g1[i].clone() * coeff_witn.coefficients()[i].clone());
         }
 
-        //print len of witn_groups
-        println!("len of witn_groups: {}", witn_groups.len());
-
         // summ all witn_groups points to get a single point
         let witn_sum = witn_groups.iter().fold(G1::identity(), |acc, x| acc + x);
 
@@ -296,7 +294,7 @@ impl CrossSetCommitment {
     ///
     /// # Returns
     /// CrossSet Commitment scheme
-    pub fn new(t: usize) -> Self {
+    pub fn new(t: MaxCardinality) -> Self {
         let (param_sc, alpha_trapdoor) = CrossSetCommitment::setup(t);
         Self {
             param_sc,
@@ -454,7 +452,7 @@ mod test {
         let set_str: InputType =
             InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
-        let (pp, _alpha) = SetCommitment::setup(max_cardinal);
+        let (pp, _alpha) = SetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str);
         // assrt open_set with pp, commitment, O, set_str
         assert!(SetCommitment::open_set(
@@ -478,7 +476,7 @@ mod test {
             InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
         let subset_str_1: InputType = InputType::VecString(vec![age.to_owned(), name.to_owned()]);
-        let (pp, _alpha) = SetCommitment::setup(max_cardinal);
+        let (pp, _alpha) = SetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str);
         let witness_subset =
             SetCommitment::open_subset(&pp, &set_str, &opening_info, &subset_str_1);
@@ -521,7 +519,7 @@ mod test {
 
         // create two set commitments for two sets set_str and set_str2
         let max_cardinal = 5;
-        let (pp, _alpha) = CrossSetCommitment::setup(max_cardinal);
+        let (pp, _alpha) = CrossSetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str);
         let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2);
 

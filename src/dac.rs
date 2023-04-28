@@ -5,8 +5,10 @@
 use super::spseq_uc;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
+use crate::spseq_uc::AttributesLength;
 use crate::spseq_uc::EqcSign;
 use crate::spseq_uc::EqcSignature;
+use crate::spseq_uc::MaxCardinality;
 use crate::spseq_uc::OpeningInformation;
 use crate::spseq_uc::RandomizedPK;
 use crate::spseq_uc::SecretWitness;
@@ -19,24 +21,22 @@ use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use sha2::{Digest, Sha256};
 
-struct Dac {
-    l_message: usize,
-    max_cardinal: usize,
+pub(crate) struct Dac {
+    l_message: AttributesLength,
+    max_cardinal: MaxCardinality,
     spseq_uc: EqcSign,
     zkp: DamgardTransform,
     setcommit: CrossSetCommitment,
 }
 
-struct User {
-    vk: Vec<VK>,
-    sk: Vec<FieldElement>,
+pub struct User {
     pk_u: G1,
     sk_u: SecretWitness,
     // zkp: DamgardTransform,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct Nym {
+pub struct Nym {
     public_key: RandomizedPK,
     secret: SecretWitness,
     proof: NymProof,
@@ -90,28 +90,20 @@ impl Dac {
     ///
     /// # Returns
     /// DAC
-    pub fn new(t: usize, l_message: usize) -> Dac {
+    pub fn new(t: MaxCardinality, l_message: AttributesLength) -> Dac {
         Dac {
             l_message,
-            max_cardinal: t,
-            spseq_uc: EqcSign::new(t),
+            max_cardinal: t.clone(),
+            spseq_uc: EqcSign::new(t.clone()),
             zkp: DamgardTransform::new(),
             setcommit: CrossSetCommitment::new(t),
         }
     }
 
     pub fn user_keygen(&self) -> User {
-        let sign_scheme = spseq_uc::EqcSign::new(self.max_cardinal);
-        let (sk, vk) = sign_scheme.sign_keygen(self.l_message);
-        let (sk_u, pk_u) = sign_scheme.user_keygen();
+        let (sk_u, pk_u) = self.spseq_uc.user_keygen();
 
-        User {
-            vk,
-            sk,
-            pk_u,
-            sk_u,
-            // zkp: self.zkp,
-        }
+        User { pk_u, sk_u }
     }
 
     /// Generate a new pseudonym and auxiliary information.
@@ -278,7 +270,7 @@ impl Dac {
 
     /// Proof of Credentials
     /// Generates a proof of a credential for a given pseudonym and selective disclosure D.
-    pub fn proof_cred(
+    pub fn prove_cred(
         &self,
         vk: &[VK],
         nym_r: &G1,
@@ -318,15 +310,6 @@ impl Dac {
             &secret_wit,
         );
 
-        // also check DamgardTransform
-        // pub struct NymProof {
-        //     pub challenge: FieldElement,
-        //     pub pedersen_open: PedersenOpen,
-        //     pub pedersen_commit: G1,
-        //     pub nym: G1, // nym === stm
-        //     pub response: FieldElement,
-        // }
-        // let proof_nym_p = (challenge, pedersen_open, pedersen_commit, nym_p, response);
         let proof_nym_p = NymProof {
             challenge,
             pedersen_open,
@@ -425,7 +408,9 @@ mod tests {
         ];
         let message3_str = vec![insurance.to_owned(), car_type.to_owned()];
 
-        let dac = Dac::new(5, 10);
+        let max_cardinality = 5;
+        let l_message = 10;
+        let dac = Dac::new(MaxCardinality(max_cardinality), AttributesLength(l_message));
 
         // create user key pair
         let user = dac.user_keygen();
@@ -478,7 +463,7 @@ mod tests {
 
         let max_cardinality = 5;
         let l_message = 10;
-        let dac = Dac::new(max_cardinality, l_message);
+        let dac = Dac::new(MaxCardinality(max_cardinality), AttributesLength(l_message));
         // TODO: Move sk_ca, vk_ca to DAC inner? Depends if you figure it'll be used with multiple keypairs
         let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(dac.l_message);
 
@@ -518,12 +503,13 @@ mod tests {
             &cred.sigma
         ));
 
-        assert!(dac.spseq_uc.verify(
-            &vk_ca,
-            &nym_u.public_key,
-            &cred_r_u.sig.commitment_vector,
-            &cred_r_u.sig.sigma
-        ));
+        // same as:
+        // assert!(dac.spseq_uc.verify(
+        //     &vk_ca,
+        //     &nym_u.public_key,
+        //     &cred_r_u.sig.commitment_vector,
+        //     &cred_r_u.sig.sigma
+        // ));
 
         let delegatee_cred = dac.delegatee(&vk_ca, &cred_r_u, &nym_r);
 
@@ -539,7 +525,7 @@ mod tests {
     fn test_delegate_and_add_attr() {
         // Test issuing/delegating a credential of user U to a user R.
         let age = "age = 30";
-        let name = "name = Alice ";
+        let name = "name = Alice";
         let drivers = "driver license = 12";
         let gender = "gender = male";
         let company = "company = ACME";
@@ -557,7 +543,7 @@ mod tests {
 
         let max_cardinality = 5;
         let l_message = 10;
-        let dac = Dac::new(max_cardinality, l_message);
+        let dac = Dac::new(MaxCardinality(max_cardinality), AttributesLength(l_message));
         // TODO: Move sk_ca, vk_ca to DAC inner? Depends if you figure it'll be used with multiple keypairs
         let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(dac.l_message);
 
@@ -622,7 +608,7 @@ mod tests {
         ];
 
         // prepare a proof
-        let proof = dac.proof_cred(
+        let proof = dac.prove_cred(
             &vk_ca,
             &nym_r.public_key,
             &nym_r.secret,

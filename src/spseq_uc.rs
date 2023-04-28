@@ -1,3 +1,21 @@
+// The differences between amcl_wrapper G1, G2 and GroupElement are subtle.
+// G1 and G2 are the types for the group elements in G1 and G2.
+// GroupElement is a trait that is implemented by G1 and G2.
+// The trait is used to abstract over the two groups.
+// The trait is implemented for G1 and G2.
+// Now, the differences between choosing G1 and G2 are that G1 is faster
+// for pairing operations, while G2 is faster for scalar multiplication.
+// The reason for this is that G1 is a subgroup of G2, and the pairing
+// operation is a bilinear map from G1 x G2 to GT.
+// The bilinear map is faster to compute when the first argument is in G1
+// and the second argument is in G2.
+// To make a bilinear pairing group using amcl_wrapper, you need to use
+// G1 and G2.
+// The code to use is as follows:
+// let g1 = G1::generator();
+// let g2 = G2::generator();
+// let gt = pair(&g1, &g2);
+
 use crate::set_commits::convert_mess_to_bn;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
@@ -23,6 +41,12 @@ pub enum VK {
     G2(G2),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AttributesLength(pub usize);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MaxCardinality(pub usize);
+
 pub type UpdateKey = Option<Vec<Vec<G1>>>;
 pub type SecretWitness = FieldElement;
 
@@ -35,6 +59,15 @@ pub struct EqcSign {
 
 pub type OpeningInformation = FieldElement;
 
+/// EqcSignature is the signature returned by the sign function
+/// It contains the sigma, update key, commitment vector and opening vector
+/// - `sigma` is the sigma value used in the signature
+/// - `update_key` is the update key used in the signature. The
+/// delegatee if allowed to perform further delegations is then given an update key for this signature.
+/// This update key allows to further extend the commitment vector and thus delegating a credential
+/// for the next level in the delegation hierarchy. If no further delegations are allowed, then no
+/// update key is provided.
+///
 #[derive(Clone)]
 pub struct EqcSignature {
     pub sigma: Sigma,
@@ -51,7 +84,7 @@ impl EqcSign {
     ///
     /// # Returns
     /// EqcSign
-    pub fn new(t: usize) -> EqcSign {
+    pub fn new(t: MaxCardinality) -> EqcSign {
         let csc_scheme = CrossSetCommitment::new(t);
         EqcSign { csc_scheme }
     }
@@ -71,12 +104,12 @@ impl EqcSign {
 
     /// Generates signing key pair given the public parameters and length of the message
     /// # Arguments
-    pub fn sign_keygen(&self, l_message: usize) -> (Vec<FieldElement>, Vec<VK>) {
+    pub fn sign_keygen(&self, l_message: AttributesLength) -> (Vec<FieldElement>, Vec<VK>) {
         // compute secret keys for each item in l_message
         let mut sk = Vec::new();
         let mut vk: Vec<VK> = Vec::new();
         // sk has to be at least 2 longer than l_message, to compute `list_z` in `sign()` function which adds +2
-        for _ in 0..l_message + 2 {
+        for _ in 0..l_message.0 + 2 {
             let sk_i = FieldElement::random();
             // compute public keys
             let vk_i = sk_i.clone() * &self.csc_scheme.param_sc.g_2;
@@ -180,7 +213,7 @@ impl EqcSign {
                 // only valid keys are between commitment length (k) an length (l), k_prime.length = k < k' < l
                 for k in messages_vector.len() + 1..k_prime + 1 {
                     let mut uk = Vec::new();
-                    for i in 0..self.csc_scheme.param_sc.max_cardinality {
+                    for i in 0..self.csc_scheme.param_sc.max_cardinality.0 {
                         let uk_i = y_rand.inverse()
                             * sk[k + 1].clone()
                             * &self.csc_scheme.param_sc.pp_commit_g1[i];
@@ -260,15 +293,15 @@ impl EqcSign {
     /// The update key is computed during the signing process.
     ///
     /// # Arguments
-    /// vk: the verification key
-    /// pk_u: the user public key
-    /// commitment_vector: the commitment vector
-    /// opening_vector: opening information vector related to commitment vector
-    /// sigma: the signature
-    /// mu: randomness is used to randomize commitment vector and signature accordingly
-    /// psi: randomness is used to randomize commitment vector and signature accordingly
-    /// b: a flag to determine if it needs to randomize update_key as well or not
-    /// update_key: it can be none, in which case there is no need for randomization
+    /// - `vk`: the verification key
+    /// - `pk_u`: the user public key
+    /// - `commitment_vector`: the commitment vector
+    /// - `opening_vector`: opening information vector related to commitment vector
+    /// - `sigma`: the signature
+    /// - `mu`: randomness is used to randomize commitment vector and signature accordingly
+    /// - `psi`: randomness is used to randomize commitment vector and signature accordingly
+    /// - `b`: a flag to determine if it needs to randomize `update_key` as well or not. Only takes
+    /// effect if there is both `b` and an `orig_sig.update_key`
     ///
     /// # Returns
     /// returns an updated signature σ for a new commitment vector and corresponding openings
@@ -334,7 +367,7 @@ impl EqcSign {
                         let update_keylist = usign.get(k - 1).expect("Valid");
                         for item in update_keylist
                             .iter()
-                            .take(self.csc_scheme.param_sc.max_cardinality)
+                            .take(self.csc_scheme.param_sc.max_cardinality.0)
                         {
                             let mainop_i = mu * &psi.inverse() * item;
                             mainop.push(mainop_i);
@@ -364,10 +397,10 @@ impl EqcSign {
     /// Update the signature for a new commitment vector including 𝐶_L for message_l using update_key
     ///
     /// # Arguments
-    /// message_l: message set at index l that will be added in message vector
-    /// index_l: index of the element to be added
-    /// signature: EqcSignature {sigma, update_key, commitment_vector, opening_vector}
-    /// mu: optional randomness, default to 1. Only applies when same randomness is used previosuly in changerep
+    /// - `message_l`: message set at index l that will be added in message vector
+    /// - `index_l`: index of the element to be added
+    /// - `signature`: EqcSignature {sigma, update_key, commitment_vector, opening_vector}
+    /// - `mu`: optional randomness, default to 1. Only applies when same randomness is used previosuly in changerep
     ///
     /// # Returns
     /// new signature including the message set at index l
@@ -581,10 +614,10 @@ mod tests {
     fn test_sign() {
         // Generate a signature and verify it
         // create a signing keys for 10 messagses
-        let max_cardinal = 5;
+        let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
 
-        let l_message = 10;
+        let l_message = AttributesLength(10);
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
@@ -610,10 +643,10 @@ mod tests {
     #[test]
     fn test_changerep() {
         //create a signing keys for 10 messagses
-        let max_cardinal = 5;
+        let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
 
-        let l_message = 10;
+        let l_message = AttributesLength(10);
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
@@ -658,10 +691,10 @@ mod tests {
     #[test]
     fn test_changerep_update_key() {
         //create a signing keys for 10 messagses
-        let max_cardinal = 5;
+        let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
 
-        let l_message = 10;
+        let l_message = AttributesLength(10);
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
@@ -713,10 +746,10 @@ mod tests {
         // Generate a signature, run changrel function one the signature, add one additional commitment using update_key (uk) and verify it
 
         //create a signing keys for 10 messages
-        let max_cardinal = 5;
+        let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
 
-        let l_message = 3;
+        let l_message = AttributesLength(3);
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
@@ -786,10 +819,10 @@ mod tests {
     #[test]
     fn test_changerel_from_rep() {
         //create a signing keys for 10 messages
-        let max_cardinal = 5;
+        let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
 
-        let l_message = 10;
+        let l_message = AttributesLength(10);
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // create a user key pair
@@ -841,10 +874,10 @@ mod tests {
     #[test]
     fn test_convert() {
         // 1. sign_keygen
-        let max_cardinal = 5;
+        let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
 
-        let l_message = 10;
+        let l_message = AttributesLength(10);
         let (sk, vk) = sign_scheme.sign_keygen(l_message);
 
         // 2. user_keygen
