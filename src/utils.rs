@@ -69,9 +69,14 @@ impl PedersenOpen {
         self.announce_element = Some(elem);
     }
 }
-
+impl Default for Pedersen {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Pedersen {
     pub fn new() -> Self {
+        // h is the statement. d is the trapdoor. g is the generator. h = d*g
         let g = G1::generator();
         let d = FieldElement::random();
         let h = &d * &g;

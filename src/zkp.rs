@@ -157,9 +157,10 @@ pub trait Schnorr {
     fn new() -> Self;
 
     // In rust, the implemented default traits are:
-    fn setup() -> G2 {
-        G2::generator()
+    fn setup() -> G1 {
+        G1::generator()
     }
+
     fn challenge(state: &ChallengeState) -> Challenge {
         let mut elem_str = vec![state.statement.len().to_string()];
         elem_str.extend(state.statement.iter().map(|x| x.to_string()));
@@ -186,12 +187,16 @@ pub trait Schnorr {
     }
 }
 
-pub struct ZKPSchnorr {}
+pub struct ZKPSchnorr {
+    g_1: G1,
+}
 
 // use defaults
 impl Schnorr for ZKPSchnorr {
     fn new() -> Self {
-        Self {}
+        Self {
+            g_1: G1::generator(),
+        }
     }
 }
 
@@ -207,6 +212,12 @@ impl ZKPSchnorr {
         let left_side = response * G1::generator();
         let right_side = announce_element + challenge * stm;
         left_side == right_side
+    }
+
+    fn announce(&self) -> (G1, FieldElement) {
+        let w_random = FieldElement::random();
+        let w_element = w_random.clone() * &self.g_1;
+        (w_element, w_random)
     }
 }
 
@@ -275,5 +286,70 @@ mod tests {
         let result_single =
             ZkpSchnorrFiatShamir::non_interact_verify(&g_2, &vec![h], &proof_single);
         assert!(result_single);
+    }
+
+    #[test]
+    fn test_interact_prove() {
+        // Create a random statement for testing
+        let x = FieldElement::random();
+        let zkpsch = ZKPSchnorr::new();
+        let stm = x.clone() * zkpsch.g_1.clone();
+
+        let announce = zkpsch.announce();
+
+        // verifier creates a challenge
+        let state = ChallengeState {
+            name: "schnorr".to_string(),
+            g: Generator::G1(zkpsch.g_1.clone()),
+            statement: vec![Generator::G1(stm.clone())],
+            hash: Sha256::digest(announce.0.to_bytes(false)).into(),
+        };
+        let challenge = ZKPSchnorr::challenge(&state);
+
+        // prover creates a respoonse (or proof)
+        let response = ZKPSchnorr::response(&challenge, &announce.1, &stm, &x);
+
+        //     assert(Schnorr.verify(challenge, W_element, stm, response))
+        assert!(zkpsch.verify(&challenge, &announce.0, &stm, &response));
+    }
+
+    #[test]
+    fn test_damgard_transform() {
+        let damgard = DamgardTransform::new();
+
+        // create a statement. A statement is a secret and a commitment to that secret.
+        // A commitment is a generator raised to the power of the secret.
+        let secret = FieldElement::random(); // x
+        let statement = secret.clone() * damgard.pedersen.g.clone(); // h
+
+        let (pedersen_commit, pedersen_open) = damgard.announce();
+
+        // TODO: create func or Builder for this
+        let state = ChallengeState {
+            name: "schnorr".to_owned(),
+            g: Generator::G1(damgard.pedersen.g.clone()),
+            hash: Sha256::digest(pedersen_commit.to_bytes(false)).into(),
+            statement: vec![Generator::G1(statement.clone())],
+        };
+
+        let challenge = DamgardTransform::challenge(&state);
+
+        // (challenge: &Challenge, announce_randomness: &FieldElement, stm: &G2, secret_wit: &FieldElement)
+        let response = DamgardTransform::response(
+            &challenge,
+            &pedersen_open.announce_randomness,
+            &statement,
+            &secret,
+        );
+
+        let proof_nym = NymProof {
+            challenge,
+            pedersen_open,
+            pedersen_commit,
+            nym: statement,
+            response,
+        };
+
+        assert!(damgard.verify(&proof_nym));
     }
 }

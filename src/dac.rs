@@ -133,7 +133,7 @@ impl Dac {
             name: "schnorr".to_owned(),
             g: Generator::G1(self.zkp.pedersen.g.clone()),
             hash: Sha256::digest(pedersen_commit.to_bytes(false)).into(),
-            statement: vec![Generator::G1(self.zkp.pedersen.h.clone())],
+            statement: vec![Generator::G1(self.zkp.pedersen.h.clone())], // TODO: Do we want to use the default statement?
         };
 
         let challenge = DamgardTransform::challenge(&state);
