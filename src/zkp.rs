@@ -9,6 +9,7 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 
 use crate::dac::NymProof;
+use crate::spseq_uc::RandomizedPubKey;
 use crate::utils::{Pedersen, PedersenCommit, PedersenOpen};
 
 #[derive(Clone, Debug)]
@@ -177,10 +178,10 @@ pub trait Schnorr {
     fn response(
         challenge: &Challenge,
         announce_randomness: &FieldElement,
-        stm: &G1,
+        stm: &RandomizedPubKey,
         secret_wit: &FieldElement,
     ) -> FieldElement {
-        assert!(secret_wit * G1::generator() == *stm);
+        assert!(secret_wit * G1::generator() == *stm.as_ref());
         let mut res = BigNum::frombytes(&(announce_randomness + challenge * secret_wit).to_bytes());
         res.rmod(&CurveOrder);
         res.into()
@@ -236,7 +237,7 @@ impl DamgardTransform {
     pub fn verify(&self, proof_nym_u: &NymProof) -> bool {
         let left_side = proof_nym_u.response.clone() * &self.pedersen.g;
         let right_side = proof_nym_u.pedersen_open.announce_element.as_ref().unwrap()
-            + proof_nym_u.challenge.clone() * proof_nym_u.nym.clone();
+            + proof_nym_u.challenge.clone() * proof_nym_u.public_key.as_ref();
         left_side == right_side
             && self
                 .pedersen
@@ -293,7 +294,7 @@ mod tests {
         // Create a random statement for testing
         let x = FieldElement::random();
         let zkpsch = ZKPSchnorr::new();
-        let stm = x.clone() * zkpsch.g_1.clone();
+        let stm = RandomizedPubKey(x.clone() * zkpsch.g_1.clone());
 
         let announce = zkpsch.announce();
 
@@ -301,9 +302,10 @@ mod tests {
         let state = ChallengeState {
             name: "schnorr".to_string(),
             g: Generator::G1(zkpsch.g_1.clone()),
-            statement: vec![Generator::G1(stm.clone())],
+            statement: vec![Generator::G1(stm.as_ref().clone())],
             hash: Sha256::digest(announce.0.to_bytes(false)).into(),
         };
+
         let challenge = ZKPSchnorr::challenge(&state);
 
         // prover creates a respoonse (or proof)
@@ -320,7 +322,7 @@ mod tests {
         // create a statement. A statement is a secret and a commitment to that secret.
         // A commitment is a generator raised to the power of the secret.
         let secret = FieldElement::random(); // x
-        let statement = secret.clone() * damgard.pedersen.g.clone(); // h
+        let statement = RandomizedPubKey(secret.clone() * damgard.pedersen.g.clone()); // h
 
         let (pedersen_commit, pedersen_open) = damgard.announce();
 
@@ -329,7 +331,7 @@ mod tests {
             name: "schnorr".to_owned(),
             g: Generator::G1(damgard.pedersen.g.clone()),
             hash: Sha256::digest(pedersen_commit.to_bytes(false)).into(),
-            statement: vec![Generator::G1(statement.clone())],
+            statement: vec![Generator::G1(statement.as_ref().clone())],
         };
 
         let challenge = DamgardTransform::challenge(&state);
@@ -346,7 +348,7 @@ mod tests {
             challenge,
             pedersen_open,
             pedersen_commit,
-            nym: statement,
+            public_key: statement,
             response,
         };
 

@@ -40,12 +40,14 @@
 //!
 //! Credential Builder Options you can set:
 //! - Attributes (defaults to empty)
-//! - Delegatable (no opening information provided by default)
-//! - Can add attributes (defaults to false)
+//! - Delegatable (defaults to no `opening information` provided [false])
+//! - Can add attributes (defaults to no `update key` provided [false])
+//! - How many attributes can be added (`k_prime` defaults to zero(0) [none])
 //!
-//! Show a credential:
-//! - Re-randomize the signature for an updated commitment vector
-//! - Provide subset openings of the respective commitments
+//! Show a credential proof:
+//! - Randomize your public key into a pseudonym
+//! - Choose which attributes to show, even if they were issued by separate delegators
+//! - Generate a proof from the credential and
 
 use std::fmt;
 

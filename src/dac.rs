@@ -9,7 +9,7 @@ use crate::spseq_uc::EqcSign;
 use crate::spseq_uc::EqcSignature;
 use crate::spseq_uc::MaxCardinality;
 // use crate::spseq_uc::OpeningInformation;
-use crate::spseq_uc::RandomizedPK;
+use crate::spseq_uc::RandomizedPubKey;
 use crate::spseq_uc::SecretWitness;
 use crate::spseq_uc::Sigma;
 use crate::spseq_uc::VK;
@@ -33,7 +33,6 @@ pub struct User {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Nym {
-    public_key: RandomizedPK,
     secret: SecretWitness,
     proof: NymProof,
 }
@@ -43,11 +42,8 @@ pub struct DelegatedCred {
 }
 
 pub struct DelegateeCred {
-    pub sigma: Sigma,
-    pub commitment_vector: Vec<G1>,
-    // opening_vector: Vec<OpeningInformation>,
-    pub nym: RandomizedPK,
-    // chi: FieldElement,
+    pub nym: RandomizedPubKey,
+    pub cred: EqcSignature,
 }
 /// (FieldElement, PedersenOpen, G1, G1, FieldElement)
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -55,7 +51,7 @@ pub struct NymProof {
     pub challenge: FieldElement,
     pub pedersen_open: PedersenOpen,
     pub pedersen_commit: G1,
-    pub nym: G1, // nym === stm
+    pub public_key: RandomizedPubKey,
     pub response: FieldElement,
 }
 
@@ -111,7 +107,7 @@ impl Dac {
         let g_1 = G1::generator();
 
         // pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1
-        let nym: RandomizedPK = spseq_uc::rndmz_pk(&user.pk_u, &chi, &psi, &g_1);
+        let nym: RandomizedPubKey = spseq_uc::rndmz_pk(&user.pk_u, &chi, &psi, &g_1);
         let secret_wit = psi * (user.sk_u + chi);
 
         // create a proof for nym
@@ -139,12 +135,11 @@ impl Dac {
             challenge,
             pedersen_open,
             pedersen_commit,
-            nym: nym.clone(),
+            public_key: nym,
             response,
         };
 
         Nym {
-            public_key: nym,
             secret: secret_wit,
             proof: proof_nym,
         }
@@ -172,10 +167,10 @@ impl Dac {
             // check if delegate keys is provided
             let cred = self
                 .spseq_uc
-                .sign(&nym.public_key, sk, attr_vector, k_prime);
+                .sign(&nym.proof.public_key, sk, attr_vector, k_prime);
             assert!(self.spseq_uc.verify(
                 vk,
-                &nym.public_key,
+                &nym.proof.public_key,
                 &cred.commitment_vector,
                 &cred.sigma
             )); //, "signature/credential is not correct";
@@ -244,22 +239,22 @@ impl Dac {
 
         // run changrep to randomize and hide the whole credential
         let (nym_p, cred_p, _chi) = self.spseq_uc.change_rep(
-            vk_ca,              // verification key
-            &nym_r.public_key,  //
-            &signature_changed, // sigma_change
+            vk_ca,                   // verification key
+            &nym_r.proof.public_key, //
+            &signature_changed,      // sigma_change
             &mu,
             &psi,
             randomize_update_key,
         );
 
         // return output a new credential for the additional attribute set as well as the new user
-
+        // a EqcSignature needs: sigma, commitment_vector, opening_vector (if further delegation allowed), update_key (if updates to the attributes allowed)
         DelegateeCred {
-            sigma: cred_p.sigma,
-            commitment_vector: cred_p.commitment_vector,
+            // sigma: cred_p.sigma,
+            // commitment_vector: cred_p.commitment_vector,
             // opening_vector: cred_p.opening_vector,
             nym: nym_p,
-            // chi,
+            cred: cred_p, // chi,
         }
     }
 
@@ -309,7 +304,7 @@ impl Dac {
             challenge,
             pedersen_open,
             pedersen_commit,
-            nym: nym_p,
+            public_key: nym_p,
             response,
         };
 
@@ -369,7 +364,7 @@ impl Dac {
 
         let verify_sig = self.spseq_uc.verify(
             vk,
-            &proof.proof_nym_p.nym,
+            &proof.proof_nym_p.public_key,
             &proof.commitment_vector,
             &proof.sigma,
         );
@@ -426,14 +421,14 @@ mod tests {
             &sk_ca,
             &nym.clone(),
             Some(3),
-            nym.proof,
+            nym.proof.clone(),
         );
 
         // check the correctness of root credential
         // assert (spseq_uc.verify(pp_sign, vk_ca, nym_u, commitment_vector, sigma))
         assert!(dac.spseq_uc.verify(
             &vk_ca,
-            &nym.public_key,
+            &nym.proof.public_key,
             &cred.commitment_vector,
             &cred.sigma
         ));
@@ -458,6 +453,12 @@ mod tests {
             drivers_type_b.to_owned(),
         ];
 
+        // Test proving a credential to verifiers
+        let all_attributes = vec![
+            InputType::VecString(message1_str.clone()),
+            InputType::VecString(message2_str.clone()),
+        ];
+
         let max_cardinality = 5;
         let l_message = AttributesLength(10);
         let dac = Dac::new(MaxCardinality(max_cardinality));
@@ -480,7 +481,7 @@ mod tests {
             &sk_ca,
             &nym_u.clone(),
             k_prime,
-            nym_u.proof,
+            nym_u.proof.clone(),
         );
 
         // generate key pair of user R
@@ -495,7 +496,7 @@ mod tests {
         // verify change_rel
         assert!(dac.spseq_uc.verify(
             &vk_ca,
-            &nym_u.public_key, //pubkey used to make signature `cred`, used in change_rel
+            &nym_u.proof.public_key, //pubkey used to make signature `cred`, used in change_rel
             &cred.commitment_vector, //
             &cred.sigma
         ));
@@ -505,9 +506,25 @@ mod tests {
         assert!(dac.spseq_uc.verify(
             &vk_ca,
             &delegatee_cred.nym,
-            &delegatee_cred.commitment_vector,
-            &delegatee_cred.sigma
+            &delegatee_cred.cred.commitment_vector,
+            &delegatee_cred.cred.sigma
         ));
+
+        // TODO: Generate proof and verify from new cred
+        // let sub_list1_str = vec![age.to_owned(), name.to_owned()];
+        // let selected_attrs = vec![InputType::VecString(sub_list1_str)];
+
+        // // prepare a proof
+        // let proof = dac.proof_cred(
+        //     &vk_ca,
+        //     &nym_r.proof.public_key,
+        //     &nym_r.secret,
+        //     &delegatee_cred.cred,
+        //     &all_attributes,
+        //     &selected_attrs,
+        // );
+
+        // assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs));
     }
 
     #[test]
@@ -556,7 +573,7 @@ mod tests {
             &sk_ca,
             &nym_p.clone(),
             k_prime,
-            nym_p.proof,
+            nym_p.proof.clone(),
         );
 
         // subset of each message set
@@ -571,7 +588,7 @@ mod tests {
         // prepare a proof
         let proof = dac.proof_cred(
             &vk_ca,
-            &nym_p.public_key,
+            &nym_p.proof.public_key,
             &nym_p.secret,
             &cred,
             &all_attributes,

@@ -363,7 +363,7 @@ impl EqcSign {
         mu: &FieldElement,
         psi: &FieldElement,
         b: bool,
-    ) -> (RandomizedPK, EqcSignature, FieldElement) {
+    ) -> (RandomizedPubKey, EqcSignature, FieldElement) {
         // pick randomness, chi
         let chi = FieldElement::random();
 
@@ -429,7 +429,7 @@ impl EqcSign {
             }
 
             (
-                rndmz_pk_u,
+                RandomizedPubKey(rndmz_pk_u),
                 EqcSignature {
                     sigma: sigma_prime,
                     update_key: rndmz_update_key,
@@ -596,9 +596,33 @@ impl EqcSign {
         }
     }
 }
-pub type RandomizedPK = G1;
-pub fn rndmz_pk(pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1) -> RandomizedPK {
-    psi * (pk_u + chi * g_1)
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RandomizedPubKey(pub G1);
+
+/// Impl As_Ref
+impl AsRef<G1> for RandomizedPubKey {
+    fn as_ref(&self) -> &G1 {
+        &self.0
+    }
+}
+
+impl Deref for RandomizedPubKey {
+    type Target = G1;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Into<G1> for RandomizedPubKey {
+    fn into(self) -> G1 {
+        self.0
+    }
+}
+
+pub fn rndmz_pk(pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1) -> RandomizedPubKey {
+    RandomizedPubKey(psi * (pk_u + chi * g_1))
 }
 
 #[cfg(test)]
