@@ -26,6 +26,7 @@ use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
+use std::ops::Deref;
 use std::ops::Mul;
 
 #[derive(Clone)]
@@ -47,6 +48,54 @@ pub struct AttributesLength(pub usize);
 #[derive(Debug, Clone, PartialEq)]
 pub struct MaxCardinality(pub usize);
 
+impl From<usize> for AttributesLength {
+    fn from(item: usize) -> Self {
+        AttributesLength(item)
+    }
+}
+impl From<AttributesLength> for usize {
+    fn from(item: AttributesLength) -> Self {
+        item.0
+    }
+}
+
+impl Deref for AttributesLength {
+    type Target = usize;
+    fn deref(&self) -> &usize {
+        &self.0
+    }
+}
+
+impl AttributesLength {
+    pub fn new(item: usize) -> Self {
+        AttributesLength(item)
+    }
+}
+
+impl From<usize> for MaxCardinality {
+    fn from(item: usize) -> Self {
+        MaxCardinality(item)
+    }
+}
+impl From<MaxCardinality> for usize {
+    fn from(item: MaxCardinality) -> Self {
+        item.0
+    }
+}
+
+impl Deref for MaxCardinality {
+    type Target = usize;
+    fn deref(&self) -> &usize {
+        &self.0
+    }
+}
+
+impl MaxCardinality {
+    pub fn new(item: usize) -> Self {
+        MaxCardinality(item)
+    }
+}
+
 pub type UpdateKey = Option<Vec<Vec<G1>>>;
 pub type SecretWitness = FieldElement;
 
@@ -60,8 +109,9 @@ pub struct EqcSign {
 pub type OpeningInformation = FieldElement;
 
 /// EqcSignature is the signature returned by the sign function
-/// It contains the sigma, update key, commitment vector and opening vector
+/// It contains the sigma, update key, commitment vector
 /// - `sigma` is the sigma value used in the signature
+/// - `commitment_vector` is the commitment vector used in the signature
 /// - `update_key` is the update key used in the signature. The
 /// delegatee if allowed to perform further delegations is then given an update key for this signature.
 /// This update key allows to further extend the commitment vector and thus delegating a credential
