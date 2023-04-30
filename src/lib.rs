@@ -12,7 +12,7 @@
 //! which attributes to show (n of cardinality), which attributes to aggregate.
 //! - Delegation: Whether cred can be re-delegated or not (update_key).
 //!
-//! Every delegator can control how far delegations can go by further restricting the update key
+//! Every delegator can control how far delegations can go by further restricting the `update key`
 //! and a delegator can also restrict the possibility to show attributes from a certain level in
 //! the hierarchy (which corresponds to a commitment in the commitment vector) by not providing
 //! the opening of the commitment to the delegatee.
@@ -48,6 +48,25 @@
 //! - Randomize your public key into a pseudonym
 //! - Choose which attributes to show, even if they were issued by separate delegators
 //! - Generate a proof from the credential and
+//!
+//! Credential Constraints:
+//! - You can only
+//!
+//! States and Sub-states:
+//!
+//! Configuration: Unconfigured, configured
+//! Credential: Unissued, issued, delegated
+//! Delegatable: True, False. A credential is only delegatable if `update_key` is provided.
+//! Extendable: True, False. Only extendable if number of attribute commits is less than k_prime
+//! Showable: Up to the number of attributes in the credential. restricted by `opening_info `
+
+// Come up with a list of constraints for states and transitions between them.
+// The states are: unconfigured, configured, issued, delegatable, delegating, delegated.
+// The transitions are: configure, issue_cred, add_attribute, updateable, prove
+// For example:
+// In (state, transition) = (configured, issue_cred) - You can only issue a credential if the current number of attributes is below max_cardinality.
+// In (state, transition) = (configured, add_attribute) - You can only add more attributes if the current number of attribute is below message_l.
+// You can only add more attributes if the current number of attributes is below max_cardinality.
 
 use std::fmt;
 

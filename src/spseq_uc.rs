@@ -15,6 +15,14 @@
 // let g1 = G1::generator();
 // let g2 = G2::generator();
 // let gt = pair(&g1, &g2);
+//
+// Can I keep the same G1 generator across all users? Or do I need to
+// generate a new G1 generator for each user? The answer is that you can
+// keep the same G1 generator across all users. The reason is that the
+// generator is a public parameter, and it is not used in any secret
+// computation. The generator is used to generate the public key, and the
+// public key is used to verify the signature. The generator is not used
+// in the signing algorithm.
 
 use crate::set_commits::convert_mess_to_bn;
 use crate::set_commits::Commitment;
@@ -30,7 +38,7 @@ use std::ops::Deref;
 use std::ops::Mul;
 
 #[derive(Clone)]
-pub struct Sigma {
+pub struct Signature {
     z: G1,
     y_g1: G1,
     y_hat: G2,
@@ -112,6 +120,7 @@ pub type OpeningInformation = FieldElement;
 /// It contains the sigma, update key, commitment vector
 /// - `sigma` is the sigma value used in the signature
 /// - `commitment_vector` is the commitment vector used in the signature
+/// - `opening_vecotr` information used to delegate further, if available
 /// - `update_key` is the update key used in the signature. The
 /// delegatee if allowed to perform further delegations is then given an update key for this signature.
 /// This update key allows to further extend the commitment vector and thus delegating a credential
@@ -119,8 +128,8 @@ pub type OpeningInformation = FieldElement;
 /// update key is provided.
 ///
 #[derive(Clone)]
-pub struct EqcSignature {
-    pub sigma: Sigma,
+pub struct Credential {
+    pub sigma: Signature,
     pub update_key: UpdateKey,
     pub commitment_vector: Vec<G1>,
     pub opening_vector: Vec<FieldElement>,
@@ -200,7 +209,7 @@ impl EqcSign {
         sk: &[FieldElement],
         messages_vector: &Vec<InputType>,
         k_prime: Option<usize>,
-    ) -> EqcSignature {
+    ) -> Credential {
         // encode all messagse sets of the messages vector as set commitments
         let mut commitment_vector = Vec::new();
         let mut opening_vector = Vec::new();
@@ -238,7 +247,7 @@ impl EqcSign {
         // t = sk[1] * Y + sk[0] * pk_u
         let t = sk[1].clone() * y_g1.clone() + sk[0].clone() * pk_u;
 
-        let sigma = Sigma { z, y_g1, y_hat, t };
+        let sigma = Signature { z, y_g1, y_hat, t };
 
         // check if the update key is requested
         // then compute update key using k_prime,
@@ -272,7 +281,7 @@ impl EqcSign {
                     usign[k - 1] = uk.clone(); // first element is index 0 (message m is index m-1)
                 }
                 update_key = Some(usign);
-                return EqcSignature {
+                return Credential {
                     sigma,
                     update_key,
                     commitment_vector,
@@ -283,7 +292,7 @@ impl EqcSign {
             }
         }
 
-        EqcSignature {
+        Credential {
             sigma,
             update_key,
             commitment_vector,
@@ -297,10 +306,16 @@ impl EqcSign {
     /// - `pk_u`: user public key
     /// - `commitment_vector`: vector of commitments
     /// - `sigma`: signature
-    pub fn verify(&self, vk: &[VK], pk_u: &G1, commitment_vector: &Vec<G1>, sigma: &Sigma) -> bool {
+    pub fn verify(
+        &self,
+        vk: &[VK],
+        pk_u: &G1,
+        commitment_vector: &Vec<G1>,
+        sigma: &Signature,
+    ) -> bool {
         let g_1 = &self.csc_scheme.param_sc.g_1;
         let g_2 = &self.csc_scheme.param_sc.g_2;
-        let Sigma { z, y_g1, y_hat, t } = sigma;
+        let Signature { z, y_g1, y_hat, t } = sigma;
 
         let right_side = GT::ate_pairing(z, y_hat);
 
@@ -359,11 +374,11 @@ impl EqcSign {
         &self,
         vk: &[VK],
         pk_u: &G1,
-        orig_sig: &EqcSignature,
+        orig_sig: &Credential,
         mu: &FieldElement,
         psi: &FieldElement,
         b: bool,
-    ) -> (RandomizedPubKey, EqcSignature, FieldElement) {
+    ) -> (RandomizedPubKey, Credential, FieldElement) {
         // pick randomness, chi
         let chi = FieldElement::random();
 
@@ -386,10 +401,10 @@ impl EqcSign {
         // let rndmz_pk_u = rndmz_pk(pk_u, &chi, psi, &self.csc_scheme.param_sc.g_1);
 
         // adapt the signature for the randomized commitment vector and PK_u_prime
-        let Sigma { z, y_g1, y_hat, t } = &orig_sig.sigma;
+        let Signature { z, y_g1, y_hat, t } = &orig_sig.sigma;
 
         if let VK::G1(vk0) = &vk[0] {
-            let sigma_prime = Sigma {
+            let sigma_prime = Signature {
                 z: mu * &psi.inverse() * z,
                 y_g1: psi * y_g1,
                 y_hat: psi * y_hat,
@@ -430,7 +445,7 @@ impl EqcSign {
 
             (
                 RandomizedPubKey(rndmz_pk_u),
-                EqcSignature {
+                Credential {
                     sigma: sigma_prime,
                     update_key: rndmz_update_key,
                     commitment_vector: rndmz_commit_vector,
@@ -458,9 +473,9 @@ impl EqcSign {
         &self,
         message_l: Option<&InputType>,
         index_l: usize,
-        orig_sig: &EqcSignature,
+        orig_sig: &Credential,
         mu: &FieldElement,
-    ) -> (EqcSignature, Option<OpeningInformation>, Option<G1>) {
+    ) -> (Credential, Option<OpeningInformation>, Option<G1>) {
         //    return  (orig_sig, None, None) if message_l.is_none()
         if message_l.is_none() {
             return (orig_sig.clone(), None, None);
@@ -468,7 +483,7 @@ impl EqcSign {
 
         let message_l = message_l.unwrap();
 
-        let Sigma { z, y_g1, y_hat, t } = &orig_sig.sigma;
+        let Signature { z, y_g1, y_hat, t } = &orig_sig.sigma;
         let (commitment_l, opening_l) = self.encode(message_l);
 
         let rndmz_commitment_l = mu * &commitment_l;
@@ -505,7 +520,7 @@ impl EqcSign {
                 let gama_l = sum_points_uk_i.mul(opening_l.clone());
                 let z_tilde = z + &gama_l;
 
-                let sigma_tilde = Sigma {
+                let sigma_tilde = Signature {
                     z: z_tilde,
                     y_g1: y_g1.clone(),
                     y_hat: y_hat.clone(),
@@ -518,7 +533,7 @@ impl EqcSign {
                 opening_vector_tilde.push(rndmz_opening_l);
 
                 (
-                    EqcSignature {
+                    Credential {
                         sigma: sigma_tilde,
                         update_key: orig_sig.update_key.clone(),
                         commitment_vector: commitment_vector_tilde, // Commitment_vector_new
@@ -536,8 +551,11 @@ impl EqcSign {
         }
     }
 
-    /// Convert Signature
-    /// Creates a temporary (orphan) signature for use in the convert signature algorithm.
+    /// Delegate by Converting a Signature.
+    /// It is an algorithm run by a user who wants to delegate a
+    /// signature σ. It takes as input the public verification key vk, a secret key sku and the signature.
+    /// It outputs an orphan signature σ. Creates a temporary (orphan) signature
+    /// used by the delegatee to finish converting the signature.
     ///
     /// # Arguments
     /// vk: Verification Key
@@ -546,13 +564,13 @@ impl EqcSign {
     ///
     /// # Returns
     /// temporary orphan signature
-    pub fn send_convert_sig(&self, vk: &[VK], sk_u: &FieldElement, sigma: &Sigma) -> Sigma {
-        let Sigma { z, y_g1, y_hat, t } = sigma;
+    pub fn send_convert_sig(&self, vk: &[VK], sk_u: &FieldElement, sigma: &Signature) -> Signature {
+        let Signature { z, y_g1, y_hat, t } = sigma;
 
         // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
             let t_new = t + (vk0 * sk_u).negation();
-            Sigma {
+            Signature {
                 z: z.clone(),
                 y_g1: y_g1.clone(),
                 y_hat: y_hat.clone(),
@@ -570,7 +588,7 @@ impl EqcSign {
     ///
     /// vk: Verification Key
     /// sk_r: Secret Key
-    /// sigma_orphan: Sigma {Z, Y, Y_hat, t} signature
+    /// orphan: Signature {Z, Y, Y_hat, t}
     ///
     /// # Returns
     /// new signature for the new public key
@@ -578,14 +596,14 @@ impl EqcSign {
         &self,
         vk: &[VK],
         sk_r: &FieldElement,
-        sigma_orpha: &Sigma,
-    ) -> Sigma {
-        let Sigma { z, y_g1, y_hat, t } = sigma_orpha;
+        orphan: &Signature,
+    ) -> Signature {
+        let Signature { z, y_g1, y_hat, t } = orphan;
 
         // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
             let t_new = t + vk0 * sk_r;
-            Sigma {
+            Signature {
                 z: z.clone(),
                 y_g1: y_g1.clone(),
                 y_hat: y_hat.clone(),
@@ -970,11 +988,11 @@ mod tests {
         // 4. create second user_keygen pk_u_new, sk_new
         let (sk_new, pk_u_new) = sign_scheme.user_keygen();
 
-        // 5. send_convert_sig to create sigma_orphan
-        let sigma_orpha = sign_scheme.send_convert_sig(&vk, &sk_u, &signature_original.sigma);
+        // 5. send_convert_sig to create sig orphan
+        let orphan = sign_scheme.send_convert_sig(&vk, &sk_u, &signature_original.sigma);
 
-        // 6. receive_convert_sig takes sigma_orphan to create sk_new and sigma_orphan
-        let sigma_new = sign_scheme.receive_convert_sig(&vk, &sk_new, &sigma_orpha);
+        // 6. receive_convert_sig takes sig orphan to create sk_new and sig orphan
+        let sigma_new = sign_scheme.receive_convert_sig(&vk, &sk_new, &orphan);
 
         // 7. verify the signature using sigma_new
         assert!(sign_scheme.verify(

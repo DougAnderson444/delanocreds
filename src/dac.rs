@@ -5,13 +5,13 @@
 use super::spseq_uc;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
+use crate::spseq_uc::Credential;
 use crate::spseq_uc::EqcSign;
-use crate::spseq_uc::EqcSignature;
 use crate::spseq_uc::MaxCardinality;
 // use crate::spseq_uc::OpeningInformation;
 use crate::spseq_uc::RandomizedPubKey;
 use crate::spseq_uc::SecretWitness;
-use crate::spseq_uc::Sigma;
+use crate::spseq_uc::Signature;
 use crate::spseq_uc::VK;
 use crate::utils::{InputType, PedersenOpen};
 use crate::zkp::{ChallengeState, DamgardTransform, Generator, Schnorr};
@@ -36,16 +36,7 @@ pub struct Nym {
     secret: SecretWitness,
     proof: NymProof,
 }
-pub struct DelegatedCred {
-    sigma_orpha: Sigma,
-    sig: EqcSignature,
-}
 
-pub struct DelegateeCred {
-    pub nym: RandomizedPubKey,
-    pub cred: EqcSignature,
-}
-/// (FieldElement, PedersenOpen, G1, G1, FieldElement)
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct NymProof {
     pub challenge: FieldElement,
@@ -53,6 +44,16 @@ pub struct NymProof {
     pub pedersen_commit: G1,
     pub public_key: RandomizedPubKey,
     pub response: FieldElement,
+}
+
+pub struct DelegatedCred {
+    orphan: Signature,
+    sig: Credential,
+}
+
+pub struct DelegateeCred {
+    pub nym: RandomizedPubKey,
+    pub cred: Credential,
 }
 
 /// Credentials Proof
@@ -64,7 +65,7 @@ pub struct NymProof {
 /// - `proof_nym_p`: NymProof, proof of the pseudonym
 #[derive(Clone)]
 pub struct CredProof {
-    sigma: Sigma,
+    sigma: Signature,
     commitment_vector: Vec<G1>,
     witness_pi: G1,
     proof_nym_p: NymProof,
@@ -161,7 +162,7 @@ impl Dac {
         nym: &Nym,
         k_prime: Option<usize>,
         proof_nym_u: NymProof,
-    ) -> spseq_uc::EqcSignature {
+    ) -> spseq_uc::Credential {
         // check if proof of nym is correct
         if self.zkp.verify(&proof_nym_u) {
             // check if delegate keys is provided
@@ -183,7 +184,7 @@ impl Dac {
     /// Delegator. Create an initial delegatable credential from a user U to a user R (an interactive protocol).
     pub fn delegator(
         &self,
-        cred_u: &EqcSignature,
+        cred_u: &Credential,
         vk: &[VK],
         addl_attrs: Option<&InputType>,
         index_l: usize,
@@ -199,11 +200,11 @@ impl Dac {
             self.spseq_uc.change_rel(addl_attrs, index_l, cred_u, &mu);
 
         // self.spseq_uc.send_convert_sig(vk, sk_ca, cred_u.sigma)
-        let sigma_orpha = self.spseq_uc.send_convert_sig(vk, sk_ca, &cred_r.sigma); // ? Found it?
+        let orphan = self.spseq_uc.send_convert_sig(vk, sk_ca, &cred_r.sigma); // ? Found it?
 
-        // (sigma_orpha, commitment_l, cred_r, opening_info)
+        // (orphan sig, commitment_l, cred_r, opening_info)
         DelegatedCred {
-            sigma_orpha,
+            orphan,
             sig: cred_r,
         }
     }
@@ -222,7 +223,7 @@ impl Dac {
     ) -> DelegateeCred {
         let sigma_new = self
             .spseq_uc
-            .receive_convert_sig(vk_ca, &nym_r.secret, &cred.sigma_orpha);
+            .receive_convert_sig(vk_ca, &nym_r.secret, &cred.orphan);
 
         // pick randomness mu, psi
         let randomize_update_key = false;
@@ -230,7 +231,7 @@ impl Dac {
         let psi = FieldElement::random();
 
         // replace the sigma in the cred signature
-        let signature_changed = EqcSignature {
+        let signature_changed = Credential {
             sigma: sigma_new,
             commitment_vector: cred.sig.commitment_vector.clone(),
             opening_vector: cred.sig.opening_vector.clone(),
@@ -265,7 +266,7 @@ impl Dac {
         vk: &[VK],
         nym_r: &G1,
         aux_r: &FieldElement,
-        cred: &EqcSignature,
+        cred: &Credential,
         all_attributes: &[InputType],
         selected_attrs: &[InputType],
     ) -> CredProof {
@@ -596,5 +597,81 @@ mod tests {
         );
 
         assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs));
+    }
+
+    #[test]
+    fn test_delegate_subset() {
+        // Test issuing/delegating a credential of user U to a user R.
+        let create = "create";
+        let read = "read";
+        let update = "update";
+        let delete = "delete";
+
+        let full_capabilities = vec![
+            create.to_owned(),
+            read.to_owned(),
+            update.to_owned(),
+            delete.to_owned(),
+        ];
+        let read_only = vec![read.to_owned()];
+
+        // Test proving a credential to verifiers
+        let all_attributes = vec![InputType::VecString(full_capabilities.clone())];
+
+        let max_cardinality = 5;
+        let l_message = AttributesLength(10);
+        let dac = Dac::new(MaxCardinality(max_cardinality));
+        // TODO: Move sk_ca, vk_ca to DAC inner? Depends if you figure it'll be used with multiple keypairs
+        let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(l_message);
+
+        // create user key pair
+        let alice = dac.user_keygen();
+        // create pseudonym for User
+        let alice_nym = dac.nym_gen(alice);
+
+        // Issue cred to Nym_U
+        let k_prime = None; // no updates allowed
+        let cred = dac.issue_cred(
+            &vk_ca,
+            &all_attributes,
+            &sk_ca,
+            &alice_nym.clone(),
+            k_prime,
+            alice_nym.proof.clone(),
+        );
+
+        // generate key pair of user R
+        let robert = dac.user_keygen();
+        // generate a pseudonym for the User_R with corresponding secret key of nym + proof of nym
+        let bobby_nym = dac.nym_gen(robert);
+
+        // create a credential for new nym_R: delegator P -> delegatee R
+        let alice_del_to_bobby: DelegatedCred =
+            dac.delegator(&cred, &vk_ca, None, 3, &alice_nym.secret, &bobby_nym.proof);
+
+        // verify change_rel
+        assert!(dac.spseq_uc.verify(
+            &vk_ca,
+            &alice_nym.proof.public_key, //pubkey used to make signature `cred`, used in change_rel
+            &cred.commitment_vector,     //
+            &cred.sigma
+        ));
+
+        let bobbys_delegated = dac.delegatee(&vk_ca, &alice_del_to_bobby, &bobby_nym);
+
+        assert!(dac.spseq_uc.verify(
+            &vk_ca,
+            &bobbys_delegated.nym,
+            &bobbys_delegated.cred.commitment_vector,
+            &bobbys_delegated.cred.sigma
+        ));
+
+        // generate key pair of user R
+        let charles = dac.user_keygen();
+        // generate a pseudonym for the User_R with corresponding secret key of nym + proof of nym
+        let chucky_nym = dac.nym_gen(charles);
+
+        // user robert issues delegated cred to chucky_nym, but only read_only
+        // robert issues cred to chucky_nym
     }
 }
