@@ -20,23 +20,37 @@ use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use sha2::{Digest, Sha256};
 
+/// DAC
+/// - `spseq_uc`: EqcSign, equivalence class signature
+/// - `zkp`: DamgardTransform, zero-knowledge proof
 pub struct Dac {
     spseq_uc: EqcSign,
     zkp: DamgardTransform,
 }
 
+/// User
+/// - `pk_u`: G1, public key of the user
+/// - `sk_u`: SecretWitness, secret witness of the user
 pub struct User {
     pk_u: G1,
     sk_u: SecretWitness,
-    // zkp: DamgardTransform,
 }
 
+/// Nym
+/// - `secret`: SecretWitness, secret witness of the user
+/// - `proof`: NymProof, proof of the user
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Nym {
     secret: SecretWitness,
     proof: NymProof,
 }
 
+/// NymProof
+/// - `challenge`: Challenge, challenge of the user
+/// - `pedersen_open`: PedersenOpen, opening information of the user
+/// - `pedersen_commit`: G1, commitment of the user
+/// - `public_key`: RandomizedPubKey, public key of the Nym
+/// - `response`: FieldElement, response of the user
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct NymProof {
     pub challenge: FieldElement,
@@ -46,11 +60,17 @@ pub struct NymProof {
     pub response: FieldElement,
 }
 
+/// DelegatedCred
+/// - `orphan`: Signature, orphan signature of the user
+/// - `sig`: Credential, credential of the user
 pub struct DelegatedCred {
     orphan: Signature,
     sig: Credential,
 }
 
+/// DelegateeCred
+/// - `nym`: Nym, pseudonym of the user
+/// - `cred`: Credential, credential of the user
 pub struct DelegateeCred {
     pub nym: RandomizedPubKey,
     pub cred: Credential,
@@ -159,19 +179,18 @@ impl Dac {
         vk: &[VK],
         attr_vector: &Vec<InputType>,
         sk: &[FieldElement],
-        nym: &Nym,
         k_prime: Option<usize>,
-        proof_nym_u: NymProof,
+        nym_proof: NymProof,
     ) -> spseq_uc::Credential {
         // check if proof of nym is correct
-        if self.zkp.verify(&proof_nym_u) {
+        if self.zkp.verify(&nym_proof) {
             // check if delegate keys is provided
             let cred = self
                 .spseq_uc
-                .sign(&nym.proof.public_key, sk, attr_vector, k_prime);
+                .sign(&nym_proof.public_key, sk, attr_vector, k_prime);
             assert!(self.spseq_uc.verify(
                 vk,
-                &nym.proof.public_key,
+                &nym_proof.public_key,
                 &cred.commitment_vector,
                 &cred.sigma
             )); //, "signature/credential is not correct";
@@ -420,7 +439,6 @@ mod tests {
                 InputType::VecString(message2_str),
             ],
             &sk_ca,
-            &nym.clone(),
             Some(3),
             nym.proof.clone(),
         );
@@ -480,7 +498,6 @@ mod tests {
                 InputType::VecString(message2_str),
             ],
             &sk_ca,
-            &nym_u.clone(),
             k_prime,
             nym_u.proof.clone(),
         );
@@ -572,7 +589,6 @@ mod tests {
             &vk_ca,
             &all_attributes,
             &sk_ca,
-            &nym_p.clone(),
             k_prime,
             nym_p.proof.clone(),
         );
@@ -616,7 +632,7 @@ mod tests {
         let read_only = vec![read.to_owned()];
 
         // Test proving a credential to verifiers
-        let all_attributes = vec![InputType::VecString(full_capabilities.clone())];
+        let all_attributes = vec![InputType::VecString(full_capabilities)];
 
         let max_cardinality = 5;
         let l_message = AttributesLength(10);
@@ -635,7 +651,6 @@ mod tests {
             &vk_ca,
             &all_attributes,
             &sk_ca,
-            &alice_nym.clone(),
             k_prime,
             alice_nym.proof.clone(),
         );
