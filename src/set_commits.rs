@@ -363,20 +363,8 @@ impl CrossSetCommitment {
 
         // 2. compute right side of verification, pp_commit_g2
         let mut set_s_group_element = Vec::with_capacity(coeff_set_s.coefficients().len());
-        // println length of set_s-group_element
-
-        println!(
-            "coeff_set_s.coefficients().len() length: {} / {:?}",
-            coeff_set_s.coefficients().len(),
-            set_s_group_element.capacity()
-        );
 
         for i in 0..coeff_set_s.coefficients().len() {
-            println!(
-                "i: {i}, g2 {}, set_s {}",
-                param_sc.pp_commit_g2.len(),
-                coeff_set_s.coefficients().len()
-            );
             set_s_group_element
                 .push(param_sc.pp_commit_g2[i].clone() * coeff_set_s.coefficients()[i].clone());
         }

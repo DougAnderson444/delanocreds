@@ -203,7 +203,7 @@ impl Dac {
     /// Delegator. Create an initial delegatable credential from a user U to a user R (an interactive protocol).
     pub fn delegator(
         &self,
-        cred_u: &Credential,
+        cred_u: Credential,
         vk: &[VK],
         addl_attrs: Option<&InputType>,
         index_l: usize,
@@ -219,7 +219,9 @@ impl Dac {
             self.spseq_uc.change_rel(addl_attrs, index_l, cred_u, &mu);
 
         // self.spseq_uc.send_convert_sig(vk, sk_ca, cred_u.sigma)
-        let orphan = self.spseq_uc.send_convert_sig(vk, sk_ca, &cred_r.sigma); // ? Found it?
+        let orphan = self
+            .spseq_uc
+            .send_convert_sig(vk, sk_ca, cred_r.sigma.clone());
 
         // (orphan sig, commitment_l, cred_r, opening_info)
         DelegatedCred {
@@ -240,9 +242,9 @@ impl Dac {
         cred: &DelegatedCred, // credential got from delegator
         nym_r: &Nym,
     ) -> DelegateeCred {
-        let sigma_new = self
-            .spseq_uc
-            .receive_convert_sig(vk_ca, &nym_r.secret, &cred.orphan);
+        let sigma_new =
+            self.spseq_uc
+                .receive_convert_sig(vk_ca, &nym_r.secret, cred.orphan.clone());
 
         // pick randomness mu, psi
         let randomize_update_key = false;
@@ -509,7 +511,7 @@ mod tests {
 
         // create a credential for new nym_R: delegator P -> delegatee R
         let cred_r_u: DelegatedCred =
-            dac.delegator(&cred, &vk_ca, None, 3, &nym_u.secret, &nym_r.proof);
+            dac.delegator(cred.clone(), &vk_ca, None, 3, &nym_u.secret, &nym_r.proof);
 
         // verify change_rel
         assert!(dac.spseq_uc.verify(
@@ -661,8 +663,14 @@ mod tests {
         let bobby_nym = dac.nym_gen(robert);
 
         // create a credential for new nym_R: delegator P -> delegatee R
-        let alice_del_to_bobby: DelegatedCred =
-            dac.delegator(&cred, &vk_ca, None, 3, &alice_nym.secret, &bobby_nym.proof);
+        let alice_del_to_bobby: DelegatedCred = dac.delegator(
+            cred.clone(),
+            &vk_ca,
+            None,
+            3,
+            &alice_nym.secret,
+            &bobby_nym.proof,
+        );
 
         // verify change_rel
         assert!(dac.spseq_uc.verify(

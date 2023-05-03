@@ -34,6 +34,7 @@ use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
+use std::mem;
 use std::ops::Deref;
 use std::ops::Mul;
 
@@ -148,19 +149,6 @@ impl EqcSign {
         EqcSign { csc_scheme }
     }
 
-    /// Setup. Sets up the signature scheme by creating public parameters and a secret key
-    ///
-    /// # Arguments
-    /// &self
-    ///
-    /// # Returns
-    /// public parameters and secret key tuple
-    pub fn setup(&self) {
-        todo!()
-        // let (pp, sk) = csc::setup();
-        // (pp, sk)
-    }
-
     /// Generates signing key pair given the public parameters and length of the message
     /// # Arguments
     pub fn sign_keygen(&self, l_message: AttributesLength) -> (Vec<FieldElement>, Vec<VK>) {
@@ -171,12 +159,12 @@ impl EqcSign {
         for _ in 0..l_message.0 + 2 {
             let sk_i = FieldElement::random();
             // compute public keys
-            let vk_i = sk_i.clone() * &self.csc_scheme.param_sc.g_2;
+            let vk_i = self.csc_scheme.param_sc.g_2.scalar_mul_const_time(&sk_i);
             sk.push(sk_i);
             vk.push(VK::G2(vk_i));
         }
         // compute X_0 keys that is used for delegation
-        let x_0 = sk[0].clone() * &self.csc_scheme.param_sc.g_1;
+        let x_0 = self.csc_scheme.param_sc.g_1.scalar_mul_const_time(&sk[0]);
         vk.insert(0, VK::G1(x_0));
         (sk, vk) // vk is now of length l_message + 1 (or sk + 1)
     }
@@ -185,7 +173,7 @@ impl EqcSign {
     /// # Arguments
     pub fn user_keygen(&self) -> (SecretWitness, G1) {
         let sk_u = FieldElement::random();
-        let pk_u = sk_u.clone() * &self.csc_scheme.param_sc.g_1;
+        let pk_u = self.csc_scheme.param_sc.g_1.scalar_mul_const_time(&sk_u);
         (sk_u, pk_u)
     }
 
@@ -225,7 +213,7 @@ impl EqcSign {
         // compute sign -> sigma = (Z, Y, hat Ym t)
         let mut list_z = Vec::new();
         for i in 0..commitment_vector.len() {
-            let z_i = sk[i + 2].clone() * commitment_vector[i].clone();
+            let z_i = commitment_vector[i].scalar_mul_const_time(&sk[i + 2]);
             list_z.push(z_i);
         }
 
@@ -239,13 +227,13 @@ impl EqcSign {
         let z = y_rand.inverse() * temp_point;
 
         // Y = y_rand * g_1
-        let y_g1 = y_rand.clone() * &self.csc_scheme.param_sc.g_1;
+        let y_g1 = self.csc_scheme.param_sc.g_1.scalar_mul_const_time(&y_rand);
 
         // Y_hat = y_rand * g_2
-        let y_hat = y_rand.clone() * &self.csc_scheme.param_sc.g_2;
+        let y_hat = self.csc_scheme.param_sc.g_2.scalar_mul_const_time(&y_rand);
 
         // t = sk[1] * Y + sk[0] * pk_u
-        let t = sk[1].clone() * y_g1.clone() + sk[0].clone() * pk_u;
+        let t = y_g1.scalar_mul_const_time(&sk[1]) + pk_u.scalar_mul_const_time(&sk[0]);
 
         let sigma = Signature { z, y_g1, y_hat, t };
 
@@ -273,12 +261,12 @@ impl EqcSign {
                 for k in messages_vector.len() + 1..k_prime + 1 {
                     let mut uk = Vec::new();
                     for i in 0..self.csc_scheme.param_sc.max_cardinality.0 {
-                        let uk_i = y_rand.inverse()
-                            * sk[k + 1].clone()
-                            * &self.csc_scheme.param_sc.pp_commit_g1[i];
+                        let uk_i = self.csc_scheme.param_sc.pp_commit_g1[i]
+                            .scalar_mul_const_time(&y_rand.inverse())
+                            .scalar_mul_const_time(&sk[k + 1]);
                         uk.push(uk_i);
                     }
-                    usign[k - 1] = uk.clone(); // first element is index 0 (message m is index m-1)
+                    usign[k - 1] = uk; // first element is index 0 (message m is index m-1)
                 }
                 update_key = Some(usign);
                 return Credential {
@@ -473,17 +461,17 @@ impl EqcSign {
         &self,
         message_l: Option<&InputType>,
         index_l: usize,
-        orig_sig: &Credential,
+        orig_sig: Credential,
         mu: &FieldElement,
     ) -> (Credential, Option<OpeningInformation>, Option<G1>) {
-        //    return  (orig_sig, None, None) if message_l.is_none()
-        if message_l.is_none() {
-            return (orig_sig.clone(), None, None);
+        // can only change attributes if we have the messages and an update_key
+        if message_l.is_none() || orig_sig.update_key.is_none() {
+            return (orig_sig, None, None);
         }
 
         let message_l = message_l.unwrap();
 
-        let Signature { z, y_g1, y_hat, t } = &orig_sig.sigma;
+        let Signature { z, y_g1, y_hat, t } = orig_sig.sigma;
         let (commitment_l, opening_l) = self.encode(message_l);
 
         let rndmz_commitment_l = mu * &commitment_l;
@@ -507,35 +495,34 @@ impl EqcSign {
                     let points_uk_i_i = list
                         .get(i)
                         .expect("Valid G1")
-                        .mul(monypolcoefficient.coefficients()[i].clone());
+                        .scalar_mul_const_time(&monypolcoefficient.coefficients()[i]);
                     points_uk_i.push(points_uk_i_i);
                 }
 
-                // sum all the points_uk_i
-                let mut sum_points_uk_i = G1::identity();
-                for item in points_uk_i {
-                    sum_points_uk_i += item.clone();
-                }
+                let sum_points_uk_i = points_uk_i
+                    .into_iter()
+                    .fold(G1::identity(), |acc, x| acc + x);
 
-                let gama_l = sum_points_uk_i.mul(opening_l.clone());
+                let gama_l = sum_points_uk_i.scalar_mul_const_time(&opening_l);
                 let z_tilde = z + &gama_l;
 
                 let sigma_tilde = Signature {
                     z: z_tilde,
-                    y_g1: y_g1.clone(),
-                    y_hat: y_hat.clone(),
-                    t: t.clone(),
+                    y_g1,
+                    y_hat,
+                    t,
                 };
-                let mut commitment_vector_tilde = orig_sig.commitment_vector.clone();
+
+                let mut commitment_vector_tilde = orig_sig.commitment_vector;
                 commitment_vector_tilde.push(rndmz_commitment_l);
 
-                let mut opening_vector_tilde = orig_sig.opening_vector.clone();
+                let mut opening_vector_tilde = orig_sig.opening_vector;
                 opening_vector_tilde.push(rndmz_opening_l);
 
                 (
                     Credential {
                         sigma: sigma_tilde,
-                        update_key: orig_sig.update_key.clone(),
+                        update_key: orig_sig.update_key,
                         commitment_vector: commitment_vector_tilde, // Commitment_vector_new
                         opening_vector: opening_vector_tilde,       // Opening_vector_new
                     },
@@ -564,16 +551,16 @@ impl EqcSign {
     ///
     /// # Returns
     /// temporary orphan signature
-    pub fn send_convert_sig(&self, vk: &[VK], sk_u: &FieldElement, sigma: &Signature) -> Signature {
+    pub fn send_convert_sig(&self, vk: &[VK], sk_u: &FieldElement, sigma: Signature) -> Signature {
         let Signature { z, y_g1, y_hat, t } = sigma;
 
         // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
             let t_new = t + (vk0 * sk_u).negation();
             Signature {
-                z: z.clone(),
-                y_g1: y_g1.clone(),
-                y_hat: y_hat.clone(),
+                z,
+                y_g1,
+                y_hat,
                 t: t_new,
             }
         } else {
@@ -596,19 +583,12 @@ impl EqcSign {
         &self,
         vk: &[VK],
         sk_r: &FieldElement,
-        orphan: &Signature,
+        mut orphan: Signature,
     ) -> Signature {
-        let Signature { z, y_g1, y_hat, t } = orphan;
-
-        // update component t of signature to remove the old key
+        // update component t of signature
         if let VK::G1(vk0) = &vk[0] {
-            let t_new = t + vk0 * sk_r;
-            Signature {
-                z: z.clone(),
-                y_g1: y_g1.clone(),
-                y_hat: y_hat.clone(),
-                t: t_new,
-            }
+            orphan.t += vk0 * sk_r;
+            orphan
         } else {
             panic!("Invalid verification key");
         }
@@ -897,7 +877,7 @@ mod tests {
         let mu = FieldElement::one();
 
         let (signature_chged, _opening_l, commitment_l) =
-            sign_scheme.change_rel(Some(&message_l), 3, &signature_original, &mu);
+            sign_scheme.change_rel(Some(&message_l), 3, signature_original, &mu);
 
         assert!(sign_scheme.verify(
             &vk,
@@ -936,7 +916,7 @@ mod tests {
         let mu = FieldElement::random();
         let psi = FieldElement::random();
 
-        let (rndmz_pk_u, signature_prime, chi) =
+        let (rndmz_pk_u, signature_prime, _chi) =
             sign_scheme.change_rep(&vk, &pk_u, &signature_original, &mu, &psi, b);
 
         // verify the signature_prime
@@ -951,7 +931,7 @@ mod tests {
         let message_l = InputType::VecString(messages_vectors.message3_str);
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         let (signature_tilde, _opening_l, commitment_l) =
-            sign_scheme.change_rel(Some(&message_l), 3, &signature_prime, &mu);
+            sign_scheme.change_rel(Some(&message_l), 3, signature_prime, &mu);
 
         // verify the signature
         assert!(sign_scheme.verify(
@@ -989,10 +969,10 @@ mod tests {
         let (sk_new, pk_u_new) = sign_scheme.user_keygen();
 
         // 5. send_convert_sig to create sig orphan
-        let orphan = sign_scheme.send_convert_sig(&vk, &sk_u, &signature_original.sigma);
+        let orphan = sign_scheme.send_convert_sig(&vk, &sk_u, signature_original.sigma);
 
         // 6. receive_convert_sig takes sig orphan to create sk_new and sig orphan
-        let sigma_new = sign_scheme.receive_convert_sig(&vk, &sk_new, &orphan);
+        let sigma_new = sign_scheme.receive_convert_sig(&vk, &sk_new, orphan);
 
         // 7. verify the signature using sigma_new
         assert!(sign_scheme.verify(
