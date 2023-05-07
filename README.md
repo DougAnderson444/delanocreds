@@ -1,10 +1,14 @@
 # **Del**egatable **Ano**nymous **Cred**ential**s** (Delanocreds)
 
-Create messages that can be held by third parties, re-delegated, and verified without revealing the identity of the holder.
+Create messages that can be held by third parties, re-delegated, and verified without revealing the identity of any of the holders in the delegation chain.
 
-Useful if you want the ability to delegate information without revealing the identity of the delegation.
+Useful if you want the ability to delegate credntials, capabiltiies, or other data without revealing the identity of the delegation or holder(s).
 
 You can also selectively delegate.
+
+## Prject Status
+
+⚠️ New project, very work in progress. API is not stable yet.
 
 ## Advantages
 
