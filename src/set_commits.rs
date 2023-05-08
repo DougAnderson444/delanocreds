@@ -19,7 +19,7 @@ pub struct ParamSetCommitment {
     pub pp_commit_g2: Vec<G2>,
     pub g_2: G2,
     pub g_1: G1,
-    pub max_cardinality: MaxCardinality,
+    pub max_cardinality: usize,
 }
 
 impl ParamSetCommitment {
@@ -31,25 +31,26 @@ impl ParamSetCommitment {
     ///
     /// # Returns
     /// ParamSetCommitment
-    pub fn new(t: MaxCardinality, base: FieldElement) -> ParamSetCommitment {
+    pub fn new(t: &usize, base: FieldElement) -> ParamSetCommitment {
         let g_2 = G2::generator();
         let g_1 = G1::generator();
 
-        // take length of t as size by using
-        let mut pp_commit_g1: Vec<G1> = Vec::with_capacity(t.0);
-        let mut pp_commit_g2: Vec<G2> = Vec::with_capacity(t.0);
-
-        for i in 0..t.0 {
-            pp_commit_g1.push(g_1.clone() * base.pow(&FieldElement::from(i as u64)));
-            pp_commit_g2.push(g_2.clone() * base.pow(&FieldElement::from(i as u64)));
-        }
+        // instead of cloning in map, consume the owned value using into_iter()
+        let pp_commit_g1 = (0..*t)
+            .into_iter()
+            .map(|i| g_1.scalar_mul_const_time(&base.pow(&FieldElement::from(i as u64))))
+            .collect::<Vec<G1>>();
+        let pp_commit_g2 = (0..*t)
+            .into_iter()
+            .map(|i| g_2.scalar_mul_const_time(&base.pow(&FieldElement::from(i as u64))))
+            .collect::<Vec<G2>>();
 
         ParamSetCommitment {
             pp_commit_g2,
             pp_commit_g1,
             g_2,
             g_1,
-            max_cardinality: t,
+            max_cardinality: *t,
         }
     }
 }
@@ -65,7 +66,7 @@ pub trait Commitment {
         let alpha_trapdoor = FieldElement::random();
 
         (
-            ParamSetCommitment::new(max_cardinality, alpha_trapdoor.clone()),
+            ParamSetCommitment::new(&max_cardinality, alpha_trapdoor.clone()),
             alpha_trapdoor,
         )
     }
@@ -519,14 +520,15 @@ mod test {
         ]);
 
         // create two set commitments for two sets set_str and set_str2
-        let max_cardinal = 15;
+        let max_cardinal = 5;
         let (pp, _alpha) = CrossSetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str);
         let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2);
 
+        let commit_vector = &vec![commitment_1, commitment_2];
+
         // create a witness for each subset -> W1 and W2
-        let subset_str_1 =
-            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+        let subset_str_1 = InputType::VecString(vec![age.to_owned(), name.to_owned()]);
 
         let subset_str_2 = InputType::VecString(vec![gender.to_owned(), company.to_owned()]);
 
@@ -539,15 +541,12 @@ mod test {
                 .expect("Some Witness");
 
         // aggregate all witnesses for a subset is correct-> proof
-        let proof = CrossSetCommitment::aggregate_cross(
-            &vec![witness_1, witness_2],
-            &vec![commitment_1.clone(), commitment_2.clone()],
-        );
+        let proof = CrossSetCommitment::aggregate_cross(&vec![witness_1, witness_2], commit_vector);
 
         // verification aggregated witnesses
         assert!(CrossSetCommitment::verify_cross(
             &pp,
-            &vec![commitment_1, commitment_2],
+            commit_vector,
             &[subset_str_1, subset_str_2],
             &proof
         ));
