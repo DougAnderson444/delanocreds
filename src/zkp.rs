@@ -40,8 +40,14 @@ pub type Response = Vec<FieldElement>; // Vec<BigNum>;
 /// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generilized version
 pub struct ZkpSchnorrFiatShamir {}
 
+impl Default for ZkpSchnorrFiatShamir {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ZkpSchnorrFiatShamir {
-    fn new() -> Self {
+    pub fn new() -> Self {
         ZkpSchnorrFiatShamir {}
     }
     pub fn setup() -> G2 {
@@ -215,7 +221,7 @@ impl ZKPSchnorr {
         left_side == right_side
     }
 
-    fn announce(&self) -> (G1, FieldElement) {
+    pub fn announce(&self) -> (G1, FieldElement) {
         let w_random = FieldElement::random();
         let w_element = w_random.clone() * &self.g_1;
         (w_element, w_random)
