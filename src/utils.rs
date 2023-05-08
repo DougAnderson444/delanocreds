@@ -52,7 +52,7 @@ pub fn ec_sum(listpoints: Vec<G1>) -> G1 {
 pub struct Pedersen {
     pub g: G1,
     pub h: G1,
-    trapdoor: FieldElement,
+    // trapdoor: FieldElement,
 }
 pub type Trapdoor = FieldElement;
 pub type PedersenCommit = G1;
@@ -80,7 +80,11 @@ impl Pedersen {
         let g = G1::generator();
         let d = FieldElement::random();
         let h = &d * &g;
-        Pedersen { g, h, trapdoor: d }
+        Pedersen {
+            g,
+            h,
+            // trapdoor: d
+        }
     }
     pub fn commit(&self, msg: FieldElement) -> (PedersenCommit, PedersenOpen) {
         let r = FieldElement::random();
