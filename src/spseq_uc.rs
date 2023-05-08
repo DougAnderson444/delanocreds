@@ -34,7 +34,6 @@ use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
-use std::mem;
 use std::ops::Deref;
 use std::ops::Mul;
 
@@ -78,6 +77,13 @@ impl Deref for AttributesLength {
 impl AttributesLength {
     pub fn new(item: usize) -> Self {
         AttributesLength(item)
+    }
+}
+
+// implement trait `std::convert::From<&usize>` for `spseq_uc::MaxCardinality`
+impl From<&usize> for MaxCardinality {
+    fn from(item: &usize) -> Self {
+        MaxCardinality(*item)
     }
 }
 
@@ -260,7 +266,7 @@ impl EqcSign {
                 // only valid keys are between commitment length (k) an length (l), k_prime.length = k < k' < l
                 for k in messages_vector.len() + 1..k_prime + 1 {
                     let mut uk = Vec::new();
-                    for i in 0..self.csc_scheme.param_sc.max_cardinality.0 {
+                    for i in 0..self.csc_scheme.param_sc.max_cardinality {
                         let uk_i = self.csc_scheme.param_sc.pp_commit_g1[i]
                             .scalar_mul_const_time(&y_rand.inverse())
                             .scalar_mul_const_time(&sk[k + 1]);
@@ -420,7 +426,7 @@ impl EqcSign {
                         let update_keylist = usign.get(k - 1).expect("Valid");
                         for item in update_keylist
                             .iter()
-                            .take(self.csc_scheme.param_sc.max_cardinality.0)
+                            .take(self.csc_scheme.param_sc.max_cardinality)
                         {
                             let mainop_i = mu * &psi.inverse() * item;
                             mainop.push(mainop_i);
@@ -613,9 +619,9 @@ impl Deref for RandomizedPubKey {
     }
 }
 
-impl Into<G1> for RandomizedPubKey {
-    fn into(self) -> G1 {
-        self.0
+impl From<RandomizedPubKey> for G1 {
+    fn from(val: RandomizedPubKey) -> Self {
+        val.0
     }
 }
 
@@ -746,7 +752,7 @@ mod tests {
         let mu = FieldElement::random();
         let psi = FieldElement::random();
 
-        let (rndmz_pk_u, signature, chi) =
+        let (rndmz_pk_u, signature, _chi) =
             sign_scheme.change_rep(&vk, &pk_u, &signature_original, &mu, &psi, b);
 
         assert!(sign_scheme.verify(
@@ -794,7 +800,7 @@ mod tests {
         let mu = FieldElement::random();
         let psi = FieldElement::random();
 
-        let (rndmz_pk_u, signature, chi) = sign_scheme.change_rep(
+        let (rndmz_pk_u, signature, _chi) = sign_scheme.change_rep(
             &vk,
             &pk_u,
             &signature_original,
