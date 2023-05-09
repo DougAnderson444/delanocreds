@@ -37,8 +37,8 @@ pub struct User {
 }
 
 /// Nym
-/// - `secret`: SecretWitness, secret witness of the user
-/// - `proof`: NymProof, proof of the user
+/// - `secret`: [SecretWitness], secret witness of the user
+/// - `proof`: [NymProof], proof of the user
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Nym {
     secret: SecretWitness,
@@ -60,10 +60,10 @@ pub struct NymProof {
     pub response: FieldElement,
 }
 
-/// DelegatedCred
-/// - `orphan`: Signature, orphan signature of the user
+/// CredReceived (cred_R)
+/// - `orphan`: [Signature], orphan signature of the user
 /// - `sig`: Credential, credential of the user
-pub struct DelegatedCred {
+pub struct CredReceived {
     orphan: Signature,
     sig: Credential,
 }
@@ -201,6 +201,8 @@ impl Dac {
     }
 
     /// Delegator. Create an initial delegatable credential from a user U to a user R (an interactive protocol).
+    /// - `index_l`: index of `update_key` to be used for the added element,
+    ///             `[1..n]` (starts at 1)
     pub fn delegator(
         &self,
         cred_u: Credential,
@@ -209,14 +211,13 @@ impl Dac {
         index_l: usize,
         sk_ca: &SecretWitness,
         proof_nym: &NymProof,
-    ) -> DelegatedCred {
+    ) -> CredReceived {
         // check the proof
         // assert self.zkp.verify(challenge, pedersen_open, pedersen_commit, stm, response)
         assert!(self.zkp.verify(proof_nym));
 
         let mu = FieldElement::one();
-        let (cred_r, _opening_info, _commitment_l) =
-            self.spseq_uc.change_rel(addl_attrs, index_l, cred_u, &mu);
+        let cred_r = self.spseq_uc.change_rel(addl_attrs, index_l, cred_u, &mu);
 
         // self.spseq_uc.send_convert_sig(vk, sk_ca, cred_u.sigma)
         let orphan = self
@@ -224,7 +225,7 @@ impl Dac {
             .send_convert_sig(vk, sk_ca, cred_r.sigma.clone());
 
         // (orphan sig, commitment_l, cred_r, opening_info)
-        DelegatedCred {
+        CredReceived {
             orphan,
             sig: cred_r,
         }
@@ -239,28 +240,36 @@ impl Dac {
     pub fn delegatee(
         &self,
         vk_ca: &[VK],
-        cred: &DelegatedCred, // credential got from delegator
+        cred: &CredReceived, // credential got from delegator
         nym_r: &Nym,
-    ) -> DelegateeCred {
+    ) -> (DelegateeCred, FieldElement) {
         let sigma_new =
             self.spseq_uc
                 .receive_convert_sig(vk_ca, &nym_r.secret, cred.orphan.clone());
 
-        // pick randomness mu, psi
-        let randomize_update_key = false;
-        let mu = FieldElement::one();
-        let psi = FieldElement::random();
+        // verify the signature of the credential first
+        assert!(self.spseq_uc.verify(
+            vk_ca,
+            &nym_r.proof.public_key,
+            &cred.sig.commitment_vector,
+            &sigma_new
+        ));
 
         // replace the sigma in the cred signature
         let signature_changed = Credential {
             sigma: sigma_new,
             commitment_vector: cred.sig.commitment_vector.clone(),
             opening_vector: cred.sig.opening_vector.clone(),
-            update_key: None,
+            update_key: cred.sig.update_key.clone(),
         };
 
+        // pick randomness mu, psi
+        let randomize_update_key = false;
+        let mu = FieldElement::one();
+        let psi = FieldElement::random();
+
         // run changrep to randomize and hide the whole credential
-        let (nym_p, cred_p, _chi) = self.spseq_uc.change_rep(
+        let (nym_p, cred_p, chi) = self.spseq_uc.change_rep(
             vk_ca,                   // verification key
             &nym_r.proof.public_key, //
             &signature_changed,      // sigma_change
@@ -269,25 +278,38 @@ impl Dac {
             randomize_update_key,
         );
 
+        // update aux_r with chi and psi
+        let aux_p_secret_wit = (nym_r.secret.clone() + chi) * psi;
+
         // return output a new credential for the additional attribute set as well as the new user
         // a EqcSignature needs: sigma, commitment_vector, opening_vector (if further delegation allowed), update_key (if updates to the attributes allowed)
-        DelegateeCred {
-            // sigma: cred_p.sigma,
-            // commitment_vector: cred_p.commitment_vector,
-            // opening_vector: cred_p.opening_vector,
-            nym: nym_p,
-            cred: cred_p, // chi,
-        }
+        (
+            DelegateeCred {
+                // sigma: cred_p.sigma,
+                // commitment_vector: cred_p.commitment_vector,
+                // opening_vector: cred_p.opening_vector,
+                nym: nym_p,
+                cred: cred_p, // chi,
+            },
+            aux_p_secret_wit,
+        )
     }
 
-    /// Proof of Credentials
+    /// Prove a Credential
     /// Generates a proof of a credential for a given pseudonym and selective disclosure D.
+    ///
+    /// - `vk`: &[VK], verification keys of the set
+    /// - `nym_r`: &G1, pseudonym of the user
+    /// - `aux_r`: &FieldElement, secret witness of the user
+    /// - `cred`: &Credential, credential of the user
+    /// - `all_attributes`: &[InputType], attributes of the user
+    /// - `selected_attrs`: &[InputType], attributes to be disclosed
     pub fn proof_cred(
         &self,
         vk: &[VK],
         nym_r: &G1,
         aux_r: &FieldElement,
-        cred: &Credential,
+        cred_r: &Credential,
         all_attributes: &[InputType],
         selected_attrs: &[InputType],
     ) -> CredProof {
@@ -299,7 +321,7 @@ impl Dac {
         let randomize_update_key = false;
         let (nym_p, cred_p, chi) =
             self.spseq_uc
-                .change_rep(vk, nym_r, cred, &mu, &psi, randomize_update_key);
+                .change_rep(vk, nym_r, cred_r, &mu, &psi, randomize_update_key);
 
         // create a Pedersen zkp announcement
         let (pedersen_commit, pedersen_open) = self.zkp.announce();
@@ -314,6 +336,7 @@ impl Dac {
         let challenge = DamgardTransform::challenge(&state);
 
         // prover creates a respoonse (or proof)
+        // update aux_r with chi and psi
         let secret_wit = (aux_r + chi) * psi;
         let response = DamgardTransform::response(
             &challenge,
@@ -331,26 +354,24 @@ impl Dac {
         };
 
         // create a witness for the attributes set that needed to be disclosed
-        let mut witness = Vec::new();
-        for i in 0..selected_attrs.len() {
-            let opened = CrossSetCommitment::open_subset(
-                &self.spseq_uc.csc_scheme.param_sc,
-                &all_attributes[i],
-                &cred_p.opening_vector[i],
-                &selected_attrs[i],
-            );
-            // if opened is none, skip. Otherwise, push it on
-            if let Some(opened) = opened {
-                witness.push(opened);
-            }
-        }
+        // selected_attrs needs to be of length equal to or less than cred_p.commitment_vector
+        let (witness, commit_vector) = selected_attrs.iter().enumerate().fold(
+            (Vec::new(), Vec::new()),
+            |(mut witness, mut commitment_vectors), (i, selected_attr)| {
+                if let Some(opened) = CrossSetCommitment::open_subset(
+                    &self.spseq_uc.csc_scheme.param_sc,
+                    &all_attributes[i],
+                    &cred_p.opening_vector[i],
+                    selected_attr,
+                ) {
+                    witness.push(opened);
+                }
+                commitment_vectors.push(cred_p.commitment_vector[i].clone());
+                (witness, commitment_vectors)
+            },
+        );
 
-        let mut commitment_vectors = Vec::new();
-        for i in 0..selected_attrs.len() {
-            commitment_vectors.push(cred_p.commitment_vector[i].clone());
-        }
-
-        let witness_pi = CrossSetCommitment::aggregate_cross(&witness, &commitment_vectors);
+        let witness_pi = CrossSetCommitment::aggregate_cross(&witness, &commit_vector);
 
         // output the whole proof = (sigma_prime, rndmz_commitment_vector, nym_P, Witness_pi, proof_nym_p)
         CredProof {
@@ -368,12 +389,9 @@ impl Dac {
         proof: &CredProof,
         selected_attrs: &Vec<InputType>,
     ) -> bool {
-        let mut commitment_vectors = Vec::new();
-
         // filter set commitments regarding the selected attributes
-        for i in 0..selected_attrs.len() {
-            commitment_vectors.push(proof.commitment_vector[i].clone());
-        }
+        let commitment_vectors = proof.commitment_vector[..selected_attrs.len()].to_vec();
+
         // check the proof is valid for each
         let check_verify_cross = CrossSetCommitment::verify_cross(
             &self.spseq_uc.csc_scheme.param_sc,
@@ -391,6 +409,9 @@ impl Dac {
             &proof.sigma,
         );
 
+        eprintln!("check_verify_cross: {check_verify_cross}");
+        eprintln!("check_zkp_verify: {check_zkp_verify}");
+        eprintln!("verify_sig: {}", verify_sig);
         // assert both check_verify_cross and check_zkp_verify are true && spseq_uc.verify
         check_verify_cross && check_zkp_verify && verify_sig
     }
@@ -400,7 +421,7 @@ impl Dac {
 mod tests {
     use super::*;
     use crate::spseq_uc::AttributesLength;
-    use crate::{dac, utils::InputType};
+    use crate::utils::InputType;
 
     #[test]
     fn test_root_cred() {
@@ -411,8 +432,8 @@ mod tests {
         let gender = "gender = male";
         let company = "company = ACME";
         let drivers_type_b = "driver license type = B";
-        let insurance = "Insurance = 2";
-        let car_type = "Car type = BMW";
+        // let insurance = "Insurance = 2";
+        // let car_type = "Car type = BMW";
 
         let message1_str = vec![age.to_owned(), name.to_owned(), drivers.to_owned()];
         let message2_str = vec![
@@ -420,7 +441,6 @@ mod tests {
             company.to_owned(),
             drivers_type_b.to_owned(),
         ];
-        let message3_str = vec![insurance.to_owned(), car_type.to_owned()];
 
         let max_cardinality = 5;
         let l_message = AttributesLength(10);
@@ -464,8 +484,8 @@ mod tests {
         let gender = "gender = male";
         let company = "company = ACME";
         let drivers_type_b = "driver license type = B";
-        let insurance = "Insurance = 2";
-        let car_type = "Car type = BMW";
+        // let insurance = "Insurance = 2";
+        // let car_type = "Car type = BMW";
 
         let message1_str = vec![age.to_owned(), name.to_owned(), drivers.to_owned()];
         let message2_str = vec![
@@ -476,11 +496,11 @@ mod tests {
 
         // Test proving a credential to verifiers
         let all_attributes = vec![
-            InputType::VecString(message1_str.clone()),
-            InputType::VecString(message2_str.clone()),
+            InputType::VecString(message1_str),
+            InputType::VecString(message2_str),
         ];
 
-        let max_cardinality = 5;
+        let max_cardinality = 6; // TODO: Better contraints -- max cardinality impacts aggregation total too
         let l_message = AttributesLength(10);
         let dac = Dac::new(MaxCardinality(max_cardinality));
         // TODO: Move sk_ca, vk_ca to DAC inner? Depends if you figure it'll be used with multiple keypairs
@@ -495,22 +515,19 @@ mod tests {
         let k_prime = None; // no updates allowed
         let cred = dac.issue_cred(
             &vk_ca,
-            &vec![
-                InputType::VecString(message1_str),
-                InputType::VecString(message2_str),
-            ],
+            &all_attributes,
             &sk_ca,
             k_prime,
             nym_u.proof.clone(),
         );
 
         // generate key pair of user R
-        let user_r = dac.user_keygen();
+        let user_r: User = dac.user_keygen();
         // generate a pseudonym for the User_R with corresponding secret key of nym + proof of nym
-        let nym_r = dac.nym_gen(user_r);
+        let nym_r: Nym = dac.nym_gen(user_r);
 
         // create a credential for new nym_R: delegator P -> delegatee R
-        let cred_r_u: DelegatedCred =
+        let cred_r_u: CredReceived =
             dac.delegator(cred.clone(), &vk_ca, None, 3, &nym_u.secret, &nym_r.proof);
 
         // verify change_rel
@@ -521,30 +538,41 @@ mod tests {
             &cred.sigma
         ));
 
-        let delegatee_cred = dac.delegatee(&vk_ca, &cred_r_u, &nym_r);
+        let (cred_p, aux_p) = dac.delegatee(&vk_ca, &cred_r_u, &nym_r);
 
         assert!(dac.spseq_uc.verify(
             &vk_ca,
-            &delegatee_cred.nym,
-            &delegatee_cred.cred.commitment_vector,
-            &delegatee_cred.cred.sigma
+            &cred_p.nym,
+            &cred_p.cred.commitment_vector,
+            &cred_p.cred.sigma
         ));
 
         // TODO: Generate proof and verify from new cred
-        // let sub_list1_str = vec![age.to_owned(), name.to_owned()];
-        // let selected_attrs = vec![InputType::VecString(sub_list1_str)];
+        // For us to generate a proof, we need:
+        // 1. A credential assigned to nym_p
+        // 2. The associated secret key of nym_p
 
-        // // prepare a proof
-        // let proof = dac.proof_cred(
-        //     &vk_ca,
-        //     &nym_r.proof.public_key,
-        //     &nym_r.secret,
-        //     &delegatee_cred.cred,
-        //     &all_attributes,
-        //     &selected_attrs,
-        // );
+        // when delegatee() is run, changerep assigns the cred to a randomized pk given random psi and chi.
+        // We either need to
+        // A) use the sk for the randomized pk, or
+        // B) change the rep back to pk and use the sk for the original pk
 
-        // assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs));
+        // let selected_attrs = vec![
+        //     InputType::VecString(vec![age.to_owned(), name.to_owned()]),
+        //     InputType::VecString(vec![]),
+        // ];
+
+        // prepare a proof
+        let proof = dac.proof_cred(
+            &vk_ca,
+            &cred_p.nym,
+            &aux_p,
+            &cred_p.cred,
+            &all_attributes,
+            &all_attributes,
+        );
+
+        assert!(dac.verify_proof(&vk_ca, &proof, &all_attributes));
     }
 
     #[test]
@@ -574,8 +602,8 @@ mod tests {
             InputType::VecString(message3_str),
         ];
 
-        let max_cardinality = 15;
-        let l_message = AttributesLength(10);
+        let max_cardinality = 8;
+        let l_message = AttributesLength(5);
         let dac = Dac::new(MaxCardinality(max_cardinality));
         // TODO: Move sk_ca, vk_ca to DAC inner? Depends if you figure it'll be used with multiple keypairs
         let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(l_message);
@@ -586,7 +614,7 @@ mod tests {
         let nym_p = dac.nym_gen(user);
 
         // Issue cred to nym_p
-        let k_prime = Some(4);
+        let k_prime = Some(4); // k_prime must be: 0 < k_prime < l_message
         let cred = dac.issue_cred(
             &vk_ca,
             &all_attributes,
@@ -599,6 +627,7 @@ mod tests {
         let sub_list1_str = vec![age.to_owned(), name.to_owned()];
         let sub_list2_str = vec![gender.to_owned(), company.to_owned()];
 
+        // TODO: redesign the API to choose selected attrs as indexes of all attributes
         let selected_attrs = vec![
             InputType::VecString(sub_list1_str),
             InputType::VecString(sub_list2_str),
@@ -620,24 +649,32 @@ mod tests {
     #[test]
     fn test_delegate_subset() {
         // Test issuing/delegating a credential of user U to a user R.
-        let create = "create";
-        let read = "read";
-        let update = "update";
-        let delete = "delete";
+        let age = "age = 30";
+        let name = "name = Alice";
+        let drivers = "driver license = 12";
+        let gender = "gender = male";
+        let company = "company = ACME";
+        let drivers_type_b = "driver license type = B";
+        let insurance = "Insurance = 2";
+        let car_type = "Car type = BMW";
 
-        let full_capabilities = vec![
-            create.to_owned(),
-            read.to_owned(),
-            update.to_owned(),
-            delete.to_owned(),
+        let message1_str = vec![age.to_owned(), name.to_owned(), drivers.to_owned()];
+        let message2_str = vec![
+            gender.to_owned(),
+            company.to_owned(),
+            drivers_type_b.to_owned(),
         ];
-        let read_only = vec![read.to_owned()];
+        let message3_str = vec![insurance.to_owned(), car_type.to_owned()];
 
         // Test proving a credential to verifiers
-        let all_attributes = vec![InputType::VecString(full_capabilities)];
+        let all_attributes = vec![
+            InputType::VecString(message1_str),
+            InputType::VecString(message2_str),
+            InputType::VecString(message3_str),
+        ];
 
-        let max_cardinality = 5;
-        let l_message = AttributesLength(10);
+        let max_cardinality = 8;
+        let l_message = AttributesLength(5);
         let dac = Dac::new(MaxCardinality(max_cardinality));
         // TODO: Move sk_ca, vk_ca to DAC inner? Depends if you figure it'll be used with multiple keypairs
         let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(l_message);
@@ -648,7 +685,9 @@ mod tests {
         let alice_nym = dac.nym_gen(alice);
 
         // Issue cred to Nym_U
-        let k_prime = None; // no updates allowed
+        let position = 5; // index of the update key to be used for the added element
+        let index_l = all_attributes.len() + position;
+        let k_prime = Some(std::cmp::max(index_l, l_message.into())); // k_prime must be: MIN(messages_vector.len()) < k_prime < MAX(l_message)
         let cred = dac.issue_cred(
             &vk_ca,
             &all_attributes,
@@ -657,30 +696,35 @@ mod tests {
             alice_nym.proof.clone(),
         );
 
-        // generate key pair of user R
         let robert = dac.user_keygen();
-        // generate a pseudonym for the User_R with corresponding secret key of nym + proof of nym
+        // generate a pseudonym for Robert
         let bobby_nym = dac.nym_gen(robert);
 
+        // Alice needs to nullify the first level of the opening vector so that Bobby doesn't have fll CRUD
+        // capabilities. This is done by setting the first level of the opening vector to zero value FieldElement
+        // setting cred.opening_vector = vec![FieldElement::zero(), ..rest]
+        let mut opening_vector_restricted = cred.opening_vector;
+        opening_vector_restricted[2] = FieldElement::zero();
+
+        let cred_restricted = Credential {
+            sigma: cred.sigma,
+            commitment_vector: cred.commitment_vector,
+            // restrict opening to read only
+            opening_vector: opening_vector_restricted,
+            update_key: cred.update_key,
+        };
+
         // create a credential for new nym_R: delegator P -> delegatee R
-        let alice_del_to_bobby: DelegatedCred = dac.delegator(
-            cred.clone(),
+        let alice_del_to_bobby: CredReceived = dac.delegator(
+            cred_restricted,
             &vk_ca,
             None,
-            3,
+            index_l,
             &alice_nym.secret,
             &bobby_nym.proof,
         );
 
-        // verify change_rel
-        assert!(dac.spseq_uc.verify(
-            &vk_ca,
-            &alice_nym.proof.public_key, //pubkey used to make signature `cred`, used in change_rel
-            &cred.commitment_vector,     //
-            &cred.sigma
-        ));
-
-        let bobbys_delegated = dac.delegatee(&vk_ca, &alice_del_to_bobby, &bobby_nym);
+        let (bobbys_delegated, aux_bobby) = dac.delegatee(&vk_ca, &alice_del_to_bobby, &bobby_nym);
 
         assert!(dac.spseq_uc.verify(
             &vk_ca,
@@ -689,12 +733,25 @@ mod tests {
             &bobbys_delegated.cred.sigma
         ));
 
-        // generate key pair of user R
-        let charles = dac.user_keygen();
-        // generate a pseudonym for the User_R with corresponding secret key of nym + proof of nym
-        let chucky_nym = dac.nym_gen(charles);
+        // subset of each message set
+        let sub_list1_str = vec![age.to_owned(), name.to_owned()];
+        let sub_list2_str = vec![gender.to_owned(), company.to_owned()];
 
-        // user robert issues delegated cred to chucky_nym, but only read_only
-        // robert issues cred to chucky_nym
+        let selected_attrs = vec![
+            InputType::VecString(sub_list1_str),
+            InputType::VecString(sub_list2_str),
+        ];
+
+        // Bobby generate proof on read_only cred at level 2 of attribute hierarchy
+        let proof = dac.proof_cred(
+            &vk_ca,
+            &bobbys_delegated.nym,
+            &aux_bobby,
+            &bobbys_delegated.cred,
+            &all_attributes,
+            &selected_attrs,
+        );
+
+        assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs));
     }
 }
