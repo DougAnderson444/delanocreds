@@ -1,16 +1,20 @@
 //! # Delanocreds API
 //!
-//! Roles:
+//! Delegatable Anaonymous Credentials.
 //!
-//! ## Root issuer.
+//! # Roles
+//!
+//! The roles start with a Root Issuer, then a Credential Holder, then a Shower.
+//!
+//! ## Root Issuer
 //!
 //! You are the issuer and your public key will be the only one seen in the credentials process.
 //!
 //! Choices to make, Summary of choices/options:
-//! - Attributes: Maximum number of attributes (message_l), maximum number of items per attribute (cardinality),
-//! how many attributes can be added (0 to k_prime, k_prime is at most message_l),
+//! - **Attributes**: Maximum number of attributes (`message_l`), maximum number of items per attribute (`cardinality` of committed sets) ,
+//! how many attributes can be added (0 to `k_prime`, `k_prime` is at most `message_l`),
 //! which attributes to show (n of cardinality), which attributes to aggregate.
-//! - Delegation: Whether cred can be re-delegated or not (update_key).
+//! - **Delegation**: Whether cred can be re-delegated or not (update_key).
 //!
 //! Every delegator can control how far delegations can go by further restricting the `update key`
 //! and a delegator can also restrict the possibility to show attributes from a certain level in
@@ -52,6 +56,16 @@
 //! Credential Constraints:
 //! - You can only
 //!
+//! If you want to restrict delegatees from showing proofs for attributes from
+//! a certain level in the hierarchy (which corresponds to a commitment in the
+//! commitment vector) by not providing the opening of the commitment to the delegatee.
+//!
+//! In Practical terms, this means that when the Root Level commit hold C.R.U.D.,
+//! the way to restrict the delegatee from showing the proof is to add a second
+//! level commit that holds only RUD, and not provide the opening of the first level.
+//! This way, the delegatee can only show the proof for the second level thus can only
+//! prove the ability to Read, Update, and Delete, but not Create.
+//!
 //! States and Sub-states:
 //!
 //! Configuration: Unconfigured, configured
@@ -59,6 +73,8 @@
 //! Delegatable: True, False. A credential is only delegatable if `update_key` is provided.
 //! Extendable: True, False. Only extendable if number of attribute commits is less than k_prime
 //! Showable: Up to the number of attributes in the credential. restricted by `opening_info `
+//!
+//! BLS12-381 public keys are 48 bytes long. Private keys are 32 bytes long.
 
 // Come up with a list of constraints for states and transitions between them.
 // The states are: unconfigured, configured, issued, delegatable, delegating, delegated.

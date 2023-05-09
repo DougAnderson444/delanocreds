@@ -377,22 +377,14 @@ impl EqcSign {
         let chi = FieldElement::random();
 
         // randomize Commitment and opening vectors and user public key with randomness mu, chi
-        let mut rndmz_commit_vector: Vec<G1> = Vec::new();
-        for i in 0..orig_sig.commitment_vector.len() {
-            let rndmz_commit_vector_i = mu * &orig_sig.commitment_vector[i];
-            rndmz_commit_vector.push(rndmz_commit_vector_i);
-        }
+        let rndmz_commit_vector: Vec<G1> =
+            orig_sig.commitment_vector.iter().map(|c| mu * c).collect();
 
-        let mut rndmz_opening_vector: Vec<FieldElement> = Vec::new();
-        for i in 0..orig_sig.opening_vector.len() {
-            let rndmz_opening_vector_i = mu * &orig_sig.opening_vector[i];
-            rndmz_opening_vector.push(rndmz_opening_vector_i);
-        }
+        let rndmz_opening_vector: Vec<FieldElement> =
+            orig_sig.opening_vector.iter().map(|o| mu * o).collect();
 
         // Randomize public key with two given randomness psi and chi.
-        // rndmz_pk_u = psi * (pk_u + chi * g_1)
         let rndmz_pk_u = psi * &(pk_u + &chi * &self.csc_scheme.param_sc.g_1);
-        // let rndmz_pk_u = rndmz_pk(pk_u, &chi, psi, &self.csc_scheme.param_sc.g_1);
 
         // adapt the signature for the randomized commitment vector and PK_u_prime
         let Signature { z, y_g1, y_hat, t } = &orig_sig.sigma;
@@ -409,29 +401,13 @@ impl EqcSign {
             let mut rndmz_update_key = None;
             if b {
                 if let Some(update_key) = &orig_sig.update_key {
-                    // Python code:
-                    // usign = update_key
-                    // usign_prime = {}
-                    // for key in usign:
-                    //     update_keylist = usign.get(key)
-                    //     mainop = [(mu * psi.mod_inverse(order)) * update_keylist[i] for i in range(max_cardinality)]
-                    //     usign_prime[key] = mainop
-                    // rndmz_update_key = usign_prime
-                    let usign = update_key;
                     let mut usign_prime = Vec::new();
-                    usign_prime.resize(usign.len(), Vec::new());
-
-                    for k in orig_sig.commitment_vector.len() + 1..usign.len() {
-                        let mut mainop = Vec::new();
-                        let update_keylist = usign.get(k - 1).expect("Valid");
-                        for item in update_keylist
+                    usign_prime.resize(update_key.len(), Vec::new());
+                    for k in orig_sig.commitment_vector.len() + 1..update_key.len() {
+                        usign_prime[k - 1] = update_key[k - 1]
                             .iter()
-                            .take(self.csc_scheme.param_sc.max_cardinality)
-                        {
-                            let mainop_i = mu * &psi.inverse() * item;
-                            mainop.push(mainop_i);
-                        }
-                        usign_prime[k - 1] = mainop;
+                            .map(|item| mu * &psi.inverse() * item)
+                            .collect();
                     }
                     rndmz_update_key = Some(usign_prime);
                 }
@@ -456,8 +432,9 @@ impl EqcSign {
     /// Update the signature for a new commitment vector including 𝐶_L for message_l using update_key
     ///
     /// # Arguments
-    /// - `message_l`: message set at index l that will be added in message vector
-    /// - `index_l`: index of the element to be added
+    /// - `message_l`: message set at index `index_l` that will be added in message vector
+    /// - `index_l`: index of `update_key` to be used for the added element,
+    ///             `[1..n]` (starts at 1)
     /// - `signature`: EqcSignature {sigma, update_key, commitment_vector, opening_vector}
     /// - `mu`: optional randomness, default to 1. Only applies when same randomness is used previosuly in changerep
     ///
@@ -469,10 +446,10 @@ impl EqcSign {
         index_l: usize,
         orig_sig: Credential,
         mu: &FieldElement,
-    ) -> (Credential, Option<OpeningInformation>, Option<G1>) {
+    ) -> Credential {
         // can only change attributes if we have the messages and an update_key
         if message_l.is_none() || orig_sig.update_key.is_none() {
-            return (orig_sig, None, None);
+            return orig_sig;
         }
 
         let message_l = message_l.unwrap();
@@ -525,16 +502,12 @@ impl EqcSign {
                 let mut opening_vector_tilde = orig_sig.opening_vector;
                 opening_vector_tilde.push(rndmz_opening_l);
 
-                (
-                    Credential {
-                        sigma: sigma_tilde,
-                        update_key: orig_sig.update_key,
-                        commitment_vector: commitment_vector_tilde, // Commitment_vector_new
-                        opening_vector: opening_vector_tilde,       // Opening_vector_new
-                    },
-                    Some(opening_l),
-                    Some(commitment_l),
-                )
+                Credential {
+                    sigma: sigma_tilde,
+                    update_key: orig_sig.update_key,
+                    commitment_vector: commitment_vector_tilde, // Commitment_vector_new
+                    opening_vector: opening_vector_tilde,       // Opening_vector_new
+                }
             } else {
                 panic!("index_l is the out of scope");
             }
@@ -882,15 +855,9 @@ mod tests {
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         let mu = FieldElement::one();
 
-        let (signature_chged, _opening_l, commitment_l) =
-            sign_scheme.change_rel(Some(&message_l), 3, signature_original, &mu);
+        let cred_chged = sign_scheme.change_rel(Some(&message_l), 3, signature_original, &mu);
 
-        assert!(sign_scheme.verify(
-            &vk,
-            &pk_u,
-            &signature_chged.commitment_vector,
-            &signature_chged.sigma
-        ));
+        assert!(sign_scheme.verify(&vk, &pk_u, &cred_chged.commitment_vector, &cred_chged.sigma));
     }
 
     /// run changrel on the signature that is coming from changerep (that is already randomized) and verify it
@@ -936,15 +903,14 @@ mod tests {
         // change_rel
         let message_l = InputType::VecString(messages_vectors.message3_str);
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
-        let (signature_tilde, _opening_l, commitment_l) =
-            sign_scheme.change_rel(Some(&message_l), 3, signature_prime, &mu);
+        let cred_tilde = sign_scheme.change_rel(Some(&message_l), 3, signature_prime, &mu);
 
         // verify the signature
         assert!(sign_scheme.verify(
             &vk,
             &rndmz_pk_u,
-            &signature_tilde.commitment_vector,
-            &signature_tilde.sigma
+            &cred_tilde.commitment_vector,
+            &cred_tilde.sigma
         ));
     }
 

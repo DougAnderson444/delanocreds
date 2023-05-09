@@ -35,7 +35,8 @@ pub fn convert_mess_to_bn(input: InputType) -> Roots {
     }
 }
 
-// roots and coefficients are the same
+/// Returns the coefficients of a polynomial with the given roots
+/// The number of polynomial coefficients is one more than the degree of the polynomial.
 pub fn polyfromroots(coeffs: Vec<FieldElement>) -> UnivarPolynomial {
     UnivarPolynomial::new_with_roots(&coeffs[..])
 }

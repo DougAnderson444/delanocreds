@@ -6,21 +6,23 @@ Useful if you want the ability to delegate credntials, capabiltiies, or other da
 
 You can also selectively delegate.
 
-## Prject Status
+## Project Status
 
 ⚠️ New project, very work in progress. API is not stable yet.
+
+## Features
 
 ## Advantages
 
 This scheme has the following advantages over other anonymous credential schemes:
 
--   Attributes: User can selectively disclose and prove some of the attributes in the credential.
--   Expressiveness: S (selective disclosure), R (arbitrary computable relations over attributes, meaning you can do more than just selective disclosure)
--   Rest: Means whether it is possible to apply a restriction on the delegator’s power during the delegation.
--   Selective Anonymity: Strong anonymity guarantees meaning that no one can trace or learn information about the user’s identity or anything beyond what they suppose to show during both the issuing/delegation and showing of credentials.
--   Credential Size: O(1), meaning the size of the credential is constant.
--   Show Size: O(L), meaning the size of the showing grows linearly in the number of delegations.
--   Undisclosed attributes: O(u), meaning the size of the undisclosed attributes grows linearly in the number of delegations.
+-   **Attributes**: User can selectively disclose and prove some of the attributes in the credential.
+-   **Expressiveness**: S (selective disclosure), R (arbitrary computable relations over attributes, meaning you can do more than just selective disclosure)
+-   **Rest**: Means whether it is possible to apply a restriction on the delegator’s power during the delegation.
+-   **Selective Anonymity**: Strong anonymity guarantees meaning that no one can trace or learn information about the user’s identity or anything beyond what they suppose to show during both the issuing/delegation and showing of credentials.
+-   **Credential Size**: O(1), meaning the size of the credential is constant.
+-   **Show Size**: O(L), meaning the size of the showing grows linearly in the number of delegations.
+-   **Undisclosed attributes**: O(u), meaning the size of the undisclosed attributes grows linearly in the number of delegations.
 
 Table 1. Comparison of practical DAC schemes
 
@@ -39,6 +41,16 @@ Table 1. Comparison of practical DAC schemes
 It also allows an adversarial CA but no delegators’s keys leaks.
 
 🌚‡ We consider a malicious issuer key CA and all delegators keys can be exposed.
+
+# Tests
+
+`cargo test`
+
+# Docs
+
+`cargo doc --workspace --no-deps --open`
+
+To build the docs incrementally, use `cargo watch -x 'doc --workspace --no-deps --open'`.
 
 ## References
 
