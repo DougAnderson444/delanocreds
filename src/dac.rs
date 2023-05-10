@@ -2,8 +2,6 @@
 //! See  the following for the details:
 //! - Practical Delegatable Anonymous Credentials From Equivalence Class Signatures, PETS 2023.
 //!    [https://eprint.iacr.org/2022/680](https://eprint.iacr.org/2022/680)
-use std::io::WriterPanicked;
-
 use super::spseq_uc;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
@@ -17,6 +15,7 @@ use crate::spseq_uc::Signature;
 use crate::spseq_uc::VK;
 use crate::utils::{InputType, PedersenOpen};
 use crate::zkp::{ChallengeState, DamgardTransform, Generator, Schnorr};
+use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
@@ -183,20 +182,20 @@ impl Dac {
         sk: &[FieldElement],
         k_prime: Option<usize>,
         nym_proof: NymProof,
-    ) -> spseq_uc::Credential {
+    ) -> Result<Credential, SerzDeserzError> {
         // check if proof of nym is correct
         if self.zkp.verify(&nym_proof) {
             // check if delegate keys is provided
             let cred = self
                 .spseq_uc
-                .sign(&nym_proof.public_key, sk, attr_vector, k_prime);
+                .sign(&nym_proof.public_key, sk, attr_vector, k_prime)?;
             assert!(self.spseq_uc.verify(
                 vk,
                 &nym_proof.public_key,
                 &cred.commitment_vector,
                 &cred.sigma
             )); //, "signature/credential is not correct";
-            cred
+            Ok(cred)
         } else {
             panic!("proof of nym is not valid");
         }
@@ -209,7 +208,7 @@ impl Dac {
         &self,
         cred_u: Credential,
         vk: &[VK],
-        addl_attrs: Option<&InputType>,
+        addl_attrs: &Option<InputType>,
         sk_ca: &SecretWitness,
         proof_nym: &NymProof,
     ) -> CredReceived {
@@ -370,7 +369,7 @@ impl Dac {
         let (witness, commit_vector) = selected_attrs.iter().enumerate().fold(
             (Vec::new(), Vec::new()),
             |(mut witness, mut commitment_vectors), (i, selected_attr)| {
-                if let Some(opened) = CrossSetCommitment::open_subset(
+                if let Ok(Some(opened)) = CrossSetCommitment::open_subset(
                     &self.spseq_uc.csc_scheme.param_sc,
                     &all_attributes[i],
                     &cred_p.opening_vector[i],
@@ -395,7 +394,12 @@ impl Dac {
     }
 
     /// Verify proof of a credential
-    pub fn verify_proof(&self, vk: &[VK], proof: &CredProof, selected_attrs: &[InputType]) -> bool {
+    pub fn verify_proof(
+        &self,
+        vk: &[VK],
+        proof: &CredProof,
+        selected_attrs: &[InputType],
+    ) -> Result<bool, SerzDeserzError> {
         // filter set commitments regarding the selected attributes
         // TODO: Make this either set of indexes or keys, so make selecting more flexible
         // Get the selected attributes from the entire attributes vector (indexes or keys)
@@ -407,7 +411,7 @@ impl Dac {
             &commitment_vectors,
             selected_attrs,
             &proof.witness_pi,
-        );
+        )?;
 
         let check_zkp_verify = self.zkp.verify(&proof.proof_nym_p);
 
@@ -419,11 +423,8 @@ impl Dac {
             &proof.sigma,
         );
 
-        eprintln!("check_verify_cross: {check_verify_cross}");
-        eprintln!("check_zkp_verify: {check_zkp_verify}");
-        eprintln!("verify_sig: {}", verify_sig);
         // assert both check_verify_cross and check_zkp_verify are true && spseq_uc.verify
-        check_verify_cross && check_zkp_verify && verify_sig
+        Ok(check_verify_cross && check_zkp_verify && verify_sig)
     }
 }
 
@@ -434,7 +435,7 @@ mod tests {
     use crate::utils::InputType;
 
     #[test]
-    fn test_root_cred() {
+    fn test_root_cred() -> Result<(), SerzDeserzError> {
         // Test the creation of a root credential.
         let age = "age = 30";
         let name = "name = Alice ";
@@ -466,14 +467,11 @@ mod tests {
         // create a root credential
         let cred = dac.issue_cred(
             &vk_ca,
-            &vec![
-                InputType::VecString(message1_str),
-                InputType::VecString(message2_str),
-            ],
+            &vec![InputType(message1_str), InputType(message2_str)],
             &sk_ca,
             Some(3),
             nym.proof.clone(),
-        );
+        )?;
 
         // check the correctness of root credential
         // assert (spseq_uc.verify(pp_sign, vk_ca, nym_u, commitment_vector, sigma))
@@ -483,10 +481,11 @@ mod tests {
             &cred.commitment_vector,
             &cred.sigma
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_delegate_only() {
+    fn test_delegate_only() -> Result<(), SerzDeserzError> {
         // Test issuing/delegating a credential of user U to a user R.
         let age = "age = 30";
         let name = "name = Alice ";
@@ -505,10 +504,7 @@ mod tests {
         ];
 
         // Test proving a credential to verifiers
-        let all_attributes = vec![
-            InputType::VecString(message1_str),
-            InputType::VecString(message2_str),
-        ];
+        let all_attributes = vec![InputType(message1_str), InputType(message2_str)];
 
         let max_cardinality = 6; // TODO: Better contraints -- max cardinality impacts aggregation total too
         let l_message = AttributesLength(10);
@@ -529,7 +525,7 @@ mod tests {
             &sk_ca,
             k_prime,
             nym_u.proof.clone(),
-        );
+        )?;
 
         // generate key pair of user R
         let user_r: User = dac.user_keygen();
@@ -538,7 +534,7 @@ mod tests {
 
         // create a credential for new nym_R: delegator P -> delegatee R
         let cred_r_u: CredReceived =
-            dac.delegator(cred.clone(), &vk_ca, None, &nym_u.secret, &nym_r.proof);
+            dac.delegator(cred.clone(), &vk_ca, &None, &nym_u.secret, &nym_r.proof);
 
         // verify change_rel
         assert!(dac.spseq_uc.verify(
@@ -568,8 +564,8 @@ mod tests {
         // B) change the rep back to pk and use the sk for the original pk
 
         // let selected_attrs = vec![
-        //     InputType::VecString(vec![age.to_owned(), name.to_owned()]),
-        //     InputType::VecString(vec![]),
+        //     InputType(vec![age.to_owned(), name.to_owned()]),
+        //     InputType(vec![]),
         // ];
 
         // prepare a proof
@@ -582,11 +578,12 @@ mod tests {
             &all_attributes,
         );
 
-        assert!(dac.verify_proof(&vk_ca, &proof, &all_attributes));
+        assert!(dac.verify_proof(&vk_ca, &proof, &all_attributes)?);
+        Ok(())
     }
 
     #[test]
-    fn test_prove_subset_creds() {
+    fn test_prove_subset_creds() -> Result<(), SerzDeserzError> {
         // Test issuing/delegating a credential of user U to a user R.
         let age = "age = 30";
         let name = "name = Alice";
@@ -607,9 +604,9 @@ mod tests {
 
         // Test proving a credential to verifiers
         let all_attributes = vec![
-            InputType::VecString(message1_str),
-            InputType::VecString(message2_str),
-            InputType::VecString(message3_str),
+            InputType(message1_str),
+            InputType(message2_str),
+            InputType(message3_str),
         ];
 
         let max_cardinality = 8;
@@ -631,17 +628,14 @@ mod tests {
             &sk_ca,
             k_prime,
             nym_p.proof.clone(),
-        );
+        )?;
 
         // subset of each message set
         let sub_list1_str = vec![age.to_owned(), name.to_owned()];
         let sub_list2_str = vec![gender.to_owned(), company.to_owned()];
 
         // TODO: redesign the API to choose selected attrs as indexes of all attributes
-        let selected_attrs = vec![
-            InputType::VecString(sub_list1_str),
-            InputType::VecString(sub_list2_str),
-        ];
+        let selected_attrs = vec![InputType(sub_list1_str), InputType(sub_list2_str)];
 
         // prepare a proof
         let proof = dac.proof_cred(
@@ -653,11 +647,12 @@ mod tests {
             &selected_attrs,
         );
 
-        assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs));
+        assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs)?);
+        Ok(())
     }
 
     #[test]
-    fn test_delegate_subset() {
+    fn test_delegate_subset() -> Result<(), SerzDeserzError> {
         // Test issuing/delegating a credential of user U to a user R.
         let age = "age = 30";
         let name = "name = Alice";
@@ -690,9 +685,9 @@ mod tests {
 
         // Test proving a credential to verifiers
         let all_attributes = vec![
-            InputType::VecString(message1_str),
-            InputType::VecString(message2_str),
-            InputType::VecString(message3_str),
+            InputType(message1_str),
+            InputType(message2_str),
+            InputType(message3_str),
         ];
 
         let max_cardinality = 8;
@@ -716,7 +711,7 @@ mod tests {
             &sk_ca,
             k_prime,
             alice_nym.proof.clone(),
-        );
+        )?;
 
         let robert = dac.user_keygen();
         // generate a pseudonym for Robert
@@ -740,7 +735,7 @@ mod tests {
         let alice_del_to_bobby: CredReceived = dac.delegator(
             cred_restricted,
             &vk_ca,
-            None,
+            &None,
             &alice_nym.secret,
             &bobby_nym.proof,
         );
@@ -757,13 +752,13 @@ mod tests {
         // subset of each message set
         let sub_list1_str = vec![age.to_owned(), name.to_owned()];
         let sub_list2_str = vec![gender.to_owned(), company.to_owned()];
-        let sub_list3_str = vec![insurance.to_owned()];
+        let _sub_list3_str = vec![insurance.to_owned()];
 
         // build new vec of selected [[1],[1], []] from the attributes
         let selected_attrs = vec![
-            InputType::VecString(sub_list1_str),
-            InputType::VecString(sub_list2_str),
-            // InputType::VecString(sub_list3_str),
+            InputType(sub_list1_str),
+            InputType(sub_list2_str),
+            // InputType(sub_list3_str),
         ];
 
         // Bobby generate proof on read_only cred at level 2 of attribute hierarchy
@@ -776,6 +771,7 @@ mod tests {
             &selected_attrs,
         );
 
-        assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs));
+        assert!(dac.verify_proof(&vk_ca, &proof, &selected_attrs)?);
+        Ok(())
     }
 }

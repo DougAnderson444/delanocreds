@@ -6,34 +6,21 @@ use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::univar_poly::UnivarPolynomial;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum InputType {
-    String(String),
-    VecString(Vec<String>),
+pub struct InputType(pub Vec<String>);
+
+impl Deref for InputType {
+    type Target = Vec<String>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-pub enum Roots {
-    FieldElement(FieldElement),
-    VecFieldElement(Vec<FieldElement>),
-}
+impl IntoIterator for InputType {
+    type Item = String;
+    type IntoIter = ::std::vec::IntoIter<String>;
 
-pub fn convert_mess_to_bn(input: InputType) -> Roots {
-    match input {
-        InputType::String(mess) => {
-            // convert the mess to bytes and then into a BigNum
-            let mess_bytes = mess.as_bytes();
-            let elem = FieldElement::from_bytes(mess_bytes).unwrap();
-            Roots::FieldElement(elem)
-        }
-        InputType::VecString(mess_vec) => {
-            let mut elem_vec = Vec::new();
-            for mess in mess_vec {
-                // convert the mess to bytes and then into a BigNum
-                let mess_bytes = mess.as_bytes();
-                let elem = FieldElement::from_bytes(mess_bytes).unwrap();
-                elem_vec.push(elem);
-            }
-            Roots::VecFieldElement(elem_vec)
-        }
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 

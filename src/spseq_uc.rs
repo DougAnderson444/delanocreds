@@ -29,12 +29,12 @@ use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
 use crate::utils::polyfromroots;
 use crate::utils::InputType;
+use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
-use std::fmt::Error;
 use std::ops::Deref;
 use std::ops::Mul;
 
@@ -124,6 +124,19 @@ pub struct EqcSign {
 
 pub type OpeningInformation = FieldElement;
 
+#[derive(Debug)]
+pub enum UpdateError {
+    SerzDeserzError(SerzDeserzError),
+    Error,
+}
+
+// create UpdateError from SerzDeserzError
+impl From<SerzDeserzError> for UpdateError {
+    fn from(err: SerzDeserzError) -> Self {
+        UpdateError::SerzDeserzError(err)
+    }
+}
+
 /// EqcSignature is the signature returned by the sign function
 /// It contains the sigma, update key, commitment vector
 /// - `sigma` is the sigma value used in the signature
@@ -185,7 +198,7 @@ impl EqcSign {
     }
 
     /// Encodes a message set into a set commitment with opening information
-    fn encode(&self, mess_set: &InputType) -> (G1, OpeningInformation) {
+    fn encode(&self, mess_set: &InputType) -> Result<(G1, OpeningInformation), SerzDeserzError> {
         CrossSetCommitment::commit_set(&self.csc_scheme.param_sc, mess_set)
     }
 
@@ -204,10 +217,14 @@ impl EqcSign {
         sk: &[FieldElement],
         messages_vector: &Vec<InputType>,
         k_prime: Option<usize>,
-    ) -> Credential {
+    ) -> Result<Credential, SerzDeserzError> {
         // encode all messagse sets of the messages vector as set commitments
-        let (commitment_vector, opening_vector): (Vec<G1>, Vec<FieldElement>) =
-            messages_vector.iter().map(|mess| self.encode(mess)).unzip();
+        let (commitment_vector, opening_vector): (Vec<G1>, Vec<FieldElement>) = messages_vector
+            .iter()
+            .map(|mess| self.encode(mess))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .unzip();
 
         // pick randomness for y_g1
         let y_rand = FieldElement::random();
@@ -263,23 +280,23 @@ impl EqcSign {
                 }
                 update_key = Some(usign);
 
-                return Credential {
+                return Ok(Credential {
                     sigma,
                     update_key,
                     commitment_vector,
                     opening_vector,
-                };
+                });
             }
             // k_prime of equal or lesser value than current message length has no effect
             // since the whole point of k_prime is to extend the message length!
         }
 
-        Credential {
+        Ok(Credential {
             sigma,
             update_key,
             commitment_vector,
             opening_vector,
-        }
+        })
     }
 
     /// Verifies a signature for a given message set
@@ -292,7 +309,7 @@ impl EqcSign {
         &self,
         vk: &[VK],
         pk_u: &G1,
-        commitment_vector: &Vec<G1>,
+        commitment_vector: &[G1],
         sigma: &Signature,
     ) -> bool {
         let g_1 = &self.csc_scheme.param_sc.g_1;
@@ -439,7 +456,7 @@ impl EqcSign {
         addl_attrs: &InputType,
         orig_sig: Credential,
         mu: &FieldElement,
-    ) -> Result<Credential, Error> {
+    ) -> Result<Credential, UpdateError> {
         // Validate the input. There must be room between the length of the current commitment vector
         // and the length of the update key to append a new entry.
         // valid input if: index_l = orig_sig.commitment_vector.len() + 1 && orig_sig.commitment_vector.len() + 1 <= orig_sig.update_key.as_ref().unwrap().len()
@@ -449,7 +466,7 @@ impl EqcSign {
             // can only change attributes if we have the messages and an update_key
             Some(usign) if index_l <= usign.len() => {
                 let Signature { z, y_g1, y_hat, t } = orig_sig.sigma;
-                let (commitment_l, opening_l) = self.encode(addl_attrs);
+                let (commitment_l, opening_l) = self.encode(addl_attrs)?;
 
                 let rndmz_commitment_l = mu * &commitment_l;
                 let rndmz_opening_l = mu * &opening_l;
@@ -500,7 +517,7 @@ impl EqcSign {
                     panic!("index_l is the out of scope");
                 }
             }
-            _ => Err(Error),
+            _ => Err(UpdateError::Error),
         }
     }
 
@@ -649,7 +666,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sign() {
+    fn test_sign() -> Result<(), SerzDeserzError> {
         // Generate a signature and verify it
         // create a signing keys for 10 messagses
         let max_cardinal = MaxCardinality(5);
@@ -668,18 +685,19 @@ mod tests {
             &pk_u,
             &sk,
             &vec![
-                InputType::VecString(messages_vectors.message1_str),
-                InputType::VecString(messages_vectors.message2_str),
+                InputType(messages_vectors.message1_str),
+                InputType(messages_vectors.message2_str),
             ],
             None,
-        );
+        )?;
 
         assert!(sign_scheme.verify(&vk, &pk_u, &signature.commitment_vector, &signature.sigma));
+        Ok(())
     }
 
     // Generate a signature, run changrep function and verify it
     #[test]
-    fn test_changerep() {
+    fn test_changerep() -> Result<(), SerzDeserzError> {
         //create a signing keys for 10 messagses
         let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
@@ -700,11 +718,11 @@ mod tests {
             &pk_u,
             &sk,
             &vec![
-                InputType::VecString(messages_vectors.message1_str),
-                InputType::VecString(messages_vectors.message2_str),
+                InputType(messages_vectors.message1_str),
+                InputType(messages_vectors.message2_str),
             ],
             k_prime,
-        );
+        )?;
 
         // run changerep function (without randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
@@ -721,13 +739,14 @@ mod tests {
             &signature.commitment_vector,
             &signature.sigma
         ));
+        Ok(())
     }
 
     /// Generate a signature, run changrep function using update_key, randomize update_key (uk) and verify it
     /// This test is similar to test_changerep, but it randomizes the update_key
     /// and verifies the signature using the randomized update_key
     #[test]
-    fn test_changerep_update_key() {
+    fn test_changerep_update_key() -> Result<(), SerzDeserzError> {
         //create a signing keys for 10 messagses
         let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
@@ -748,11 +767,11 @@ mod tests {
             &pk_u,
             &sk,
             &vec![
-                InputType::VecString(messages_vectors.message1_str),
-                InputType::VecString(messages_vectors.message2_str),
+                InputType(messages_vectors.message1_str),
+                InputType(messages_vectors.message2_str),
             ],
             k_prime,
-        );
+        )?;
 
         // run changerep function (without randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
@@ -775,12 +794,13 @@ mod tests {
             &signature.commitment_vector,
             &signature.sigma
         ));
+        Ok(())
     }
 
     /// Generate a signature, run changrel function one the signature, add one additional commitment using update_key (uk) and verify it
     /// This test is similar to test_changerep_uk, but it adds one additional commitment to the signature
     #[test]
-    fn test_changerel_from_sign() {
+    fn test_changerel_from_sign() -> Result<(), UpdateError> {
         // Generate a signature, run changrel function one the signature, add one additional commitment using update_key (uk) and verify it
 
         //create a signing keys for 10 messages
@@ -798,10 +818,10 @@ mod tests {
         // create a signature for pk_u on (C1, C2) related to (message1_str, message2_str)) and aslo output update_key for k_prime = 4, allow adding 2 more commitments like C3 and C4
         let k_prime = Some(3);
         let messages_vector = &vec![
-            InputType::VecString(messages_vectors.message1_str),
-            InputType::VecString(messages_vectors.message2_str),
+            InputType(messages_vectors.message1_str),
+            InputType(messages_vectors.message2_str),
         ];
-        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime);
+        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime)?;
 
         // assrt that signature has update_key of length k_prime
         // how to convert a usize to integer:
@@ -838,20 +858,19 @@ mod tests {
         }
 
         // run changerel function (with update_key) to add commitment C3 (for message3_str) to the sign where index L = 3
-        let message_l = InputType::VecString(messages_vectors.message3_str);
+        let message_l = InputType(messages_vectors.message3_str);
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         let mu = FieldElement::one();
 
-        let cred_chged = sign_scheme
-            .push_attr_entry(&message_l, signature_original, &mu)
-            .expect("valid tests");
+        let cred_chged = sign_scheme.push_attr_entry(&message_l, signature_original, &mu)?;
 
         assert!(sign_scheme.verify(&vk, &pk_u, &cred_chged.commitment_vector, &cred_chged.sigma));
+        Ok(())
     }
 
     /// run changrel on the signature that is coming from changerep (that is already randomized) and verify it
     #[test]
-    fn test_changerel_from_rep() {
+    fn test_changerel_from_rep() -> Result<(), SerzDeserzError> {
         //create a signing keys for 10 messages
         let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
@@ -867,10 +886,10 @@ mod tests {
         // create a signature for pk_u on (C1, C2) related to (message1_str, message2_str)) and aslo output update_key for k_prime = 4, allow adding 2 more commitments like C3 and C4
         let k_prime = Some(4);
         let messages_vector = &vec![
-            InputType::VecString(messages_vectors.message1_str),
-            InputType::VecString(messages_vectors.message2_str),
+            InputType(messages_vectors.message1_str),
+            InputType(messages_vectors.message2_str),
         ];
-        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime);
+        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime)?;
 
         // run changerep function (without randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
@@ -890,7 +909,7 @@ mod tests {
         ));
 
         // change_rel
-        let message_l = InputType::VecString(messages_vectors.message3_str);
+        let message_l = InputType(messages_vectors.message3_str);
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         let cred_tilde = sign_scheme
             .push_attr_entry(&message_l, signature_prime, &mu)
@@ -903,11 +922,12 @@ mod tests {
             &cred_tilde.commitment_vector,
             &cred_tilde.sigma
         ));
+        Ok(())
     }
 
     /// run convert protocol (send_convert_sig, receive_convert_sig) to switch a pk_u to new pk_u and verify it
     #[test]
-    fn test_convert() {
+    fn test_convert() -> Result<(), SerzDeserzError> {
         // 1. sign_keygen
         let max_cardinal = MaxCardinality(5);
         let sign_scheme = EqcSign::new(max_cardinal);
@@ -922,11 +942,11 @@ mod tests {
         let messages_vectors = setup_tests();
         let k_prime = Some(4);
         let messages_vector = &vec![
-            InputType::VecString(messages_vectors.message1_str),
-            InputType::VecString(messages_vectors.message2_str),
+            InputType(messages_vectors.message1_str),
+            InputType(messages_vectors.message2_str),
         ];
 
-        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime);
+        let signature_original = sign_scheme.sign(&pk_u, &sk, messages_vector, k_prime)?;
 
         // 4. create second user_keygen pk_u_new, sk_new
         let (sk_new, pk_u_new) = sign_scheme.user_keygen();
@@ -944,5 +964,6 @@ mod tests {
             &signature_original.commitment_vector,
             &sigma_new
         ));
+        Ok(())
     }
 }

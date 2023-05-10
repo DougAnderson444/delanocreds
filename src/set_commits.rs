@@ -1,12 +1,12 @@
 use crate::spseq_uc::MaxCardinality;
 use crate::utils::polyfromroots;
 use crate::utils::InputType;
+use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
-use std::collections::HashSet;
 
 /// Public Parameters of the Set Commitment
 /// - `pp_commit_g1`: public parameter commitment for G1
@@ -96,7 +96,10 @@ pub trait Commitment {
     /// 2. Compute the commitment as a product of P^ai, P_hat^ai, where ai is the ith element of the message set
     /// 3. Compute the witness as a product of P^ai, P_hat^ai, where ai is the ith element of the message set
     /// 4. Return the commitment and witness
-    fn commit_set(param_sc: &ParamSetCommitment, mess_set_str: &InputType) -> (G1, FieldElement) {
+    fn commit_set(
+        param_sc: &ParamSetCommitment,
+        mess_set_str: &InputType,
+    ) -> Result<(G1, FieldElement), SerzDeserzError> {
         // TODO: Verify the message set string length is no more than the max cardinality in ParamSetCommitment
 
         let mess_set = convert_mess_to_bn(mess_set_str);
@@ -121,7 +124,7 @@ pub trait Commitment {
         let commitment = pre_commit * rho.clone();
         // open_info is rho.
         let open_info = rho;
-        (commitment, open_info)
+        Ok((commitment, open_info))
     }
 
     /// Open a commitment to a set of messages. This is the verification step. Verifies the opening information of a set.
@@ -141,7 +144,7 @@ pub trait Commitment {
         commitment: &G1,
         open_info: &FieldElement,
         mess_set_str: &InputType,
-    ) -> bool {
+    ) -> Result<bool, SerzDeserzError> {
         let mess_set = convert_mess_to_bn(mess_set_str);
         // get monypol_coeff using polyfromroots() fn from utils.rs
         let monypol_coeff = polyfromroots(mess_set);
@@ -160,7 +163,7 @@ pub trait Commitment {
         // multiply pre_commit by rho. Rho is a random element in Zp. Zp is the set of integers modulo p.
         let commitment_check = pre_commit * open_info;
 
-        *commitment == commitment_check
+        Ok(*commitment == commitment_check)
     }
 
     /// OpenSubset Generates a witness for the subset if the length of the subset is less than the length of the message set
@@ -179,9 +182,9 @@ pub trait Commitment {
         mess_set_str: &InputType,
         open_info: &FieldElement,
         subset_str: &InputType,
-    ) -> Option<G1> {
+    ) -> Result<Option<G1>, SerzDeserzError> {
         if open_info.is_zero() {
-            return None;
+            return Ok(None);
         }
 
         let mess_set = convert_mess_to_bn(mess_set_str);
@@ -190,13 +193,13 @@ pub trait Commitment {
         // check if mess_subset is a subset of mess_set
         // compare the lengths of the two vectors
         if mess_subset_t.len() > mess_set.len() {
-            return None;
+            return Ok(None);
         }
 
         // now, for each item in mess_subset_t, if item is in mess_set, checker = true, else checker = false
         // check to ensure all messages in mess_subset_t are in mess_set
         if !mess_subset_t.iter().all(|item| mess_set.contains(item)) {
-            return None;
+            return Ok(None);
         }
 
         // creates a list of elements that are in mess_set but not in mess_subset_t,
@@ -221,7 +224,7 @@ pub trait Commitment {
         let witn_sum = witn_groups.iter().fold(G1::identity(), |acc, x| acc + x);
 
         let witness = witn_sum * open_info;
-        Some(witness)
+        Ok(Some(witness))
     }
 
     /// VerifySubset verifies the witness for the subset. Verifies if witness proves that subset_str is a subset of the original message set.
@@ -241,7 +244,7 @@ pub trait Commitment {
         commitment: &G1,
         subset_str: &InputType,
         witness: &G1,
-    ) -> bool {
+    ) -> Result<bool, SerzDeserzError> {
         let mess_subset_t = convert_mess_to_bn(subset_str);
         let coeff_t = polyfromroots(mess_subset_t);
 
@@ -257,21 +260,16 @@ pub trait Commitment {
             .iter()
             .fold(G2::identity(), |acc, x| acc + x);
 
-        GT::ate_pairing(witness, &subset_elements_sum) == GT::ate_pairing(commitment, &param_sc.g_2)
+        Ok(GT::ate_pairing(witness, &subset_elements_sum)
+            == GT::ate_pairing(commitment, &param_sc.g_2))
     }
 }
 
 pub fn convert_mess_to_bn(input: &InputType) -> Vec<FieldElement> {
-    match input {
-        InputType::String(mess) => {
-            let mess_bn = FieldElement::from_msg_hash(mess.as_bytes());
-            vec![mess_bn]
-        }
-        InputType::VecString(mess_vec) => mess_vec
-            .iter()
-            .map(|mess| FieldElement::from_msg_hash(mess.as_bytes()))
-            .collect::<Vec<FieldElement>>(),
-    }
+    input
+        .iter()
+        .map(|entry| FieldElement::from_msg_hash(entry.as_bytes()))
+        .collect::<Vec<FieldElement>>()
 }
 
 pub struct SetCommitment {
@@ -377,9 +375,9 @@ impl CrossSetCommitment {
         commit_vector: &[G1],
         subsets_vector_str: &[InputType],
         proof: &G1,
-    ) -> bool {
+    ) -> Result<bool, SerzDeserzError> {
         // Steps:
-        // 1. convert message str into the BN
+        // 1. convert message str into the BN, roll up possible error from convert_mess_to_bn with `? operator`
         let subsets_vector = subsets_vector_str
             .iter()
             .map(convert_mess_to_bn)
@@ -446,7 +444,7 @@ impl CrossSetCommitment {
         let left_side = vector_gt.iter().fold(GT::one(), |acc, x| acc * x.clone());
 
         // 4. compare left and right side of verification to see if they are equal
-        left_side == right_side
+        Ok(left_side == right_side)
     }
 }
 
@@ -476,7 +474,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_commit_and_open() {
+    fn test_commit_and_open() -> Result<(), SerzDeserzError> {
         let max_cardinal = 5;
 
         // Set 1
@@ -485,21 +483,22 @@ mod test {
         let drivers = "driver license = 12";
 
         let set_str: InputType =
-            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+            InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
         let (pp, _alpha) = SetCommitment::setup(MaxCardinality(max_cardinal));
-        let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str);
+        let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str)?;
         // assrt open_set with pp, commitment, O, set_str
         assert!(SetCommitment::open_set(
             &pp,
             &commitment,
             &witness,
             &set_str
-        ));
+        )?);
+        Ok(())
     }
 
     #[test]
-    fn test_open_verify_subset() {
+    fn test_open_verify_subset() -> Result<(), SerzDeserzError> {
         let max_cardinal = 5;
 
         // Set 1
@@ -507,14 +506,13 @@ mod test {
         let name = "name = Alice";
         let drivers = "driver license = 12";
 
-        let set_str =
-            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+        let set_str = InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
-        let subset_str_1 = InputType::VecString(vec![age.to_owned(), name.to_owned()]);
+        let subset_str_1 = InputType(vec![age.to_owned(), name.to_owned()]);
         let (pp, _alpha) = SetCommitment::setup(MaxCardinality(max_cardinal));
-        let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str);
+        let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str)?;
         let witness_subset =
-            SetCommitment::open_subset(&pp, &set_str, &opening_info, &subset_str_1);
+            SetCommitment::open_subset(&pp, &set_str, &opening_info, &subset_str_1)?;
 
         // assert that there is some witness_subset
         assert!(witness_subset.is_some());
@@ -526,11 +524,12 @@ mod test {
             &commitment,
             &subset_str_1,
             &witness_subset
-        ));
+        )?);
+        Ok(())
     }
 
     #[test]
-    fn test_aggregate_verify_cross() {
+    fn test_aggregate_verify_cross() -> Result<(), SerzDeserzError> {
         // check aggregation of witnesses using cross set commitment scheme
 
         // Set 1
@@ -544,9 +543,9 @@ mod test {
         let alt_drivers = "driver license type = B";
 
         let set_str: InputType =
-            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+            InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
-        let set_str2: InputType = InputType::VecString(vec![
+        let set_str2: InputType = InputType(vec![
             gender.to_owned(),
             company.to_owned(),
             alt_drivers.to_owned(),
@@ -561,23 +560,22 @@ mod test {
         // from(PublicParameters) -> CrossSetCommitment
 
         let (pp, _alpha) = CrossSetCommitment::setup(MaxCardinality(max_cardinal));
-        let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str);
-        let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2);
+        let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str)?;
+        let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2)?;
 
         let commit_vector = &vec![commitment_1, commitment_2];
 
         // create a witness for each subset -> W1 and W2
-        let subset_str_1 =
-            InputType::VecString(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+        let subset_str_1 = InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
 
-        let subset_str_2 = InputType::VecString(vec![gender.to_owned(), company.to_owned()]);
+        let subset_str_2 = InputType(vec![gender.to_owned(), company.to_owned()]);
 
         let witness_1 =
-            CrossSetCommitment::open_subset(&pp, &set_str, &opening_info_1, &subset_str_1)
+            CrossSetCommitment::open_subset(&pp, &set_str, &opening_info_1, &subset_str_1)?
                 .expect("Some Witness");
 
         let witness_2 =
-            CrossSetCommitment::open_subset(&pp, &set_str2, &opening_info_2, &subset_str_2)
+            CrossSetCommitment::open_subset(&pp, &set_str2, &opening_info_2, &subset_str_2)?
                 .expect("Some Witness");
 
         // aggregate all witnesses for a subset is correct-> proof
@@ -590,6 +588,7 @@ mod test {
             commit_vector,
             &[subset_str_1, subset_str_2],
             &proof
-        ));
+        )?);
+        Ok(())
     }
 }
