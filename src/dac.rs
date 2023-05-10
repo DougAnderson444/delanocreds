@@ -1,7 +1,9 @@
 //! This is implementation of delegatable anonymous credential using SPSQE-UC signatures and set commitment.
 //! See  the following for the details:
 //! - Practical Delegatable Anonymous Credentials From Equivalence Class Signatures, PETS 2023.
-//!    https://eprint.iacr.org/2022/680
+//!    [https://eprint.iacr.org/2022/680](https://eprint.iacr.org/2022/680)
+use std::io::WriterPanicked;
+
 use super::spseq_uc;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
@@ -79,10 +81,10 @@ pub struct DelegateeCred {
 /// Credentials Proof
 ///
 /// # Arguments
-/// - `sigma`: Sigma, signature of the user
-/// - `commitment_vector`: Vec<G1>, commitment vector of the user
-/// - `witness_pi`: G1, witness of the user
-/// - `proof_nym_p`: NymProof, proof of the pseudonym
+/// - `sigma`: `Sigma`, signature of the user
+/// - `commitment_vector`: `Vec<G1>`, commitment vector of the user
+/// - `witness_pi`: `G1`, witness of the user
+/// - `proof_nym_p`: `NymProof`, proof of the pseudonym
 #[derive(Clone)]
 pub struct CredProof {
     sigma: Signature,
@@ -168,11 +170,11 @@ impl Dac {
 
     /// Issues a root credential to a user.
     /// # Arguments
-    /// - vk: &Vec<VK>, verification keys of the set
-    /// - attr_vector: &Vec<InputType>, attributes of the user
-    /// - sk: &Vec<FieldElement>, secret keys of the set
+    /// - vk: `&Vec<VK>`, verification keys of the set
+    /// - attr_vector: `&Vec<InputType>`, attributes of the user
+    /// - sk: `&Vec<FieldElement>`, secret keys of the set
     /// - nym: &Nym, pseudonym of the user
-    /// - k_prime: Option<usize>, the number of attributes to be delegated. If None, all attributes are delegated.
+    /// - k_prime: `Option<usize>`, the number of attributes to be delegated. If None, all attributes are delegated.
     /// - proof_nym_u: NymProof, proof of the pseudonym
     pub fn issue_cred(
         &self,
@@ -208,7 +210,6 @@ impl Dac {
         cred_u: Credential,
         vk: &[VK],
         addl_attrs: Option<&InputType>,
-        index_l: usize,
         sk_ca: &SecretWitness,
         proof_nym: &NymProof,
     ) -> CredReceived {
@@ -216,8 +217,19 @@ impl Dac {
         // assert self.zkp.verify(challenge, pedersen_open, pedersen_commit, stm, response)
         assert!(self.zkp.verify(proof_nym));
 
-        let mu = FieldElement::one();
-        let cred_r = self.spseq_uc.change_rel(addl_attrs, index_l, cred_u, &mu);
+        // if Some(addl_attrs) then push_attr_entry else keep cred unchanged
+        let mut cred_r = cred_u;
+        if let Some(addl_attrs) = addl_attrs {
+            let mu = FieldElement::one();
+            // if push_attr_entry returns Ok, use that cred
+            // else, keep cred unchanged
+            if let Ok(cred_pushed) = self
+                .spseq_uc
+                .push_attr_entry(addl_attrs, cred_r.clone(), &mu)
+            {
+                cred_r = cred_pushed;
+            }
+        }
 
         // self.spseq_uc.send_convert_sig(vk, sk_ca, cred_u.sigma)
         let orphan = self
@@ -364,7 +376,7 @@ impl Dac {
                     &cred_p.opening_vector[i],
                     selected_attr,
                 ) {
-                    witness.push(opened);
+                    witness.push(opened); //can only have as many witnesses as there are openable selected attributes
                 }
                 commitment_vectors.push(cred_p.commitment_vector[i].clone());
                 (witness, commitment_vectors)
@@ -383,13 +395,10 @@ impl Dac {
     }
 
     /// Verify proof of a credential
-    pub fn verify_proof(
-        &self,
-        vk: &[VK],
-        proof: &CredProof,
-        selected_attrs: &Vec<InputType>,
-    ) -> bool {
+    pub fn verify_proof(&self, vk: &[VK], proof: &CredProof, selected_attrs: &[InputType]) -> bool {
         // filter set commitments regarding the selected attributes
+        // TODO: Make this either set of indexes or keys, so make selecting more flexible
+        // Get the selected attributes from the entire attributes vector (indexes or keys)
         let commitment_vectors = proof.commitment_vector[..selected_attrs.len()].to_vec();
 
         // check the proof is valid for each
@@ -402,6 +411,7 @@ impl Dac {
 
         let check_zkp_verify = self.zkp.verify(&proof.proof_nym_p);
 
+        // signature is based on the original commitment vector. Unless we adapt it when the restriction is applied?
         let verify_sig = self.spseq_uc.verify(
             vk,
             &proof.proof_nym_p.public_key,
@@ -528,7 +538,7 @@ mod tests {
 
         // create a credential for new nym_R: delegator P -> delegatee R
         let cred_r_u: CredReceived =
-            dac.delegator(cred.clone(), &vk_ca, None, 3, &nym_u.secret, &nym_r.proof);
+            dac.delegator(cred.clone(), &vk_ca, None, &nym_u.secret, &nym_r.proof);
 
         // verify change_rel
         assert!(dac.spseq_uc.verify(
@@ -658,6 +668,18 @@ mod tests {
         let insurance = "Insurance = 2";
         let car_type = "Car type = BMW";
 
+        // Test proving a credential to verifiers
+        // DOING: rm InputType, just make them Vectors of Strings
+        // let all_attributes = vec![
+        //     vec![age.to_owned(), name.to_owned(), drivers.to_owned()],
+        //     vec![
+        //         gender.to_owned(),
+        //         company.to_owned(),
+        //         drivers_type_b.to_owned(),
+        //     ],
+        //     vec![insurance.to_owned(), car_type.to_owned()],
+        // ];
+
         let message1_str = vec![age.to_owned(), name.to_owned(), drivers.to_owned()];
         let message2_str = vec![
             gender.to_owned(),
@@ -674,7 +696,7 @@ mod tests {
         ];
 
         let max_cardinality = 8;
-        let l_message = AttributesLength(5);
+        let l_message = AttributesLength(10);
         let dac = Dac::new(MaxCardinality(max_cardinality));
         // TODO: Move sk_ca, vk_ca to DAC inner? Depends if you figure it'll be used with multiple keypairs
         let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(l_message);
@@ -704,7 +726,7 @@ mod tests {
         // capabilities. This is done by setting the first level of the opening vector to zero value FieldElement
         // setting cred.opening_vector = vec![FieldElement::zero(), ..rest]
         let mut opening_vector_restricted = cred.opening_vector;
-        opening_vector_restricted[2] = FieldElement::zero();
+        // opening_vector_restricted[0] = FieldElement::zero(); // means the selected attributes cannot include the first commit in the vector
 
         let cred_restricted = Credential {
             sigma: cred.sigma,
@@ -719,7 +741,6 @@ mod tests {
             cred_restricted,
             &vk_ca,
             None,
-            index_l,
             &alice_nym.secret,
             &bobby_nym.proof,
         );
@@ -736,10 +757,13 @@ mod tests {
         // subset of each message set
         let sub_list1_str = vec![age.to_owned(), name.to_owned()];
         let sub_list2_str = vec![gender.to_owned(), company.to_owned()];
+        let sub_list3_str = vec![insurance.to_owned()];
 
+        // build new vec of selected [[1],[1], []] from the attributes
         let selected_attrs = vec![
             InputType::VecString(sub_list1_str),
             InputType::VecString(sub_list2_str),
+            // InputType::VecString(sub_list3_str),
         ];
 
         // Bobby generate proof on read_only cred at level 2 of attribute hierarchy

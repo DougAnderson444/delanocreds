@@ -34,6 +34,7 @@ use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
+use std::fmt::Error;
 use std::ops::Deref;
 use std::ops::Mul;
 
@@ -159,16 +160,16 @@ impl EqcSign {
     /// # Arguments
     pub fn sign_keygen(&self, l_message: AttributesLength) -> (Vec<FieldElement>, Vec<VK>) {
         // compute secret keys for each item in l_message
-        let mut sk = Vec::new();
-        let mut vk: Vec<VK> = Vec::new();
         // sk has to be at least 2 longer than l_message, to compute `list_z` in `sign()` function which adds +2
-        for _ in 0..l_message.0 + 2 {
-            let sk_i = FieldElement::random();
-            // compute public keys
-            let vk_i = self.csc_scheme.param_sc.g_2.scalar_mul_const_time(&sk_i);
-            sk.push(sk_i);
-            vk.push(VK::G2(vk_i));
-        }
+        let sk: Vec<FieldElement> = (0..l_message.0 + 2)
+            .map(|_| FieldElement::random())
+            .collect::<Vec<_>>();
+
+        let mut vk: Vec<VK> = sk
+            .iter()
+            .map(|sk_i| VK::G2(self.csc_scheme.param_sc.g_2.scalar_mul_const_time(sk_i)))
+            .collect::<Vec<_>>();
+
         // compute X_0 keys that is used for delegation
         let x_0 = self.csc_scheme.param_sc.g_1.scalar_mul_const_time(&sk[0]);
         vk.insert(0, VK::G1(x_0));
@@ -205,29 +206,21 @@ impl EqcSign {
         k_prime: Option<usize>,
     ) -> Credential {
         // encode all messagse sets of the messages vector as set commitments
-        let mut commitment_vector = Vec::new();
-        let mut opening_vector = Vec::new();
-        for mess in messages_vector {
-            let (commitment, opening) = self.encode(mess);
-            commitment_vector.push(commitment);
-            opening_vector.push(opening);
-        }
+        let (commitment_vector, opening_vector): (Vec<G1>, Vec<FieldElement>) =
+            messages_vector.iter().map(|mess| self.encode(mess)).unzip();
 
         // pick randomness for y_g1
         let y_rand = FieldElement::random();
 
         // compute sign -> sigma = (Z, Y, hat Ym t)
-        let mut list_z = Vec::new();
-        for i in 0..commitment_vector.len() {
-            let z_i = commitment_vector[i].scalar_mul_const_time(&sk[i + 2]);
-            list_z.push(z_i);
-        }
+        let list_z = commitment_vector
+            .iter()
+            .enumerate()
+            .map(|(i, c)| c.scalar_mul_const_time(&sk[i + 2]))
+            .collect::<Vec<_>>();
 
         // temp_point = sum of all ec points in list_Z
-        let mut temp_point = G1::identity();
-        for z_i in list_z {
-            temp_point += z_i;
-        }
+        let temp_point = list_z.iter().fold(G1::identity(), |acc, x| acc + x);
 
         // Z is y_rand mod_inverse(order) times temp_point
         let z = y_rand.inverse() * temp_point;
@@ -251,20 +244,14 @@ impl EqcSign {
             let mut k_prime = k_prime;
 
             if k_prime > messages_vector.len() {
-                // enusre k_prime is maximum sk.len() - 2, which is l_message length from sign_keygen()
+                // k_prime upper bounds: enusre k_prime is at most sk.len() - 2, which is l_message length from sign_keygen()
                 k_prime = k_prime.min(sk.len() - 2);
-
-                // usign = {}
-                // for item in range(len(messages_vector) + 1, k_prime + 1): # In Python, this syntax means "from len(messages_vector) + 1 to k_prime + 1". In rust, the equiv would be "len(messages_vector) + 1..k_prime + 1"
-                //     UK = [(y_g1.mod_inverse(order) * sk[item + 1]) * pp_commit_g1[i] for i in range(max_cardinality)]
-                //     usign[item] = UK
-                //     update_key = usign
 
                 let mut usign = Vec::new();
                 usign.resize(k_prime, Vec::new()); // update_key is k < k' < l, same length as l_message.length, which is same as sk
 
                 // only valid keys are between commitment length (k) an length (l), k_prime.length = k < k' < l
-                for k in messages_vector.len() + 1..k_prime + 1 {
+                for k in (messages_vector.len() + 1)..=k_prime {
                     let mut uk = Vec::new();
                     for i in 0..self.csc_scheme.param_sc.max_cardinality {
                         let uk_i = self.csc_scheme.param_sc.pp_commit_g1[i]
@@ -275,15 +262,16 @@ impl EqcSign {
                     usign[k - 1] = uk; // first element is index 0 (message m is index m-1)
                 }
                 update_key = Some(usign);
+
                 return Credential {
                     sigma,
                     update_key,
                     commitment_vector,
                     opening_vector,
                 };
-            } else {
-                panic!("Not a good index, k_prime index should be greater than message length");
             }
+            // k_prime of equal or lesser value than current message length has no effect
+            // since the whole point of k_prime is to extend the message length!
         }
 
         Credential {
@@ -314,22 +302,20 @@ impl EqcSign {
         let right_side = GT::ate_pairing(z, y_hat);
 
         // pairing_op = [group.pair(commitment_vector[j], vk[j + 3]) for j in range(len(commitment_vector))]
-        let mut pairing_op = Vec::new();
-        for j in 0..commitment_vector.len() {
-            // the only VK that is not G2 is the first elem we inserted at 0 back in sign_keygen()
-            if let VK::G2(vkj3) = &vk[j + 3] {
-                let pair = GT::ate_pairing(&commitment_vector[j], vkj3);
-                pairing_op.push(pair);
-            } else {
-                panic!("Invalid verification key");
-            }
-        }
+        let pairing_op = commitment_vector
+            .iter()
+            .zip(vk.iter().skip(3))
+            .map(|(c, vkj3)| {
+                if let VK::G2(vkj3) = vkj3 {
+                    GT::ate_pairing(c, vkj3)
+                } else {
+                    panic!("Invalid verification key");
+                }
+            })
+            .collect::<Vec<_>>();
 
         // left_side = product_GT(pairing_op)
-        let mut left_side = GT::one();
-        for pair in pairing_op {
-            left_side = GT::mul(left_side, &pair);
-        }
+        let left_side = pairing_op.iter().fold(GT::one(), GT::mul);
 
         if let VK::G2(vk2) = &vk[2] {
             if let VK::G2(vk1) = &vk[1] {
@@ -428,8 +414,16 @@ impl EqcSign {
         }
     }
 
-    /// Change Relations over the attributes
-    /// Update the signature for a new commitment vector including 𝐶_L for message_l using update_key
+    /// ChangeRequest
+    /// Takes a Credential and index of the update key to use and generates a new
+    /// change request. Ensure that request is valid by checking that the index is
+    /// within the range of the update key.
+
+    /// Push AttributeEntry onto the end of Message Stack.
+    /// Appends new randomized commitment and opening for the new entry.
+    /// Updates the signature for a new commitment vector including 𝐶_L for message_l using update_key
+    ///
+    /// Referred to as "Change Relations" in the paper.
     ///
     /// # Arguments
     /// - `message_l`: message set at index `index_l` that will be added in message vector
@@ -440,80 +434,73 @@ impl EqcSign {
     ///
     /// # Returns
     /// new signature including the message set at index l
-    pub fn change_rel(
+    pub fn push_attr_entry(
         &self,
-        message_l: Option<&InputType>,
-        index_l: usize,
+        addl_attrs: &InputType,
         orig_sig: Credential,
         mu: &FieldElement,
-    ) -> Credential {
-        // can only change attributes if we have the messages and an update_key
-        if message_l.is_none() || orig_sig.update_key.is_none() {
-            return orig_sig;
-        }
+    ) -> Result<Credential, Error> {
+        // Validate the input. There must be room between the length of the current commitment vector
+        // and the length of the update key to append a new entry.
+        // valid input if: index_l = orig_sig.commitment_vector.len() + 1 && orig_sig.commitment_vector.len() + 1 <= orig_sig.update_key.as_ref().unwrap().len()
+        let index_l = orig_sig.commitment_vector.len() + 1;
 
-        let message_l = message_l.unwrap();
+        match &orig_sig.update_key {
+            // can only change attributes if we have the messages and an update_key
+            Some(usign) if index_l <= usign.len() => {
+                let Signature { z, y_g1, y_hat, t } = orig_sig.sigma;
+                let (commitment_l, opening_l) = self.encode(addl_attrs);
 
-        let Signature { z, y_g1, y_hat, t } = orig_sig.sigma;
-        let (commitment_l, opening_l) = self.encode(message_l);
+                let rndmz_commitment_l = mu * &commitment_l;
+                let rndmz_opening_l = mu * &opening_l;
 
-        let rndmz_commitment_l = mu * &commitment_l;
-        let rndmz_opening_l = mu * &opening_l;
+                // add the commitment CL for index L into the signature,
+                // the update commitment vector and opening for this new commitment
+                // if let  &orig_sig.update_key is Some usign
 
-        // add the commitment CL for index L into the signature,
-        // the update commitment vector and opening for this new commitment
-        // if let  &orig_sig.update_key is Some usign
-        if let Some(usign) = &orig_sig.update_key {
-            // check if usign has index matching index_l or not
-            // if yes, then update the signature
-            // if no, then add the new commitment and opening to the signature
-            if index_l <= usign.len() {
-                let set_l = convert_mess_to_bn(message_l);
-                let monypolcoefficient = polyfromroots(set_l);
-                let list = usign.get(index_l - 1).unwrap();
+                // check if usign has index matching index_l or not
+                // if yes, then update the signature
+                // if no, then add the new commitment and opening to the signature
+                if index_l <= usign.len() {
+                    let set_l = convert_mess_to_bn(addl_attrs);
+                    let monypolcoefficient = polyfromroots(set_l);
 
-                // points_uk_i = [(list[i]).mul(monypolcoefficient[i]) for i in range(len(monypolcoefficient))]
-                let mut points_uk_i = Vec::new();
-                for i in 0..monypolcoefficient.coefficients().len() {
-                    let points_uk_i_i = list
-                        .get(i)
-                        .expect("Valid G1")
-                        .scalar_mul_const_time(&monypolcoefficient.coefficients()[i]);
-                    points_uk_i.push(points_uk_i_i);
+                    let list = usign.get(index_l - 1).unwrap();
+                    let sum_points_uk_i = list
+                        .iter()
+                        .zip(monypolcoefficient.coefficients().iter())
+                        .fold(G1::identity(), |acc, (list_i, monypolcoefficient_i)| {
+                            acc + list_i.scalar_mul_const_time(monypolcoefficient_i)
+                        });
+
+                    let gama_l = sum_points_uk_i.scalar_mul_const_time(&opening_l);
+
+                    let z_tilde = z + &gama_l;
+
+                    let sigma_tilde = Signature {
+                        z: z_tilde,
+                        y_g1,
+                        y_hat,
+                        t,
+                    };
+
+                    let mut commitment_vector_tilde = orig_sig.commitment_vector;
+                    commitment_vector_tilde.push(rndmz_commitment_l);
+
+                    let mut opening_vector_tilde = orig_sig.opening_vector;
+                    opening_vector_tilde.push(rndmz_opening_l);
+
+                    Ok(Credential {
+                        sigma: sigma_tilde,
+                        update_key: orig_sig.update_key,
+                        commitment_vector: commitment_vector_tilde, // Commitment_vector_new
+                        opening_vector: opening_vector_tilde,       // Opening_vector_new
+                    })
+                } else {
+                    panic!("index_l is the out of scope");
                 }
-
-                let sum_points_uk_i = points_uk_i
-                    .into_iter()
-                    .fold(G1::identity(), |acc, x| acc + x);
-
-                let gama_l = sum_points_uk_i.scalar_mul_const_time(&opening_l);
-                let z_tilde = z + &gama_l;
-
-                let sigma_tilde = Signature {
-                    z: z_tilde,
-                    y_g1,
-                    y_hat,
-                    t,
-                };
-
-                let mut commitment_vector_tilde = orig_sig.commitment_vector;
-                commitment_vector_tilde.push(rndmz_commitment_l);
-
-                let mut opening_vector_tilde = orig_sig.opening_vector;
-                opening_vector_tilde.push(rndmz_opening_l);
-
-                Credential {
-                    sigma: sigma_tilde,
-                    update_key: orig_sig.update_key,
-                    commitment_vector: commitment_vector_tilde, // Commitment_vector_new
-                    opening_vector: opening_vector_tilde,       // Opening_vector_new
-                }
-            } else {
-                panic!("index_l is the out of scope");
             }
-        } else {
-            // no update key, cannot update, panic
-            panic!("No update key, cannot update");
+            _ => Err(Error),
         }
     }
 
@@ -855,7 +842,9 @@ mod tests {
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         let mu = FieldElement::one();
 
-        let cred_chged = sign_scheme.change_rel(Some(&message_l), 3, signature_original, &mu);
+        let cred_chged = sign_scheme
+            .push_attr_entry(&message_l, signature_original, &mu)
+            .expect("valid tests");
 
         assert!(sign_scheme.verify(&vk, &pk_u, &cred_chged.commitment_vector, &cred_chged.sigma));
     }
@@ -903,7 +892,9 @@ mod tests {
         // change_rel
         let message_l = InputType::VecString(messages_vectors.message3_str);
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
-        let cred_tilde = sign_scheme.change_rel(Some(&message_l), 3, signature_prime, &mu);
+        let cred_tilde = sign_scheme
+            .push_attr_entry(&message_l, signature_prime, &mu)
+            .expect("valid tests");
 
         // verify the signature
         assert!(sign_scheme.verify(

@@ -1,34 +1,76 @@
 //! # Delanocreds API
 //!
-//! Delegatable Anaonymous Credentials.
+//! **Del**egatable **Ano**nymous **Cred**ential**s**: Based on the Crypto paper
+//! [Practical Delegatable Anonymous Credentials From Equivalence Class Signatures](https://eprint.iacr.org/2022/680)
+//!
+//! This library enables you to create, issue, delegate, and verify credentials in an anonymous way.
 //!
 //! # Roles
 //!
-//! The roles start with a Root Issuer, then a Credential Holder, then a Shower.
+//! The roles start with a Root Issuer, then delegated Credential Holder(s), then a Prover(s) and Verifier(s).
 //!
 //! ## Root Issuer
 //!
-//! You are the issuer and your public key will be the only one seen in the credentials process.
+//! You are the issuer and your verification key (public key) will be the only non-anonymous key in the credentials process.
 //!
-//! Choices to make, Summary of choices/options:
-//! - **Attributes**: Maximum number of attributes (`message_l`), maximum number of items per attribute (`cardinality` of committed sets) ,
-//! how many attributes can be added (0 to `k_prime`, `k_prime` is at most `message_l`),
-//! which attributes to show (n of cardinality), which attributes to aggregate.
+//! #### Root Issuer Summary of Choices/Options:
+//!
+//! - **Attribute Entries**: There can be a maximum number of attribute entries (`message_l`)
+//! - **Total Entries Elements**: There is a set maximum number of items total (`cardinality`)
+//! - **Additonal Entries**: There can be a maximum number of additional entries (current entries length up to `k_prime`, `k_prime` is at most `message_l`),
 //! - **Delegation**: Whether cred can be re-delegated or not (update_key).
+//!
+//! Below is a markdown table with an example of attribute entries, and attributes in each entry, with yes/no for each feature
+//!
+//! ```md
+//! Attribute Entries:
+//! ==> Entry Level 0: [Element, Element, Element, Element]
+//! ==> Entry Level 1: [Element, Element, Element, Element, Element]
+//! ==> Entry Level 2: [Element, Element]
+//! ==> Additonal Entry? Only if 3 < k_prime < message_l
+//! ```
+//!
+//! - Max Entries: `message_l`
+//! - Max total elements: `max_cardinality`
+//!
+//! ```md
+//! Opening Information
+//!
+//! ==> Entry Level 0: Valid opening information
+//! ==> Entry Level 1: Valid opening information
+//! ==> Entry Level 2: Zeroized opening information
+//! ```
+//!
+//! #### Delegated Credential Holder(s) Choice of Options:
+//!
+//! Delegation in the sence of DAC means the adding or generating proofs of attributes to a credential.
+//!
+//! Thus holders have the option to restrict:
+//!
+//! - **Restrict Adding Attributes**: Restrict adding attributes to the credential (by reducing `k_prime`).
+//! - **Restrict Showing certin Attribute Entry levels**: By zeroizing the opening information  corresponding
+//! to the attribute entry level you want to restrict.
 //!
 //! Every delegator can control how far delegations can go by further restricting the `update key`
 //! and a delegator can also restrict the possibility to show attributes from a certain level in
 //! the hierarchy (which corresponds to a commitment in the commitment vector) by not providing
 //! the opening of the commitment to the delegatee.
 //!
+//! Likewise, holders have the ability to extend the credential by adding attributes to the credential,
+//! as long as the total number of attributes doesn't exceed `k_prime`.
+//!
 //! ## Showing a credential
 //!
-//! Adapt the signature to a re-randomized signature for a re-randomized commitment vector and
-//! providing subset openings of the respective commitments. Multiple commitments can also be aggregated
-//! by using a cross-commitment.
+//! Once a holder wants to show a credential, with any combination of attributes (as long as the opening information is available),
+//! the holder selects which attributes they want to prove, then they run `proof_cred` to generate a proof.
+//!
+//! Holders can only prove up to `max_cardinality` attributes at a time.
+//!
+//! ## Building a Credential
 //!
 //! Building credentials is a multiple step process:
-//! 1. First you generate the Verification keys by choosing the max cardinality (total individual credentials)
+//!
+//! 1. First you generate the Verification Keys by choosing the max cardinality (total individual credentials)
 //! and max number of credential sets. Those verification keys (VK) can only be used up to those lengths. If you need longer
 //! attributes, you need to generate new VKs.
 //!
@@ -38,7 +80,7 @@
 //!
 //! A Credential Builder.
 //!
-//! Issue Builder Options you can set:
+//! Root Issuer Builder Options you can set:
 //! - Max number of attributes (defaults to 5)
 //! - Max cardinality (defaults to 10)
 //!
@@ -54,7 +96,8 @@
 //! - Generate a proof from the credential and
 //!
 //! Credential Constraints:
-//! - You can only
+//! - You can only add attributes if the current number of attributes is below `message_l`.
+//! - You can only issue a credential if the current number of attributes is below `max_cardinality`.
 //!
 //! If you want to restrict delegatees from showing proofs for attributes from
 //! a certain level in the hierarchy (which corresponds to a commitment in the
@@ -62,32 +105,53 @@
 //!
 //! In Practical terms, this means that when the Root Level commit hold C.R.U.D.,
 //! the way to restrict the delegatee from showing the proof is to add a second
-//! level commit that holds only RUD, and not provide the opening of the first level.
+//! level commit that holds only R.U.D., and not provide the opening of the first level.
 //! This way, the delegatee can only show the proof for the second level thus can only
 //! prove the ability to Read, Update, and Delete, but not Create.
 //!
 //! States and Sub-states:
-//!
-//! Configuration: Unconfigured, configured
-//! Credential: Unissued, issued, delegated
-//! Delegatable: True, False. A credential is only delegatable if `update_key` is provided.
-//! Extendable: True, False. Only extendable if number of attribute commits is less than k_prime
-//! Showable: Up to the number of attributes in the credential. restricted by `opening_info `
+//! - State: Sub-states.
+//! - Configuration: Unconfigured, configured
+//! - Credential: Unissued, issued, delegated
+//! - Delegatable: True, False. A credential is only delegatable if `update_key` is provided.
+//! - Extendable: True, False. Only extendable if number of attribute commits is less than k_prime
+//! - Showable: Up to the number of attributes in the credential. restricted by `opening_info `
 //!
 //! BLS12-381 public keys are 48 bytes long. Private keys are 32 bytes long.
 
-// Come up with a list of constraints for states and transitions between them.
-// The states are: unconfigured, configured, issued, delegatable, delegating, delegated.
-// The transitions are: configure, issue_cred, add_attribute, updateable, prove
-// For example:
-// In (state, transition) = (configured, issue_cred) - You can only issue a credential if the current number of attributes is below max_cardinality.
-// In (state, transition) = (configured, add_attribute) - You can only add more attributes if the current number of attribute is below message_l.
-// You can only add more attributes if the current number of attributes is below max_cardinality.
-
+/// Given all the the documentation above, the following code is a possible API and usage for Delanocreds in Rust:
+///
+/// 1. Root Issuer builds Root Credential with:
+/// - max attributes,
+/// - max cardinality,
+/// - initial attribute entries,
+/// - extendable attributes (k_prime),
+/// - fully provable atrributes (all opening information provided)
+/// - delegatable attributes (update key provided)
+///
+/// 2. Root Issuer issues Root Credential to Credential Holder Alice's pseudonym (nym).
+/// Alice is the first holder of the Credential.
+///
+/// 3. Alice take credential bytes and loads them into the Credential structure. With the Root Credential, Alice can:
+/// - generate proof
+/// - delegate to another nym (if allowed by the cred update_key)
+/// - add attributes (if allowed by the cred update_key)
+///
+/// 3a. Alice generates a proof for the Root Credential with:
+/// - a list of attributes to prove
+///
+/// 3b. Alice delegates to another nym with:
+/// - a list of attributes to delegate
+/// - a potentially shorter update key to restrict the delegatee from adding attribute entries
+/// - potentially redacted opening information to restrict the delegatee from showing attributes
+///
+/// 4. Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
+/// With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
 use std::fmt;
 
 use spseq_uc::{AttributesLength, MaxCardinality};
 
+pub mod attributes;
 pub mod dac;
 pub mod set_commits;
 pub mod spseq_uc;

@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 /// Public Parameters of the Set Commitment
 /// - `pp_commit_g1`: public parameter commitment for G1
-/// - `pp_commit_g2` : Public parameters commitment for G2, type we get returned from the Python code: [g_2.mul(alpha_trapdoor.pow(i)) for i in range(max_cardinality)] # This loops through the range of max_cardinality and multiplies g_2 by alpha_trapdoor raised to the power of i. Which is a list of G2 elements, or in Rust a Vec<G2>.
+/// - `pp_commit_g2` : Public parameters commitment for G2, type we get returned from the Python code: [g_2.mul(alpha_trapdoor.pow(i)) for i in range(max_cardinality)] # This loops through the range of max_cardinality and multiplies g_2 by alpha_trapdoor raised to the power of i. Which is a list of G2 elements, or in Rust a `Vec<G2>`.
 /// - `g_1`: G1 generator.
 /// - `g_2`: G2 generator.
 /// - `max_cardinality`: max cardinality of the set. Cardinality of the set is in [1, t]. t is a public parameter.
@@ -180,6 +180,10 @@ pub trait Commitment {
         open_info: &FieldElement,
         subset_str: &InputType,
     ) -> Option<G1> {
+        if open_info.is_zero() {
+            return None;
+        }
+
         let mess_set = convert_mess_to_bn(mess_set_str);
         let mess_subset_t = convert_mess_to_bn(subset_str);
 
@@ -196,7 +200,6 @@ pub trait Commitment {
         }
 
         // creates a list of elements that are in mess_set but not in mess_subset_t,
-        // Equivalent to this Python code: `create_witn_elements = [item for item in mess_set if item not in mess_subset_t] `
         // use into_iter() to consume the owned value (mess_set) and return an iterator
         let create_witn_elements: Vec<FieldElement> = mess_set
             .into_iter()
@@ -342,6 +345,7 @@ impl CrossSetCommitment {
     pub fn aggregate_cross(witness_vector: &[G1], commit_vector: &[G1]) -> G1 {
         // TODO: Needs to ensure that elements in the witness_vector are no longer than the max_cardinality in ParamSetCommitment
         // check number of entries in `witness_vector` against `self.param_sc.max_cardinality` to ensure within bounds
+        // ie. witness_vector.len() <= self.param_sc.max_cardinality
 
         // sum all elements in all witness_vectors
         witness_vector.iter().zip(commit_vector.iter()).fold(
@@ -380,6 +384,7 @@ impl CrossSetCommitment {
             .iter()
             .map(convert_mess_to_bn)
             .collect::<Vec<Vec<FieldElement>>>();
+
         // create a union of sets
         let set_s = subsets_vector
             .iter()
@@ -387,8 +392,6 @@ impl CrossSetCommitment {
                 acc.extend(x.clone());
                 acc
             })
-            .into_iter()
-            .collect::<HashSet<FieldElement>>()
             .into_iter()
             .collect::<Vec<FieldElement>>();
 
@@ -415,7 +418,7 @@ impl CrossSetCommitment {
             .map(|x| not_intersection(&set_s, x))
             .collect::<Vec<Vec<FieldElement>>>();
 
-        // 3. compute left side of verification, such as this Python code:
+        // 3. compute left side of verification
         let vector_gt = commit_vector
             .iter()
             .zip(set_s_not_t.iter())

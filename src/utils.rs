@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
