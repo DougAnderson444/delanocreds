@@ -318,7 +318,6 @@ impl EqcSign {
 
         let right_side = GT::ate_pairing(z, y_hat);
 
-        // pairing_op = [group.pair(commitment_vector[j], vk[j + 3]) for j in range(len(commitment_vector))]
         let pairing_op = commitment_vector
             .iter()
             .zip(vk.iter().skip(3))
