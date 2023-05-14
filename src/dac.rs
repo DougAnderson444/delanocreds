@@ -173,7 +173,7 @@ impl Dac {
     /// - attr_vector: `&Vec<InputType>`, attributes of the user
     /// - sk: `&Vec<FieldElement>`, secret keys of the set
     /// - nym: &Nym, pseudonym of the user
-    /// - k_prime: `Option<usize>`, the number of attributes to be delegated. If None, all attributes are delegated.
+    /// - k_prime: `Option<usize>`, the number of attributes to be delegated. If None, no attributes are updatable.
     /// - proof_nym_u: NymProof, proof of the pseudonym
     pub fn issue_cred(
         &self,
@@ -315,7 +315,7 @@ impl Dac {
     /// - `cred`: &Credential, credential of the user
     /// - `all_attributes`: &[InputType], attributes of the user
     /// - `selected_attrs`: &[InputType], attributes to be disclosed
-    pub fn proof_cred(
+    pub fn prove_cred(
         &self,
         vk: &[VK],
         nym_r: &G1,
@@ -569,7 +569,7 @@ mod tests {
         // ];
 
         // prepare a proof
-        let proof = dac.proof_cred(
+        let proof = dac.prove_cred(
             &vk_ca,
             &cred_p.nym,
             &aux_p,
@@ -638,7 +638,7 @@ mod tests {
         let selected_attrs = vec![InputType(sub_list1_str), InputType(sub_list2_str)];
 
         // prepare a proof
-        let proof = dac.proof_cred(
+        let proof = dac.prove_cred(
             &vk_ca,
             &nym_p.proof.public_key,
             &nym_p.secret,
@@ -762,7 +762,7 @@ mod tests {
         ];
 
         // Bobby generate proof on read_only cred at level 2 of attribute hierarchy
-        let proof = dac.proof_cred(
+        let proof = dac.prove_cred(
             &vk_ca,
             &bobbys_delegated.nym,
             &aux_bobby,
