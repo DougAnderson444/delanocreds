@@ -119,34 +119,34 @@
 //!
 //! BLS12-381 public keys are 48 bytes long. Private keys are 32 bytes long.
 
-/// Given all the the documentation above, the following code is a possible API and usage for Delanocreds in Rust:
-///
-/// 1. Root Issuer builds Root Credential with:
-/// - max attributes,
-/// - max cardinality,
-/// - initial attribute entries,
-/// - extendable attributes (k_prime),
-/// - fully provable atrributes (all opening information provided)
-/// - delegatable attributes (update key provided)
-///
-/// 2. Root Issuer issues Root Credential to Credential Holder Alice's pseudonym (nym).
-/// Alice is the first holder of the Credential.
-///
-/// 3. Alice take credential bytes and loads them into the Credential structure. With the Root Credential, Alice can:
-/// - generate proof
-/// - delegate to another nym (if allowed by the cred update_key)
-/// - add attributes (if allowed by the cred update_key)
-///
-/// 3a. Alice generates a proof for the Root Credential with:
-/// - a list of attributes to prove
-///
-/// 3b. Alice delegates to another nym with:
-/// - a list of attributes to delegate
-/// - a potentially shorter update key to restrict the delegatee from adding attribute entries
-/// - potentially redacted opening information to restrict the delegatee from showing attributes
-///
-/// 4. Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
-/// With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
+//! Given all the the documentation above, the following code is a possible API and usage for Delanocreds in Rust:
+//!
+//! 1. Root Issuer builds Root Credential with:
+//! - max attributes,
+//! - max cardinality,
+//! - initial attribute entries,
+//! - extendable attributes (k_prime),
+//! - fully provable atrributes (all opening information provided)
+//! - delegatable attributes (update key provided)
+//!
+//! 2. Root Issuer issues Root Credential to Credential Holder Alice's pseudonym (nym).
+//! Alice is the first holder of the Credential.
+//!
+//! 3. Alice take credential bytes and loads them into the Credential structure. With the Root Credential, Alice can:
+//! - generate proof
+//! - delegate to another nym (if allowed by the cred update_key)
+//! - add attributes (if allowed by the cred update_key)
+//!
+//! 3a. Alice generates a proof for the Root Credential with:
+//! - a list of attributes to prove
+//!
+//! 3b. Alice delegates to another nym with:
+//! - a list of attributes to delegate
+//! - a potentially shorter update key to restrict the delegatee from adding attribute entries
+//! - potentially redacted opening information to restrict the delegatee from showing attributes
+//!
+//! 4. Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
+//! With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
 use std::fmt;
 
 use spseq_uc::{AttributesLength, MaxCardinality};
@@ -159,9 +159,14 @@ pub mod types;
 pub mod utils;
 pub mod zkp;
 
-/// Defaults
+/// Default Max Attributes: The maximum number of attribute entries allowed in a credential.
 const DEFAULT_MAX_ATTRIBUTES: usize = 10;
+/// Default Max Cardinality: The maximum number of total attribute elements allowed in a credential.
 const DEFAULT_MAX_CARDINALITY: usize = 5;
+
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
 
 #[derive(Debug)]
 /// The Root Issuer, the one with the Verification Key that issues the first credential.
