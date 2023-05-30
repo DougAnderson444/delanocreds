@@ -1,12 +1,15 @@
-use crate::spseq_uc::MaxCardinality;
+use crate::keypair::MaxCardinality;
+use crate::utils::convert_mess_to_bn;
 use crate::utils::polyfromroots;
-use crate::utils::InputType;
+use crate::utils::Entry;
 use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
+use secrecy::ExposeSecret;
+use secrecy::Secret;
 
 /// Public Parameters of the Set Commitment
 /// - `pp_commit_g1`: public parameter commitment for G1
@@ -32,9 +35,10 @@ impl ParamSetCommitment {
     ///
     /// # Returns
     /// ParamSetCommitment
-    pub fn new(t: &usize, base: FieldElement) -> ParamSetCommitment {
+    pub fn new(t: &usize) -> ParamSetCommitment {
         let g_2 = G2::generator();
         let g_1 = G1::generator();
+        let base: Secret<FieldElement> = Secret::new(FieldElement::random());
 
         // pp_commit_g1 and pp_commit_g2 are vectors of G1 and G2 elements respectively.
         // They are used to compute the commitment and witness.
@@ -42,12 +46,14 @@ impl ParamSetCommitment {
         // Since `pp_commit_g2` is used to compute the witness, we need to add one more element to the vector.
         // Hence use [..=] instead of [..] to ensure the last element is included.
         let pp_commit_g1 = (0..=*t)
-            .into_iter()
-            .map(|i| g_1.scalar_mul_const_time(&base.pow(&FieldElement::from(i as u64))))
+            .map(|i| {
+                g_1.scalar_mul_const_time(&base.expose_secret().pow(&FieldElement::from(i as u64)))
+            })
             .collect::<Vec<G1>>();
         let pp_commit_g2 = (0..=*t)
-            .into_iter()
-            .map(|i| g_2.scalar_mul_const_time(&base.pow(&FieldElement::from(i as u64))))
+            .map(|i| {
+                g_2.scalar_mul_const_time(&base.expose_secret().pow(&FieldElement::from(i as u64)))
+            })
             .collect::<Vec<G2>>();
 
         ParamSetCommitment {
@@ -72,15 +78,10 @@ pub trait Commitment {
     /// A Commitment scheme, either SetCommitment or CrossSetCommitment
     fn new(t: MaxCardinality) -> Self;
 
-    fn public_parameters(&self) -> &ParamSetCommitment;
+    fn public_parameters(self) -> ParamSetCommitment;
 
-    fn setup(max_cardinality: MaxCardinality) -> (ParamSetCommitment, FieldElement) {
-        let alpha_trapdoor = FieldElement::random();
-
-        (
-            ParamSetCommitment::new(&max_cardinality, alpha_trapdoor.clone()),
-            alpha_trapdoor,
-        )
+    fn setup(max_cardinality: MaxCardinality) -> ParamSetCommitment {
+        ParamSetCommitment::new(&max_cardinality)
     }
     /// Commit to a set of messages
     ///
@@ -98,7 +99,7 @@ pub trait Commitment {
     /// 4. Return the commitment and witness
     fn commit_set(
         param_sc: &ParamSetCommitment,
-        mess_set_str: &InputType,
+        mess_set_str: &Entry,
     ) -> Result<(G1, FieldElement), SerzDeserzError> {
         // TODO: Verify the message set string length is no more than the max cardinality in ParamSetCommitment
 
@@ -143,7 +144,7 @@ pub trait Commitment {
         param_sc: &ParamSetCommitment,
         commitment: &G1,
         open_info: &FieldElement,
-        mess_set_str: &InputType,
+        mess_set_str: &Entry,
     ) -> Result<bool, SerzDeserzError> {
         let mess_set = convert_mess_to_bn(mess_set_str);
         // get monypol_coeff using polyfromroots() fn from utils.rs
@@ -166,7 +167,9 @@ pub trait Commitment {
         Ok(*commitment == commitment_check)
     }
 
-    /// OpenSubset Generates a witness for the subset if the length of the subset is less than the length of the message set
+    /// Opens a subet of Attributes for an Entry
+    /// `open_subset` generates a witness for the subset only if
+    /// the length of the subset is less than the length of the message set
     ///
     /// # Arguments
     ///
@@ -179,16 +182,16 @@ pub trait Commitment {
     /// Some witness for the subset or None if the subset is not a subset of the message set
     fn open_subset(
         param_sc: &ParamSetCommitment,
-        mess_set_str: &InputType,
+        all_messages: &Entry,
         open_info: &FieldElement,
-        subset_str: &InputType,
+        subset: &Entry,
     ) -> Result<Option<G1>, SerzDeserzError> {
         if open_info.is_zero() {
             return Ok(None);
         }
 
-        let mess_set = convert_mess_to_bn(mess_set_str);
-        let mess_subset_t = convert_mess_to_bn(subset_str);
+        let mess_set = convert_mess_to_bn(all_messages);
+        let mess_subset_t = convert_mess_to_bn(subset);
 
         // check if mess_subset is a subset of mess_set
         // compare the lengths of the two vectors
@@ -242,7 +245,7 @@ pub trait Commitment {
     fn verify_subset(
         param_sc: &ParamSetCommitment,
         commitment: &G1,
-        subset_str: &InputType,
+        subset_str: &Entry,
         witness: &G1,
     ) -> Result<bool, SerzDeserzError> {
         let mess_subset_t = convert_mess_to_bn(subset_str);
@@ -265,13 +268,6 @@ pub trait Commitment {
     }
 }
 
-pub fn convert_mess_to_bn(input: &InputType) -> Vec<FieldElement> {
-    input
-        .iter()
-        .map(|entry| FieldElement::from_msg_hash(entry.as_bytes()))
-        .collect::<Vec<FieldElement>>()
-}
-
 pub struct SetCommitment {
     param_sc: ParamSetCommitment,
 }
@@ -286,20 +282,22 @@ impl Commitment for SetCommitment {
     /// # Returns
     /// A Commitment scheme, either SetCommitment or CrossSetCommitment
     fn new(t: MaxCardinality) -> Self {
-        let (param_sc, _alpha_trapdoor) = SetCommitment::setup(t);
         // return union type of SetCommitment and CrossSetCommitment.
         // A Rust union type is a type that can store only one of its members at a time.
         // ie. it can be either SetCommitment or CrossSetCommitment.
         // it looks like: `pub enum Commitment { SetCommitment(SetCommitment), CrossSetCommitment(CrossSetCommitment) }`
-        Self { param_sc }
+        Self {
+            param_sc: SetCommitment::setup(t),
+        }
     }
 
-    fn public_parameters(&self) -> &ParamSetCommitment {
-        &self.param_sc
+    fn public_parameters(self) -> ParamSetCommitment {
+        self.param_sc
     }
 }
 
-/// Here is CrossSetCommitment that extends the Set Commitment to provide aggregation witness and a batch verification
+/// CrossSetCommitment extends the Set Commitment to provide aggregation witness and a batch verification
+/// - `param_sc`: [`ParamSetCommitment`] public parameters for the commitment scheme, as P^ai, P_hat^ai, P = g1, P_hat = g2, Order, BG
 pub struct CrossSetCommitment {
     pub param_sc: ParamSetCommitment,
 }
@@ -314,7 +312,7 @@ impl Commitment for CrossSetCommitment {
     /// # Returns
     /// A Commitment scheme, for CrossSetCommitment
     fn new(t: MaxCardinality) -> Self {
-        let (param_sc, _alpha_trapdoor) = CrossSetCommitment::setup(t);
+        let param_sc = CrossSetCommitment::setup(t);
         // return union type of SetCommitment and CrossSetCommitment.
         // A Rust union type is a type that can store only one of its members at a time.
         // ie. it can be either SetCommitment or CrossSetCommitment.
@@ -325,8 +323,8 @@ impl Commitment for CrossSetCommitment {
     /// Exports the public parameters of the commitment scheme.
     /// Values are borrowed from the commitment scheme.
     /// If the user needs the values to outlive the commitment scheme, they should clone the values.
-    fn public_parameters(&self) -> &ParamSetCommitment {
-        &self.param_sc
+    fn public_parameters(self) -> ParamSetCommitment {
+        self.param_sc
     }
 }
 
@@ -373,7 +371,7 @@ impl CrossSetCommitment {
     pub fn verify_cross(
         param_sc: &ParamSetCommitment,
         commit_vector: &[G1],
-        subsets_vector_str: &[InputType],
+        subsets_vector_str: &[Entry],
         proof: &G1,
     ) -> Result<bool, SerzDeserzError> {
         // Steps:
@@ -461,6 +459,7 @@ pub fn mul_and_fold(monypol_coeff: Vec<FieldElement>, param_sc: ParamSetCommitme
     coef_points.iter().fold(G1::identity(), |acc, x| acc + x)
 }
 
+/// Returns where the two Arguments do not intersect
 pub fn not_intersection(list_s: &[FieldElement], list_t: Vec<FieldElement>) -> Vec<FieldElement> {
     list_s
         .iter()
@@ -471,6 +470,8 @@ pub fn not_intersection(list_s: &[FieldElement], list_t: Vec<FieldElement>) -> V
 
 #[cfg(test)]
 mod test {
+    use crate::utils::{self};
+
     use super::*;
 
     #[test]
@@ -482,10 +483,13 @@ mod test {
         let name = "name = Alice";
         let drivers = "driver license = 12";
 
-        let set_str: InputType =
-            InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+        let set_str: Entry = Entry(vec![
+            utils::attribute(age),
+            utils::attribute(name),
+            utils::attribute(drivers),
+        ]);
 
-        let (pp, _alpha) = SetCommitment::setup(MaxCardinality(max_cardinal));
+        let pp = SetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str)?;
         // assrt open_set with pp, commitment, O, set_str
         assert!(SetCommitment::open_set(
@@ -506,10 +510,14 @@ mod test {
         let name = "name = Alice";
         let drivers = "driver license = 12";
 
-        let set_str = InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+        let set_str = Entry(vec![
+            utils::attribute(age),
+            utils::attribute(name),
+            utils::attribute(drivers),
+        ]);
 
-        let subset_str_1 = InputType(vec![age.to_owned(), name.to_owned()]);
-        let (pp, _alpha) = SetCommitment::setup(MaxCardinality(max_cardinal));
+        let subset_str_1 = Entry(vec![utils::attribute(age), utils::attribute(name)]);
+        let pp = SetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str)?;
         let witness_subset =
             SetCommitment::open_subset(&pp, &set_str, &opening_info, &subset_str_1)?;
@@ -542,13 +550,16 @@ mod test {
         let company = "company = ACME Inc.";
         let alt_drivers = "driver license type = B";
 
-        let set_str: InputType =
-            InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+        let set_str: Entry = Entry(vec![
+            utils::attribute(age),
+            utils::attribute(name),
+            utils::attribute(drivers),
+        ]);
 
-        let set_str2: InputType = InputType(vec![
-            gender.to_owned(),
-            company.to_owned(),
-            alt_drivers.to_owned(),
+        let set_str2: Entry = Entry(vec![
+            utils::attribute(gender),
+            utils::attribute(company),
+            utils::attribute(alt_drivers),
         ]);
 
         // create two set commitments for two sets set_str and set_str2
@@ -559,16 +570,20 @@ mod test {
         // new(max_cardinal) -> CrossSetCommitment
         // from(PublicParameters) -> CrossSetCommitment
 
-        let (pp, _alpha) = CrossSetCommitment::setup(MaxCardinality(max_cardinal));
+        let pp = CrossSetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str)?;
         let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2)?;
 
         let commit_vector = &vec![commitment_1, commitment_2];
 
         // create a witness for each subset -> W1 and W2
-        let subset_str_1 = InputType(vec![age.to_owned(), name.to_owned(), drivers.to_owned()]);
+        let subset_str_1 = Entry(vec![
+            utils::attribute(age),
+            utils::attribute(name),
+            utils::attribute(drivers),
+        ]);
 
-        let subset_str_2 = InputType(vec![gender.to_owned(), company.to_owned()]);
+        let subset_str_2 = Entry(vec![utils::attribute(gender), utils::attribute(company)]);
 
         let witness_1 =
             CrossSetCommitment::open_subset(&pp, &set_str, &opening_info_1, &subset_str_1)?

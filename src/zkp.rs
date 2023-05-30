@@ -6,10 +6,11 @@ use amcl_wrapper::group_elem_g2::G2;
 use amcl_wrapper::types::BigNum;
 use amcl_wrapper::{constants::CurveOrder, group_elem_g1::G1};
 use anyhow::Result;
+use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
 
-use crate::dac::NymProof;
-use crate::spseq_uc::RandomizedPubKey;
+use crate::keypair::spseq_uc::RandomizedPubKey;
+use crate::keypair::NymProof;
 use crate::utils::{Pedersen, PedersenCommit, PedersenOpen};
 
 #[derive(Clone, Debug)]
@@ -55,7 +56,7 @@ impl ZkpSchnorrFiatShamir {
     }
 
     /// The code below is from the original implementation of the Schnorr proof (non-interactive using FS heuristic) of the statement ZK(x ; h = g^x)
-    fn challenge(state: &ChallengeState) -> FieldElement {
+    pub fn challenge(state: &ChallengeState) -> FieldElement {
         // transform the state into a byte array
         let mut state_bytes = Vec::new();
         state_bytes.extend_from_slice(state.name.as_bytes());
@@ -185,10 +186,12 @@ pub trait Schnorr {
         challenge: &Challenge,
         announce_randomness: &FieldElement,
         stm: &RandomizedPubKey,
-        secret_wit: &FieldElement,
+        secret_wit: &Secret<FieldElement>,
     ) -> FieldElement {
-        assert!(secret_wit * G1::generator() == *stm.as_ref());
-        let mut res = BigNum::frombytes(&(announce_randomness + challenge * secret_wit).to_bytes());
+        assert!(G1::generator() * secret_wit.expose_secret() == *stm.as_ref());
+        let mut res = BigNum::frombytes(
+            &(announce_randomness + challenge * secret_wit.expose_secret()).to_bytes(),
+        );
         res.rmod(&CurveOrder);
         res.into()
     }
@@ -227,6 +230,7 @@ impl ZKPSchnorr {
         (w_element, w_random)
     }
 }
+#[derive(Clone)]
 
 pub struct DamgardTransform {
     pub pedersen: Pedersen,
@@ -240,14 +244,14 @@ impl DamgardTransform {
         pedersen_open.element(w_element);
         (pedersen_commit, pedersen_open)
     }
-    pub fn verify(&self, proof_nym_u: &NymProof) -> bool {
-        let left_side = proof_nym_u.response.clone() * &self.pedersen.g;
-        let right_side = proof_nym_u.pedersen_open.announce_element.as_ref().unwrap()
-            + proof_nym_u.challenge.clone() * proof_nym_u.public_key.as_ref();
+    pub fn verify(nym_proof: &NymProof, nym_damgard: &DamgardTransform) -> bool {
+        let left_side = nym_proof.response.clone() * &G1::generator();
+        let right_side = nym_proof.pedersen_open.announce_element.as_ref().unwrap()
+            + nym_proof.challenge.clone() * nym_proof.public_key.as_ref();
         left_side == right_side
-            && self
+            && nym_damgard
                 .pedersen
-                .decommit(&proof_nym_u.pedersen_open, &proof_nym_u.pedersen_commit)
+                .decommit(&nym_proof.pedersen_open, &nym_proof.pedersen_commit)
     }
 }
 
@@ -298,9 +302,9 @@ mod tests {
     #[test]
     fn test_interact_prove() {
         // Create a random statement for testing
-        let x = FieldElement::random();
+        let x = Secret::new(FieldElement::random());
         let zkpsch = ZKPSchnorr::new();
-        let stm = RandomizedPubKey(x.clone() * zkpsch.g_1.clone());
+        let stm = RandomizedPubKey(zkpsch.g_1.scalar_mul_const_time(x.expose_secret()));
 
         let announce = zkpsch.announce();
 
@@ -327,8 +331,13 @@ mod tests {
 
         // create a statement. A statement is a secret and a commitment to that secret.
         // A commitment is a generator raised to the power of the secret.
-        let secret = FieldElement::random(); // x
-        let statement = RandomizedPubKey(secret.clone() * damgard.pedersen.g.clone()); // h
+        let secret = Secret::new(FieldElement::random()); // x
+        let statement = RandomizedPubKey(
+            damgard
+                .pedersen
+                .g
+                .scalar_mul_const_time(secret.expose_secret()),
+        ); // h
 
         let (pedersen_commit, pedersen_open) = damgard.announce();
 
@@ -358,6 +367,6 @@ mod tests {
             response,
         };
 
-        assert!(damgard.verify(&proof_nym));
+        assert!(DamgardTransform::verify(&proof_nym, &damgard));
     }
 }

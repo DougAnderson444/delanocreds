@@ -1,23 +1,40 @@
-use std::ops::Deref;
-
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::univar_poly::UnivarPolynomial;
+use secrecy::ExposeSecret;
+use secrecy::Secret;
+use std::ops::Deref;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct InputType(pub Vec<String>);
+/// Attribute type
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct Attribute(pub Vec<u8>);
 
-impl Deref for InputType {
-    type Target = Vec<String>;
+pub fn attribute(a: impl AsRef<[u8]>) -> Attribute {
+    Attribute(a.as_ref().to_vec())
+}
+
+// impl DeRef for Attibute
+impl Deref for Attribute {
+    type Target = Vec<u8>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl IntoIterator for InputType {
-    type Item = String;
-    type IntoIter = ::std::vec::IntoIter<String>;
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Entry(pub Vec<Attribute>);
+
+impl Deref for Entry {
+    type Target = Vec<Attribute>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl IntoIterator for Entry {
+    type Item = Attribute;
+    type IntoIter = ::std::vec::IntoIter<Attribute>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -39,6 +56,15 @@ pub fn ec_sum(listpoints: Vec<G1>) -> G1 {
     sum
 }
 
+/// Iterates through each Attribute in the Entry and converts it to a FieldElement
+pub fn convert_mess_to_bn(input: &Entry) -> Vec<FieldElement> {
+    input
+        .iter()
+        .map(|entry| FieldElement::from_msg_hash(entry))
+        .collect::<Vec<FieldElement>>()
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Pedersen {
     pub g: G1,
     pub h: G1,
@@ -68,11 +94,11 @@ impl Pedersen {
     pub fn new() -> Self {
         // h is the statement. d is the trapdoor. g is the generator. h = d*g
         let g = G1::generator();
-        let d = FieldElement::random();
-        let h = &d * &g;
+        let d = Secret::new(FieldElement::random());
+        let h = &g.scalar_mul_const_time(d.expose_secret());
         Pedersen {
             g,
-            h,
+            h: h.clone(),
             // trapdoor: d
         }
     }
@@ -88,7 +114,7 @@ impl Pedersen {
         (pedersen_commit, pedersen_open)
     }
 
-    /// Decrypts/Decommit the message
+    /// Decrypts/Decommits the message
     pub fn decommit(&self, pedersen_open: &PedersenOpen, pedersen_commit: &PedersenCommit) -> bool {
         let c2 = pedersen_open.open_randomness.clone() * &self.h
             + pedersen_open.announce_randomness.clone() * &self.g;

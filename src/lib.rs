@@ -3,11 +3,11 @@
 //! **Del**egatable **Ano**nymous **Cred**ential**s**: Based on the Crypto paper
 //! [Practical Delegatable Anonymous Credentials From Equivalence Class Signatures](https://eprint.iacr.org/2022/680)
 //!
-//! This library enables you to create, issue, delegate, and verify credentials in an anonymous way.
+//! This library enables you to create, issue, delegate/extend/restrict/transfer, and verify credentials in an anonymous way.
 //!
 //! # Roles
 //!
-//! The roles start with a Root Issuer, then delegated Credential Holder(s), then a Prover(s) and Verifier(s).
+//! The roles start with a Root Issuer, then delegated Credential Holder/Prover and Verifier.
 //!
 //! ## Root Issuer
 //!
@@ -15,18 +15,17 @@
 //!
 //! #### Root Issuer Summary of Choices/Options:
 //!
-//! - **Attribute Entries**: There can be a maximum number of attribute entries (`message_l`)
-//! - **Total Entries Elements**: There is a set maximum number of items total (`cardinality`)
-//! - **Additonal Entries**: There can be a maximum number of additional entries (current entries length up to `k_prime`, `k_prime` is at most `message_l`),
-//! - **Delegation**: Whether cred can be re-delegated or not (update_key).
+//! - **Maxiumum Attribute Entries**: Root Issuer sets a maximum number of attribute entries (`message_l`)
+//! - **Maximum Cardinality (Attributes per Entry)**: There is a set maximum number of items total (`cardinality`, `message_l[n].len()` <= `cardinality`)
+//! - **Extendable Entries**: What the maximum number of additional entries may be (current entries length up to `k_prime`, `k_prime` is at most `message_l`. `current < k_prime < message_l`),
 //!
 //! Below is a markdown table with an example of attribute entries, and attributes in each entry, with yes/no for each feature
 //!
 //! ```md
 //! Attribute Entries:
-//! ==> Entry Level 0: [Element, Element, Element, Element]
-//! ==> Entry Level 1: [Element, Element, Element, Element, Element]
-//! ==> Entry Level 2: [Element, Element]
+//! ==> Entry Level 0: [Attribute, Attribute, Attribute, Attribute]
+//! ==> Entry Level 1: [Attribute, Attribute, Attribute, Attribute, Attribute]
+//! ==> Entry Level 2: [Attribute, Attribute]
 //! ==> Additonal Entry? Only if 3 < k_prime < message_l
 //! ```
 //!
@@ -47,8 +46,8 @@
 //!
 //! Thus holders have the option to restrict:
 //!
-//! - **Restrict Adding Attributes**: Restrict adding attributes to the credential (by reducing `k_prime`).
-//! - **Restrict Showing certin Attribute Entry levels**: By zeroizing the opening information  corresponding
+//! - **Restrict Adding Attributes**: Restrict adding attributes to the credential (by reducing the length of `Credential { UpdateKey } `).
+//! - **Restrict Showing certain `Attribute` Entry levels**: By zeroizing the opening information  corresponding
 //! to the attribute entry level you want to restrict.
 //!
 //! Every delegator can control how far delegations can go by further restricting the `update key`
@@ -125,9 +124,9 @@
 //! - max attributes,
 //! - max cardinality,
 //! - initial attribute entries,
-//! - extendable attributes (k_prime),
+//! - extendable attributes (),
 //! - fully provable atrributes (all opening information provided)
-//! - delegatable attributes (update key provided)
+//! - k_prime set the number of additonal attributes available from the `update_key`
 //!
 //! 2. Root Issuer issues Root Credential to Credential Holder Alice's pseudonym (nym).
 //! Alice is the first holder of the Credential.
@@ -147,14 +146,15 @@
 //!
 //! 4. Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
 //! With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
-use std::fmt;
+#![feature(type_alias_impl_trait)]
 
-use spseq_uc::{AttributesLength, MaxCardinality};
+use amcl_wrapper::field_elem::FieldElement;
+use keypair::{MaxCardinality, MaxEntries, VK};
+use utils::{Attribute, Entry};
 
 pub mod attributes;
-pub mod dac;
+pub mod keypair;
 pub mod set_commits;
-pub mod spseq_uc;
 pub mod types;
 pub mod utils;
 pub mod zkp;
@@ -164,37 +164,37 @@ const DEFAULT_MAX_ATTRIBUTES: usize = 10;
 /// Default Max Cardinality: The maximum number of total attribute elements allowed in a credential.
 const DEFAULT_MAX_CARDINALITY: usize = 5;
 
-#[doc = include_str!("../README.md")]
-#[cfg(doctest)]
-pub struct ReadmeDoctests;
+// #[doc = include_str!("../README.md")]
+// #[cfg(doctest)]
+// pub struct ReadmeDoctests;
 
 #[derive(Debug)]
 /// The Root Issuer, the one with the Verification Key that issues the first credential.
-pub struct RootIssuer {
-    max_attrs: AttributesLength,
+pub struct RootIssuerBuilder {
+    max_entries: MaxEntries,
     max_card: MaxCardinality,
 }
 
-impl Default for RootIssuer {
+impl Default for RootIssuerBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RootIssuer {
+impl RootIssuerBuilder {
     pub fn new() -> Self {
         // generate keys for the root issuer
 
         Self {
-            max_attrs: AttributesLength(DEFAULT_MAX_ATTRIBUTES),
+            max_entries: MaxEntries(DEFAULT_MAX_ATTRIBUTES),
             max_card: MaxCardinality(DEFAULT_MAX_CARDINALITY),
         }
     }
 
     /// Add attributes to the credential. Attribute Type checks to ensure it is within the
     /// maximum number of attributes and maximum cardinality.
-    pub fn max_attributes(&mut self, attributes: AttributesLength) -> &mut Self {
-        self.max_attrs = attributes;
+    pub fn max_entries(&mut self, attributes: MaxEntries) -> &mut Self {
+        self.max_entries = attributes;
         self
     }
 
@@ -205,131 +205,139 @@ impl RootIssuer {
         self
     }
 
-    /// Terminal function to build CrentialBuilder
-    pub fn build(self) -> CredentialBuilder {
-        // generate signing keys
-        // let dac = dac::Dac::new(self.max_card, self.max_attrs);
+    // /// Terminal function to build CrentialBuilder
+    // pub fn build(self) -> RootIssuer {
+    //     // generate signing keys
+    //     // let dac = dac::Dac::new(self.max_card, self.max_attrs);
 
-        CredentialBuilder::new(self)
-    }
+    //     // RootIssuer::new(self)
+    // }
 }
 
-/// The Credential Builder, the one that builds the credential.
-/// Constructor takes a RootIssuer
 #[derive(Debug)]
-pub struct CredentialBuilder {
-    root_issuer: RootIssuer,
-    attributes: Vec<Vec<Attribute>>,
-    delegatable: bool,
-    can_add_attributes: bool,
+/// The Root Issuer, the one with the Verification Key that issues the first credential.
+pub struct RootIssuer {
+    max_entries: MaxEntries,
+    max_card: MaxCardinality,
+    entries: Vec<Entry>,
+    extendable_limit: usize,
+    vk_ca: Vec<VK>,
+    sk_ca: Vec<FieldElement>,
 }
 
-/// Attribute type
-pub type Attribute = String;
+impl RootIssuer {
+    // pub fn new(root_issuer_builder: RootIssuerBuilder) -> Self {
+    //     let dac = Dac::new(MaxCardinality(*root_issuer_builder.max_card));
+    //     let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(root_issuer_builder.max_entries);
 
-impl CredentialBuilder {
+    //     Self {
+    //         max_entries: root_issuer_builder.max_entries,
+    //         max_card: root_issuer_builder.max_card,
+    //         entries: Vec::new(),
+    //         extendable_limit: 0,
+    //         vk_ca,
+    //         sk_ca,
+    //     }
+    // }
+
+    // /// Terminal function to build CrentialBuilder
+    // pub fn entry_builder(self) -> EntryBuilder {
+    //     EntryBuilder::new(self)
+    // }
+
+    // /// Set the current entries for th Root Credential.
+    // pub fn entries(self, entries: Vec<Entry>) -> Self {
+    //     Self { entries, ..self }
+    // }
+
+    // /// Set the Root Credential as extendable to the given limit
+    // /// Limit must be no more then max_entries - `entries.len()`
+    // pub fn extendable(self, limit: usize) -> Self {
+    //     Self {
+    //         extendable_limit: limit,
+    //         ..self
+    //     }
+    // }
+
+    // /// Issues (Builds) the Root Credential.
+    // /// # Returns
+    // /// - [`Credential`]: The Root Credential
+    // pub fn issue_to(self, proof: NymProof) -> Credential {
+    //     // use `dac.issue_cred()` to build the credential
+    //     let dac = Dac::new(MaxCardinality(*self.max_card));
+
+    //     match dac.issue_cred(
+    //         &self.vk_ca,
+    //         &self.entries,
+    //         &self.sk_ca,
+    //         Some(self.extendable_limit),
+    //         proof,
+    //     ) {
+    //         Ok(cred) => cred,
+    //         Err(e) => panic!("Error issuing credential: {:?}", e),
+    //     }
+    // }
+}
+
+/// Builds the entries for the Root Credential. Ensures that the number of attributes
+/// in each entry are within the max cardinality. Ensures the number of entries are
+/// within the max entries.
+/// - `entry_count`: The current number of entries in the credential.
+/// - `root_issuer`: The Root Issuer that issued the credential.
+///
+pub struct EntryBuilder {
+    entry_count: usize,
+    entries: Vec<Entry>,
+    root_issuer: RootIssuer,
+}
+
+impl EntryBuilder {
     pub fn new(root_issuer: RootIssuer) -> Self {
         Self {
+            entry_count: 0,
+            entries: Vec::new(),
             root_issuer,
-            attributes: Vec::new(),
-            delegatable: false,
-            can_add_attributes: false,
         }
     }
 
-    /// Set the attributes for the credential.
+    /// Wraps the value as an Attribute for an entry.
     /// An attribute is vectors of strings up to max cardinality in length.
     /// Attributes are vectors of strings up to max attributes in length.
-    ///
     /// # Returns
-    /// `CredentialBuilder` if the attributes are within the max attributes and max cardinality.
-    /// `LengthError` if the attributes are not within the max attributes and max cardinality.
-    pub fn with_attributes(
-        &mut self,
-        attributes: Vec<Vec<String>>,
-    ) -> Result<&mut Self, LengthError> {
-        // check both length of attributes <= max_length,
-        if attributes.len() > *self.root_issuer.max_attrs {
-            return Err(LengthError::new(attributes.len(), 0));
+    /// - `Attibute`
+    pub fn attribute(&mut self, attribute: String) -> Attribute {
+        utils::attribute(attribute)
+    }
+
+    /// Builds an Entry out of a vector of attributes
+    /// # Returns
+    /// `Some(Entry)` if the attributes are within the max entries.
+    /// `None` if the attributes are not within the max entries.
+    pub fn entry(&mut self, attributes: &[Attribute]) -> Option<Entry> {
+        // check if entries are within max entries
+        // if not, return None
+        if self.entry_count == self.root_issuer.max_card.0 {
+            return None;
         }
-        // and the cardinality of each attribute <= max_cardinality
-        for (i, attribute) in attributes.iter().enumerate() {
-            if attribute.len() > *self.root_issuer.max_card {
-                return Err(LengthError::new(i, attribute.len()));
-            }
-        }
-        self.attributes = attributes;
-        Ok(self)
-    }
 
-    /// Set the credential to be delegatable.
-    pub fn delegatable(&mut self, delegatable: bool) -> &mut Self {
-        self.delegatable = delegatable;
-        self
-    }
+        // increment entry count
+        self.entry_count += 1;
 
-    /// Set the credential to be able to add attributes.
-    pub fn can_add_attributes(&mut self, can_add_attributes: bool) -> &mut Self {
-        self.can_add_attributes = can_add_attributes;
-        self
-    }
-
-    /// Terminal function to issue (build) the Credential
-    pub fn issue(&self) -> spseq_uc::EqcSign {
-        spseq_uc::EqcSign::new(self.root_issuer.max_card.clone())
-    }
-}
-
-/// Make a LengthError that tells the user which Attribute or Attributes was too long
-/// or had too high of a cardinality
-#[derive(Debug)]
-pub struct LengthError {
-    pub kind: LengthErrorKind,
-    pub attribute: usize,
-    pub cardinality: usize,
-}
-
-/// Error if the attributes are too long or have too high of a cardinality
-#[derive(Debug)]
-pub enum LengthErrorKind {
-    TooManyAttributes,
-    TooLongCardinality(usize),
-}
-
-/// Error kind depends on if Some(cardinality) is included, then it's a TooLongCardinality
-/// otherwise it's a TooManyAttributes
-impl LengthError {
-    pub fn new(attribute: usize, cardinality: usize) -> Self {
-        // guard on cardinality (if 0, then TooManyAttributes)
-        if cardinality == 0 {
-            Self {
-                kind: LengthErrorKind::TooManyAttributes,
-                attribute,
-                cardinality,
-            }
+        if attributes.len() < self.root_issuer.max_entries.0 {
+            Some(Entry(attributes.to_vec()))
         } else {
-            Self {
-                kind: LengthErrorKind::TooLongCardinality(cardinality),
-                attribute,
-                cardinality,
-            }
+            None
         }
     }
-}
 
-/// impl fmt for display to show reasonable error message
-impl fmt::Display for LengthError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.kind {
-            LengthErrorKind::TooManyAttributes => {
-                write!(f, "too many attributes, max is {}", self.attribute)
-            }
-            LengthErrorKind::TooLongCardinality(cardinality) => write!(
-                f,
-                "attribute {} has too long of a cardinality of {}",
-                self.attribute, cardinality
-            ),
-        }
+    /// Build all entires from each entry
+    /// # Returns
+    /// - `Entries`
+    pub fn drain(&mut self) -> Vec<Entry> {
+        // reset count
+        self.entry_count = 0;
+        // return ownership of entries
+        self.entries.drain(..).collect()
     }
 }
 
@@ -339,89 +347,20 @@ mod test_api {
 
     #[test]
     fn test_root_issuer() {
-        let mut root_issuer = RootIssuer::new();
+        let mut root_issuer = RootIssuerBuilder::new();
 
         // check defaults
-        assert_eq!(root_issuer.max_attrs.0, DEFAULT_MAX_ATTRIBUTES);
+        assert_eq!(root_issuer.max_entries.0, DEFAULT_MAX_ATTRIBUTES);
         assert_eq!(root_issuer.max_card.0, DEFAULT_MAX_CARDINALITY);
 
         // set new ones
         let attributes = 12;
         let cardinality = 8;
 
-        root_issuer.max_attributes(AttributesLength(attributes));
+        root_issuer.max_entries(MaxEntries(attributes));
         root_issuer.max_cardinality(MaxCardinality(cardinality));
 
-        assert_eq!(root_issuer.max_attrs, AttributesLength(attributes));
+        assert_eq!(root_issuer.max_entries, MaxEntries(attributes));
         assert_eq!(root_issuer.max_card, MaxCardinality(cardinality));
     }
-
-    #[test]
-    fn test_credential_builder() -> Result<(), LengthError> {
-        let root_issuer = RootIssuer::new();
-        let mut credential_builder = CredentialBuilder::new(root_issuer);
-
-        // empty Vec<Vec::<String>::new()>
-        let empty = Vec::<Vec<String>>::new();
-        // check defaults
-        assert_eq!(credential_builder.attributes, empty);
-        assert!(!credential_builder.delegatable);
-        assert!(!credential_builder.can_add_attributes);
-
-        // set new ones
-        let attributes = vec![
-            vec!["name".to_string(), "age".to_string()];
-            *credential_builder.root_issuer.max_attrs
-        ];
-        let delegatable = true;
-        let can_add_attributes = true;
-
-        credential_builder
-            .with_attributes(attributes.clone())?
-            .delegatable(delegatable)
-            .can_add_attributes(can_add_attributes);
-
-        assert_eq!(credential_builder.attributes, attributes);
-        assert_eq!(credential_builder.delegatable, delegatable);
-        assert_eq!(credential_builder.can_add_attributes, can_add_attributes);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_attributes_too_long() {
-        // fails when too long of an attributes vctor is passed > max attributes
-        let root_issuer = RootIssuer::new();
-        let mut credential_builder = CredentialBuilder::new(root_issuer);
-
-        // create attrs that are max_attrs +1
-        let attribute = vec!["name".to_string(), "age".to_string()];
-        let attributes = vec![attribute; *credential_builder.root_issuer.max_attrs + 1];
-
-        // add with_attributes
-        let result = credential_builder.with_attributes(attributes);
-
-        // check that it fails
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_too_long_cardinality() {
-        // fails when too long of a cardinality is passed > max cardinality
-        let root_issuer = RootIssuer::new();
-        let mut credential_builder = CredentialBuilder::new(root_issuer);
-
-        // create attrs that are max_attrs +1
-        let attribute = vec!["name".to_string(); *credential_builder.root_issuer.max_card + 1];
-        let attributes = vec![attribute];
-
-        // add with_attributes
-        let result = credential_builder.with_attributes(attributes);
-
-        // check that it fails
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_delegatable() {}
 }

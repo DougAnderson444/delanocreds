@@ -1,4 +1,7 @@
-//! A module for commitments, attributes and opening information management.
+//! A module for creating:
+//! - Individual Attibutes (Attribute elements)
+//! - Attributes Entry (a vector of elements)
+//! - Attribute Entries (a vector of Entries)
 //!
 //! - AttributeEntries (a Vector of attribute entries) hierarchy starts with Root Issuer entry/entries
 //! - AttributeEntries can be extended up to `k_prime`
@@ -23,15 +26,13 @@
 //! let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);
 use std::ops::Deref;
 
-use wa_serde_derive::{Deserialize, Serialize};
+// use wa_serde_derive::{Deserialize, Serialize};
 
-use crate::spseq_uc::{AttributesLength, MaxCardinality};
+use crate::keypair::{MaxCardinality, MaxEntries};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct AttributeName(String);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AttributeValue(String);
 
 impl Deref for AttributeName {
     type Target = String;
@@ -41,6 +42,10 @@ impl Deref for AttributeName {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
+pub struct AttributeValue(String);
+
 impl Deref for AttributeValue {
     type Target = String;
 
@@ -49,7 +54,8 @@ impl Deref for AttributeValue {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute {
     name: String,
     value: String,
@@ -65,7 +71,7 @@ impl Attribute {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttributeEntry {
     name: String,
     attributes: Vec<Attribute>,
@@ -83,7 +89,7 @@ impl AttributeEntry {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct AttributeEntries(Vec<AttributeEntry>);
 
 impl Default for AttributeEntries {
@@ -96,6 +102,10 @@ impl AttributeEntries {
     /// New attribute entries
     pub fn new() -> Self {
         AttributeEntries(Vec::new())
+    }
+
+    pub fn from_vec(entries: &[AttributeEntry]) -> Self {
+        AttributeEntries(entries.to_vec())
     }
 
     /// Select Attribute Entry/Entries by name of AttributeEntry
@@ -127,6 +137,55 @@ impl AttributeEntries {
 /// There is a Builder trait which defines remove_entry and build
 /// There is AttrBuilder which implements Builder
 /// AttrBuilder<Vacancy> has a add_entry fn which returns impl Builder (AttrBuilder<Vacancy> or AttrBuilder<Full>) depending on whether it hit max_entries or not
+
+/// create a `pub trait Builder` which has an associated type as Existential type State, and an try_add_entry fn which evaluates to the concrete instance of the Existential type
+/// This way we can add logic to the implementations of try_add_entry to return any concrete type of Builder<State>, either AttrBuilder<Vacancy> or AttrBuilder<Full>
+/// Existential type also allows us to hide the implementation detail of the `State` type, which is either Vacancy or Full
+/// since the user of the library doesn't need to know about the implementation detail of the State type, we can hide it from them
+// pub trait Builder {
+//     type State; // = impl Builder<Self::State>; // Existential type
+//     fn try_add_entry(self, entry: AttributeEntry) -> Self::State;
+//     fn remove_entry(self, index: usize) -> Self::State;
+//     fn build(&self) -> AttributeEntries;
+// }
+
+// impl Builder for AttrBuilder<Vacancy> {
+//     type State = impl Builder<State = Self::State>;
+
+//     fn try_add_entry(self, entry: AttributeEntry) -> Self::State {
+//         self.entries.push(entry);
+//         if self.entries.len() == self.entries.capacity() {
+//             // return Full
+//             State::Full(self.into())
+//         } else {
+//             State::Vacancy(self.into())
+//         }
+//     }
+
+//     fn remove_entry(mut self, index: usize) -> Self::State {
+//         self.entries.remove(index);
+//         self.into()
+//     }
+
+//     fn build(&self) -> AttributeEntries {
+//         AttributeEntries(self.entries.to_vec())
+//     }
+// }
+
+// impl Builder for AttrBuilder<Full> {
+//     type State = AttrBuilder<Vacancy>;
+
+//     fn remove_entry(mut self, index: usize) -> Self::State {
+//         self.entries.remove(index);
+//         self.into()
+//     }
+
+//     fn build(&self) -> AttributeEntries {
+//         AttributeEntries(self.entries.to_vec())
+//     }
+// }
+
+#[derive(PartialEq, Eq, Clone)]
 struct AttrBuilder<S = Vacancy> {
     state: std::marker::PhantomData<S>,
     entries: Vec<AttributeEntry>,
@@ -142,7 +201,7 @@ struct Full;
 
 impl AttrBuilder<Vacancy> {
     /// New AttrBuilder
-    pub fn new(max_entries: &AttributesLength, max_cardinality: &MaxCardinality) -> Self {
+    pub fn new(max_entries: &MaxEntries, max_cardinality: &MaxCardinality) -> Self {
         AttrBuilder {
             state: std::marker::PhantomData::<Vacancy>,
             entries: Vec::new(),
@@ -157,13 +216,14 @@ impl AttrBuilder<Vacancy> {
 
     /// Add entry to AttrBuilder
     /// Returns State as this could potentially alter the State
-    pub fn add_entry(mut self, entry: AttributeEntry) -> AttrBuilder {
+    pub fn add_entry(mut self, entry: AttributeEntry) -> Self {
         self.entries.push(entry);
         if self.entries.len() == self.entries.capacity() {
             // Long way:
             // AttrBuilder {
             //     state: std::marker::PhantomData::<Vacancy>,
             //     entries: self.entries,
+            //     ..
             // }
             // Short way:
             State::Vacancy(self).into()
@@ -171,25 +231,23 @@ impl AttrBuilder<Vacancy> {
             State::Full(self.into()).into()
         }
     }
-
-    /// Remove entry, no state change
-    fn remove_entry(mut self, index: usize) -> Self {
-        self.entries.remove(index);
-        self
-    }
 }
 
 impl AttrBuilder<Full> {
-    /// Remove entry, set state Vacancy
-    fn remove_entry(mut self, index: usize) -> AttrBuilder<Vacancy> {
-        self.entries.remove(index);
-        self.into()
-    }
+    // Full specific methods here
 }
 
-impl<S> AttrBuilder<S> {
-    fn build(self) -> AttributeEntries {
-        AttributeEntries(self.entries)
+impl<S> AttrBuilder<S>
+where
+    AttrBuilder: std::convert::From<AttrBuilder<S>>,
+{
+    fn build(&self) -> AttributeEntries {
+        AttributeEntries(self.entries.to_vec())
+    }
+
+    fn remove_entry(mut self, index: usize) -> AttrBuilder<Vacancy> {
+        self.entries.remove(index);
+        State::Vacancy(self.into()).into()
     }
 }
 
@@ -233,6 +291,31 @@ impl From<State> for AttrBuilder<Full> {
     }
 }
 
+// implement trait `std::convert::From<&mut attributes::AttrBuilder<attributes::Full>>` for `attributes::AttrBuilder`
+// impl From<&mut AttrBuilder<Full>> for AttrBuilder {
+//     fn from(builder: &mut AttrBuilder<Full>) -> AttrBuilder {
+//         State::Full(*builder).into()
+//         // AttrBuilder {
+//         //     state: std::marker::PhantomData::<Vacancy>,
+//         //     entries: builder.entries,
+//         //     max_entries: builder.max_entries,
+//         //     max_cardinality: builder.max_cardinality,
+//         // }
+//     }
+// }
+
+// implement the trait `std::convert::From<&mut attributes::AttrBuilder>` for `attributes::AttrBuilder`
+// impl From<&mut AttrBuilder> for AttrBuilder {
+//     fn from(builder: &mut AttrBuilder) -> AttrBuilder {
+//         AttrBuilder {
+//             state: std::marker::PhantomData::<Vacancy>,
+//             entries: builder.entries,
+//             max_entries: builder.max_entries,
+//             max_cardinality: builder.max_cardinality,
+//         }
+//     }
+// }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -240,7 +323,7 @@ mod test {
     #[test]
     fn test_full_entry() {
         let max_card = MaxCardinality(2);
-        let mut builder = AttrBuilder::new(&AttributesLength(2), &max_card);
+        let mut builder = AttrBuilder::new(&MaxEntries(2), &max_card);
 
         let attr_1 = Attribute::new(
             AttributeName("name".to_string()),
@@ -265,6 +348,20 @@ mod test {
         let entry_2 = AttributeEntry::new("entry_2".to_string(), vec![attr_3, attr_4], &max_card);
 
         let state = builder.add_entry(entry_1).add_entry(entry_2);
+        let entries = state.build();
+
+        // try to add another entry, it will fail
+        let attr_5 = Attribute::new(
+            AttributeName("name".to_string()),
+            AttributeValue("value".to_string()),
+        );
+        let attr_6 = Attribute::new(
+            AttributeName("name".to_string()),
+            AttributeValue("value".to_string()),
+        );
+
+        let entry_3 = AttributeEntry::new("entry_3".to_string(), vec![attr_5, attr_6], &max_card);
+        let state = state.add_entry(entry_3);
         let entries = state.build();
     }
 }
