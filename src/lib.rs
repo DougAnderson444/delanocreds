@@ -15,16 +15,19 @@
 //!
 //! #### Root Issuer Summary of Choices/Options:
 //!
-//! - **Maxiumum Attribute Entries**: Root Issuer sets a maximum number of attribute entries (`message_l`)
+//! - **Maxiumum Attribute Entries**: Credntials have a maximum number of entries.
+//! Each entry holds up to MaxCardinality of Attributes.
+//! The Root Issuer sets a maximum number of entries (`message_l`)
 //! - **Maximum Cardinality (Attributes per Entry)**: There is a set maximum number of items total (`cardinality`, `message_l[n].len()` <= `cardinality`)
-//! - **Extendable Entries**: What the maximum number of additional entries may be (current entries length up to `k_prime`, `k_prime` is at most `message_l`. `current < k_prime < message_l`),
+//! - **Extendable Limit**: What the maximum number of additional entries may be (current entries length up to `k_prime`, `k_prime` is at most `message_l`.
+//! Or in other words: `current < k_prime < message_l`),
 //!
 //! Below is a markdown table with an example of attribute entries, and attributes in each entry, with yes/no for each feature
 //!
 //! ```md
 //! Attribute Entries:
-//! ==> Entry Level 0: [Attribute, Attribute, Attribute, Attribute]
-//! ==> Entry Level 1: [Attribute, Attribute, Attribute, Attribute, Attribute]
+//! ==> Entry Level 0: [Attribute, Attribute, Attribute]
+//! ==> Entry Level 1: [Attribute]
 //! ==> Entry Level 2: [Attribute, Attribute]
 //! ==> Additonal Entry? Only if 3 < k_prime < message_l
 //! ```
@@ -148,9 +151,10 @@
 //! With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
 #![feature(type_alias_impl_trait)]
 
+use crate::attributes::Attribute;
 use amcl_wrapper::field_elem::FieldElement;
 use keypair::{MaxCardinality, MaxEntries, VK};
-use utils::{Attribute, Entry};
+use utils::Entry;
 
 pub mod attributes;
 pub mod keypair;
@@ -164,6 +168,7 @@ const DEFAULT_MAX_ATTRIBUTES: usize = 10;
 /// Default Max Cardinality: The maximum number of total attribute elements allowed in a credential.
 const DEFAULT_MAX_CARDINALITY: usize = 5;
 
+// Test the README.md code snippets
 // #[doc = include_str!("../README.md")]
 // #[cfg(doctest)]
 // pub struct ReadmeDoctests;
@@ -306,7 +311,7 @@ impl EntryBuilder {
     /// # Returns
     /// - `Attibute`
     pub fn attribute(&mut self, attribute: String) -> Attribute {
-        utils::attribute(attribute)
+        attributes::attribute(attribute)
     }
 
     /// Builds an Entry out of a vector of attributes
