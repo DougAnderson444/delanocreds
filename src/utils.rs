@@ -1,29 +1,24 @@
+use crate::attributes::Attribute;
+use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
-use amcl_wrapper::univar_poly::UnivarPolynomial;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
 use std::ops::Deref;
 
-/// Attribute type
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub struct Attribute(pub Vec<u8>);
+#[derive(Clone, Debug, PartialEq)]
+pub struct Entry(pub Vec<Attribute>);
 
-pub fn attribute(a: impl AsRef<[u8]>) -> Attribute {
-    Attribute(a.as_ref().to_vec())
-}
-
-// impl DeRef for Attibute
-impl Deref for Attribute {
-    type Target = Vec<u8>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl Entry {
+    pub fn new(attributes: &[Attribute]) -> Self {
+        Entry(attributes.to_vec())
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Entry(pub Vec<Attribute>);
+pub fn entry(attributes: &[Attribute]) -> Entry {
+    Entry(attributes.to_vec())
+}
 
 impl Deref for Entry {
     type Target = Vec<Attribute>;
@@ -41,27 +36,12 @@ impl IntoIterator for Entry {
     }
 }
 
-/// Returns the coefficients of a polynomial with the given roots
-/// The number of polynomial coefficients is one more than the degree of the polynomial.
-pub fn polyfromroots(coeffs: Vec<FieldElement>) -> UnivarPolynomial {
-    UnivarPolynomial::new_with_roots(&coeffs[..])
-}
-
-/// Sum EC points list.
-pub fn ec_sum(listpoints: Vec<G1>) -> G1 {
-    let mut sum = G1::identity();
-    for pts in &listpoints {
-        sum += pts;
-    }
-    sum
-}
-
 /// Iterates through each Attribute in the Entry and converts it to a FieldElement
-pub fn convert_mess_to_bn(input: &Entry) -> Vec<FieldElement> {
+pub fn convert_entry_to_bn(input: &Entry) -> Result<Vec<FieldElement>, SerzDeserzError> {
     input
         .iter()
-        .map(|entry| FieldElement::from_msg_hash(entry))
-        .collect::<Vec<FieldElement>>()
+        .map(|attr| FieldElement::from_bytes(attr))
+        .collect()
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -94,13 +74,9 @@ impl Pedersen {
     pub fn new() -> Self {
         // h is the statement. d is the trapdoor. g is the generator. h = d*g
         let g = G1::generator();
-        let d = Secret::new(FieldElement::random());
+        let d = Secret::new(FieldElement::random()); // trapdoor
         let h = &g.scalar_mul_const_time(d.expose_secret());
-        Pedersen {
-            g,
-            h: h.clone(),
-            // trapdoor: d
-        }
+        Pedersen { g, h: h.clone() }
     }
     pub fn commit(&self, msg: FieldElement) -> (PedersenCommit, PedersenOpen) {
         let r = FieldElement::random();
@@ -116,8 +92,10 @@ impl Pedersen {
 
     /// Decrypts/Decommits the message
     pub fn decommit(&self, pedersen_open: &PedersenOpen, pedersen_commit: &PedersenCommit) -> bool {
-        let c2 = pedersen_open.open_randomness.clone() * &self.h
-            + pedersen_open.announce_randomness.clone() * &self.g;
+        let c2 = &self.h.scalar_mul_const_time(&pedersen_open.open_randomness)
+            + &self
+                .g
+                .scalar_mul_const_time(&pedersen_open.announce_randomness);
         &c2 == pedersen_commit
     }
 }
