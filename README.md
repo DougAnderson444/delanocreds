@@ -1,10 +1,32 @@
 # **Del**egatable **Ano**nymous **Cred**ential**s** (Delanocreds)
 
-Create messages that can be held by third parties, re-delegated, and verified without revealing the identity of any of the holders in the delegation chain.
+Create credentials, and delegate the ability to add more credentials, without revealing the identity of any of the holders in the delegation chain, including the prover.
 
-Useful if you want the ability to delegate credntials, capabiltiies, or other data without revealing the identity of the delegation or holder(s).
+Useful if you want the ability to delegate credentials, capabilities, or other data without revealing the identity of the delegation or holder(s).
 
-You can also selectively delegate.
+Holders can also selectively prove attributes and remove the ability for delegatees to prove selected attributes.
+
+## Delegation
+
+What can be delegated is: the number of additional attribute Entries that can be added (zero to MaxEnties), but only if the credential is marked as _extendable_.
+
+Even if there is no ability for a credential holder to add additional attributes, the follwoing is true:
+
+-   Credentials holders can always assign their credential to a new public key
+-   Attributes are always removable by a holder
+
+It is important to note that the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.
+
+Therefore, while holders may restrict the ability of delegatees to _add_ attributes, they will always be
+able to assign the credential to a new public key for the attributes they _do_ have.
+
+You may wish to apply a Credential Strategy such that the Credential is properly handled by the holder. This is left to the user, as the use cases of Credentials are varied too widely to provide a one-size-fits-all solution.
+
+## Speed
+
+This library can generate, issue, delegate, prove and verify 30 selected credentials out of 100 issued attributes in less than 400ms on [Intel i5-3470 CPU @ 3.20GHz](https://cpu.userbenchmark.com/Intel-Core-i5-3470/Rating/2771).
+
+That's fast enough for time-critical applications like public transportation, ticketing, etc.
 
 ## Project Status
 
@@ -15,16 +37,15 @@ You can also selectively delegate.
 ```rust
 use std::result::Result;
 use delanocreds::spseq_uc::*;
-use delanocreds::utils::InputType;
-use delanocreds::dac::Dac*;
+use delanocreds::utils::Entry;
+use delanocreds::dac::Dac;
 use delanocreds::attributes::{Attribute, AttributeName, AttributeValue};
-use indexmap::indexmap;
 
 fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     // Build a RootIssuer
     let max_entries = 10;
     let max_cardinality = 5;
-    let mut root_issuer = RootIssuer::new().max_entries(max_entries).max_cardinality(max_cardinality).build();
+    let mut root_issuer = RootIssuerBuilder::new().max_entries(max_entries).max_cardinality(max_cardinality).build();
 
     // get an Attributes builder with the constraints of the RootIssuer
     let mut entry_builder = root_issuer.entry_builder();
@@ -34,25 +55,23 @@ fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     // if you add more, it will overwrite the oldest attributes / give you an error
 
     // Individual attributes are referenced by Provers generating a proof
-    // Can add `max_cardinality` into the builder
-    let read_attr   = entry_builder.attribute(AttributeName("read"),   AttributeValue("*"))?;
-    let create_attr = entry_builder.attribute(AttributeName("create"), AttributeValue("*"))?;
-    let update_attr = entry_builder.attribute(AttributeName("update"), AttributeValue("*"))?;
-    let delete_attr = entry_builder.attribute(AttributeName("delete"), AttributeValue("*"))?;
+    let read_attr   = Attribute::new("read"); // using the new method
+    let create_attr = Attribute::from("create"); // using the from method
+    let update_attr = attribute("update"); // using the attribute convenience method
+    let delete_attr = attribute("delete");
 
     // Generate and insert First Entry using read attribute
-    // Cred Holders can add `max_entries` into the builder
+    // Root issuer can add `max_entries` into the builder
     // Returns None is limit has been reached
-    let Some(read_entry) = entry_builder.entry("read_entry", vec![read_attr]);
+    let Some(read_entry) = entry_builder.entry(vec![read_attr]);
 
     // Generate and insert Second Entry using create, update and delete elements
-    let Some(change_entry) = entry_builder.entry("change_entry", vec![create_attr, update_attr, delete_attr]);
+    let Some(change_entry) = entry_builder.entry(vec![create_attr, update_attr, delete_attr]);
 
-    let all_entries: AttributeEntries = entry_builder.build(); // generate the attributes entries
+    // update _only_ entry
+    let Some(update_entry) = entry_builder.entry(vec![update_attr]);
 
-    // An Attribute Entry is/are selected by Issuers when issuing/delegating a credential
-    let read_entry = all_entries["read_entry"]; // get the read entry
-    let change_entry = all_entries["change_entry"]; // get the change entry
+    let all_entries: AttributeEntries = entry_builder.drain(); // generate the attributes entries
 
     let alice = Keypair::user::generate();
     let ally_nym = Keypair::nym::from(alice);
@@ -102,10 +121,10 @@ fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
         // Explicitly, Choose, Add, and Redact which entries bobby to be able to prove.
         // Any new entries here (within ally's limits) will be added to the credential,
         // and any entries not here will be redacted from the credential
-        .allow(vec![read_entry, update_attr])
+        .allow_entries(vec![read_entry, update_entry])
         .extendable(max_entries) // Allow the delegated party to add more entries up to max_entries
-        .delegable() // Allow the delegated party to further delegate the credential to others
-        .issue_to(&bobby_nym.proof);
+        .delegatable() // Allow the delegated party to further delegate the credential to others
+        .issue_to(&bobby_nym.proof); // builds the offer
 
     // Serialize and send
     // let bobby_offer_bytes = bobby_offer.serialize()?;
@@ -166,13 +185,51 @@ It also allows an adversarial CA but no delegators’s keys leaks.
 
 # Tests
 
-`cargo test`
+`cargo test --workspace`
+
+# Build Binary Release
+
+`cargo build --bin delanocreds-bin --release`
+
+Run the built binary:
+
+`./target/release/delanocreds-bin.exe`
+
+# Quick Bench
+
+For eight (8) attributes, the following benchmarks were observed for each step:
+
+| Step           | Time (ms) |
+| -------------- | --------- |
+| Setup          | 118       |
+| Issue          | 168       |
+| Offer          | 5         |
+| Accept         | 83        |
+| Prove          | 36        |
+| Verify         | 124       |
+| =============  | ========= |
+| **Total Time** | **535**   |
+
+Bench Variables:
+l - upper bound for the length of the commitment vector
+t - upper bound for the cardinality of the committed sets
+n < t - number of attributes in each attribute set A_i in commitment C_i (same for each commitment level)
+k - length of attribute set vector
+k_prime - number of attributes sets which can be delegated
+
+we set the above parameters as t = 25, l = 15, k = 4, k' = 7 and n = 10 to cover many different use-cases
+
+Assumption:
+
+-   each time a credential is delegated, an attribute is added
 
 # Docs
 
 `cargo doc --workspace --no-deps --open`
 
 To build the docs incrementally, use `cargo watch -x 'doc --workspace --no-deps --open'`.
+
+Build the docs in Windows for Github pages: `./build.bat`
 
 ## References
 
