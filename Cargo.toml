@@ -1,16 +1,38 @@
 [package]
+edition = "2021"
 name = "delanocreds"
 version = "0.1.1"
-edition = "2021"
+
+[[bin]]
+name = "delanocreds-bin"
+path = "src/bin/main.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-amcl_wrapper = { version = "0.4.0", features = ["bls381"] }
-sha2 = { version = "0.10" }
+amcl_wrapper = {version = "0.4.0", features = ["bls381"]}
 anyhow = "1.0.70"
+cid = "0.10.1"
+multihash = "0.18.1"
 secrecy = "0.8.0"
+sha2 = {version = "0.10"}
+shake-multihash = {git = "https://github.com/DougAnderson444/shake-multihash.git", branch = "master"}
 # serde = "1.0"
 # wa-serde-derive = "0.1"                                     # serde-derive in webassembly                                     # serde-derive for wasm
 
 # applies to build scripts and proc-macros (serde) to optimize compile times
 # [profile.dev.build-override]
 # opt-level = 3
+
+[profile.release]
+codegen-units = 1 # allow for maximum size reduction optimizations
+debug = false 
+debug-assertions = false 
+incremental = false 
+lto = true # Enable Link Time Optimization
+opt-level = 3 # Optimize for size
+overflow-checks = false 
+panic = 'abort' # Abort on panic
+rpath = false 
+strip = true # Automatically strip symbols from the binary.
