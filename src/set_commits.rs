@@ -1,6 +1,5 @@
 use crate::keypair::MaxCardinality;
-use crate::utils::convert_mess_to_bn;
-use crate::utils::polyfromroots;
+use crate::utils::convert_entry_to_bn;
 use crate::utils::Entry;
 use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
@@ -8,15 +7,16 @@ use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
+use amcl_wrapper::univar_poly::UnivarPolynomial;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
 
 /// Public Parameters of the Set Commitment
-/// - `pp_commit_g1`: public parameter commitment for G1
-/// - `pp_commit_g2` : Public parameters commitment for G2, type we get returned from the Python code: [g_2.mul(alpha_trapdoor.pow(i)) for i in range(max_cardinality)] # This loops through the range of max_cardinality and multiplies g_2 by alpha_trapdoor raised to the power of i. Which is a list of G2 elements, or in Rust a `Vec<G2>`.
+/// - `pp_commit_g1`: Root Issuer's public parameters commitment for G1
+/// - `pp_commit_g2`: Root Issuer's Public parameter commitment for G2
 /// - `g_1`: G1 generator.
 /// - `g_2`: G2 generator.
-/// - `max_cardinality`: max cardinality of the set. Cardinality of the set is in [1, t]. t is a public parameter.
+/// - `max_cardinality`: The Max Cardinality of this set. Cardinality of the set is in [1, t]
 #[derive(Clone, Debug)]
 pub struct ParamSetCommitment {
     pub pp_commit_g1: Vec<G1>,
@@ -78,19 +78,21 @@ pub trait Commitment {
     /// A Commitment scheme, either SetCommitment or CrossSetCommitment
     fn new(t: MaxCardinality) -> Self;
 
+    /// Public parameters of the commitment scheme.
     fn public_parameters(self) -> ParamSetCommitment;
 
+    /// Generates a new commitment scheme.
     fn setup(max_cardinality: MaxCardinality) -> ParamSetCommitment {
         ParamSetCommitment::new(&max_cardinality)
     }
     /// Commit to a set of messages
     ///
     /// # Arguments
-    /// param_sc: public parameters for the commitment scheme, as P^ai, P_hat^ai, P = g1, P_hat = g2, Order, BG
-    /// mess_set_str: a message set as a string
+    /// `param_sc`: [ParamSetCommitment] public parameters for the commitment scheme, as P^ai, P_hat^ai, P = g1, P_hat = g2, Order, BG
+    /// `mess_set_str`: a vector of [Entry]s
     ///
     /// # Returns
-    /// Tuple of (commitment, witness)
+    /// Tuple of (commitment, witness) or a SerzDeserzError if
     ///
     /// # Method
     /// 1. Convert the message set to a vector of FieldElements
@@ -102,29 +104,14 @@ pub trait Commitment {
         mess_set_str: &Entry,
     ) -> Result<(G1, FieldElement), SerzDeserzError> {
         // TODO: Verify the message set string length is no more than the max cardinality in ParamSetCommitment
+        let mess_set = convert_entry_to_bn(mess_set_str)?;
+        let monypol_coeff = UnivarPolynomial::new_with_roots(&mess_set);
+        let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
-        let mess_set = convert_mess_to_bn(mess_set_str);
-        // get monypol_coeff using polyfromroots() fn from utils.rs
-        let monypol_coeff = polyfromroots(mess_set);
+        let open_info = FieldElement::random();
 
-        // multiply each G1 in Vec<G1> by each coefficient in the polynomial (FieldElementVector)
-        let coef_points = param_sc
-            .pp_commit_g1
-            .iter()
-            .zip(monypol_coeff.coefficients().iter())
-            .map(|(g1, coeff)| g1 * coeff)
-            .collect::<Vec<G1>>();
-
-        // use amcl_wrapper to sum all the elements in coef_points as FieldElements into a pre_commit
-        let pre_commit = coef_points.iter().fold(G1::identity(), |acc, x| acc + x);
-
-        // get a random element in Zp
-        let rho = FieldElement::random();
-
-        // multiply pre_commit by rho. Rho is a random element in Zp. Zp is the set of integers modulo p.
-        let commitment = pre_commit * rho.clone();
-        // open_info is rho.
-        let open_info = rho;
+        // multiply pre_commit by rho (open_info = rho). Rho is a random element in Zp. Zp is the set of integers modulo p.
+        let commitment = pre_commit.scalar_mul_const_time(&open_info);
         Ok((commitment, open_info))
     }
 
@@ -146,20 +133,9 @@ pub trait Commitment {
         open_info: &FieldElement,
         mess_set_str: &Entry,
     ) -> Result<bool, SerzDeserzError> {
-        let mess_set = convert_mess_to_bn(mess_set_str);
-        // get monypol_coeff using polyfromroots() fn from utils.rs
-        let monypol_coeff = polyfromroots(mess_set);
-
-        // multiply each G1 in Vec<G1> by each coefficient in the polynomial (FieldElementVector)
-        let coef_points = param_sc
-            .pp_commit_g1
-            .iter()
-            .zip(monypol_coeff.coefficients().iter())
-            .map(|(g1, coeff)| g1 * coeff)
-            .collect::<Vec<G1>>();
-
-        // sum all coef_points
-        let pre_commit = coef_points.iter().fold(G1::identity(), |acc, x| acc + x);
+        let mess_set = convert_entry_to_bn(mess_set_str)?;
+        let monypol_coeff = UnivarPolynomial::new_with_roots(&mess_set);
+        let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
         // multiply pre_commit by rho. Rho is a random element in Zp. Zp is the set of integers modulo p.
         let commitment_check = pre_commit * open_info;
@@ -190,8 +166,8 @@ pub trait Commitment {
             return Ok(None);
         }
 
-        let mess_set = convert_mess_to_bn(all_messages);
-        let mess_subset_t = convert_mess_to_bn(subset);
+        let mess_set = convert_entry_to_bn(all_messages)?;
+        let mess_subset_t = convert_entry_to_bn(subset)?;
 
         // check if mess_subset is a subset of mess_set
         // compare the lengths of the two vectors
@@ -213,18 +189,8 @@ pub trait Commitment {
             .collect::<Vec<FieldElement>>();
 
         // compute a witness for the subset
-        let coeff_witn = polyfromroots(create_witn_elements);
-
-        // multiply each G1 in pp_commit_g1 Vec<G1> by each coefficient witness in the polynomial (FieldElementVector)
-        let witn_groups = param_sc
-            .pp_commit_g1
-            .iter()
-            .zip(coeff_witn.coefficients().iter())
-            .map(|(g1, coeff)| g1 * coeff)
-            .collect::<Vec<G1>>();
-
-        // sum all witn_groups points to get a single point
-        let witn_sum = witn_groups.iter().fold(G1::identity(), |acc, x| acc + x);
+        let coeff_witn = UnivarPolynomial::new_with_roots(&create_witn_elements);
+        let witn_sum = generate_pre_commit(coeff_witn, param_sc);
 
         let witness = witn_sum * open_info;
         Ok(Some(witness))
@@ -248,8 +214,8 @@ pub trait Commitment {
         subset_str: &Entry,
         witness: &G1,
     ) -> Result<bool, SerzDeserzError> {
-        let mess_subset_t = convert_mess_to_bn(subset_str);
-        let coeff_t = polyfromroots(mess_subset_t);
+        let mess_subset_t = convert_entry_to_bn(subset_str)?;
+        let coeff_t = UnivarPolynomial::new_with_roots(&mess_subset_t);
 
         let subset_group_elements = param_sc
             .pp_commit_g2
@@ -347,13 +313,7 @@ impl CrossSetCommitment {
         witness_vector.iter().zip(commit_vector.iter()).fold(
             G1::identity(),
             |acc, (witness, commit)| {
-                // generate a BigNumber challenge t_i by hashing a number of EC points
-                // join all the commit_vector elements into a single vector of hex
-                let c_string = commit.to_hex();
-                let hash_i: FieldElement = FieldElement::from_msg_hash(c_string.as_bytes());
-
-                // append witnessness_group_elements
-                // add to existing proof
+                let hash_i: FieldElement = g1_hash_to_field_el(commit);
                 acc + witness.scalar_mul_const_time(&hash_i)
             },
         )
@@ -363,7 +323,7 @@ impl CrossSetCommitment {
     /// # Arguments
     /// param_sc: public parameters
     /// commit_vector: the commitment vector
-    /// subsets_vector_str: the message sets vector
+    /// entry_subsets_vector: Vector of sleected [Entry]s
     /// proof: a proof which is a aggregate of witnesses
     ///
     /// # Returns
@@ -371,15 +331,15 @@ impl CrossSetCommitment {
     pub fn verify_cross(
         param_sc: &ParamSetCommitment,
         commit_vector: &[G1],
-        subsets_vector_str: &[Entry],
+        entry_subsets_vector: &[Entry],
         proof: &G1,
     ) -> Result<bool, SerzDeserzError> {
         // Steps:
-        // 1. convert message str into the BN, roll up possible error from convert_mess_to_bn with `? operator`
-        let subsets_vector = subsets_vector_str
+        // 1. convert message str into the BN
+        let subsets_vector = entry_subsets_vector
             .iter()
-            .map(convert_mess_to_bn)
-            .collect::<Vec<Vec<FieldElement>>>();
+            .map(convert_entry_to_bn)
+            .collect::<Result<Vec<Vec<FieldElement>>, SerzDeserzError>>()?;
 
         // create a union of sets
         let set_s = subsets_vector
@@ -391,7 +351,7 @@ impl CrossSetCommitment {
             .into_iter()
             .collect::<Vec<FieldElement>>();
 
-        let coeff_set_s = polyfromroots(set_s.clone());
+        let coeff_set_s = UnivarPolynomial::new_with_roots(&set_s);
 
         // 2. compute right side of verification, pp_commit_g2
         let set_s_group_element = param_sc
@@ -419,7 +379,7 @@ impl CrossSetCommitment {
             .iter()
             .zip(set_s_not_t.iter())
             .map(|(commit, set_s_not_t)| {
-                let coeff_s_not_t = polyfromroots(set_s_not_t.clone());
+                let coeff_s_not_t = UnivarPolynomial::new_with_roots(set_s_not_t);
                 // use amcl_wrapper to multiply FieldElementVector by a FieldElement: `&coeff_s_not_t * param_sc.pp_commit_g2`
                 let listpoints_s_not_t = param_sc
                     .pp_commit_g2
@@ -432,8 +392,7 @@ impl CrossSetCommitment {
                     .iter()
                     .fold(G2::identity(), |acc, x| acc + x);
 
-                let c_string = commit.to_hex();
-                let hash_i: FieldElement = FieldElement::from_msg_hash(c_string.as_bytes());
+                let hash_i: FieldElement = g1_hash_to_field_el(commit);
 
                 GT::ate_pairing(commit, &(hash_i * temp_sum))
             })
@@ -446,12 +405,19 @@ impl CrossSetCommitment {
     }
 }
 
-pub fn mul_and_fold(monypol_coeff: Vec<FieldElement>, param_sc: ParamSetCommitment) -> G1 {
+fn g1_hash_to_field_el(commit: &G1) -> FieldElement {
+    FieldElement::from_msg_hash(&commit.to_bytes(false))
+}
+
+pub fn generate_pre_commit(
+    monypol_coeff: amcl_wrapper::univar_poly::UnivarPolynomial,
+    param_sc: &ParamSetCommitment,
+) -> G1 {
     // multiply each pp_commit_g1 by each monypol_coeff and put result in a vector
     let coef_points = param_sc
         .pp_commit_g1
         .iter()
-        .zip(monypol_coeff.iter())
+        .zip(monypol_coeff.coefficients().iter())
         .map(|(g1, coeff)| g1 * coeff)
         .collect::<Vec<G1>>();
 
@@ -470,7 +436,10 @@ pub fn not_intersection(list_s: &[FieldElement], list_t: Vec<FieldElement>) -> V
 
 #[cfg(test)]
 mod test {
-    use crate::utils::{self};
+    use crate::{
+        attributes::attribute,
+        utils::{self},
+    };
 
     use super::*;
 
@@ -483,11 +452,7 @@ mod test {
         let name = "name = Alice";
         let drivers = "driver license = 12";
 
-        let set_str: Entry = Entry(vec![
-            utils::attribute(age),
-            utils::attribute(name),
-            utils::attribute(drivers),
-        ]);
+        let set_str: Entry = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
 
         let pp = SetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str)?;
@@ -510,13 +475,9 @@ mod test {
         let name = "name = Alice";
         let drivers = "driver license = 12";
 
-        let set_str = Entry(vec![
-            utils::attribute(age),
-            utils::attribute(name),
-            utils::attribute(drivers),
-        ]);
+        let set_str = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
 
-        let subset_str_1 = Entry(vec![utils::attribute(age), utils::attribute(name)]);
+        let subset_str_1 = Entry(vec![attribute(age), attribute(name)]);
         let pp = SetCommitment::setup(MaxCardinality(max_cardinal));
         let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str)?;
         let witness_subset =
@@ -550,16 +511,12 @@ mod test {
         let company = "company = ACME Inc.";
         let alt_drivers = "driver license type = B";
 
-        let set_str: Entry = Entry(vec![
-            utils::attribute(age),
-            utils::attribute(name),
-            utils::attribute(drivers),
-        ]);
+        let set_str: Entry = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
 
         let set_str2: Entry = Entry(vec![
-            utils::attribute(gender),
-            utils::attribute(company),
-            utils::attribute(alt_drivers),
+            attribute(gender),
+            attribute(company),
+            attribute(alt_drivers),
         ]);
 
         // create two set commitments for two sets set_str and set_str2
@@ -577,13 +534,9 @@ mod test {
         let commit_vector = &vec![commitment_1, commitment_2];
 
         // create a witness for each subset -> W1 and W2
-        let subset_str_1 = Entry(vec![
-            utils::attribute(age),
-            utils::attribute(name),
-            utils::attribute(drivers),
-        ]);
+        let subset_str_1 = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
 
-        let subset_str_2 = Entry(vec![utils::attribute(gender), utils::attribute(company)]);
+        let subset_str_2 = Entry(vec![attribute(gender), attribute(company)]);
 
         let witness_1 =
             CrossSetCommitment::open_subset(&pp, &set_str, &opening_info_1, &subset_str_1)?
