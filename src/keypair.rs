@@ -5,8 +5,7 @@
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
 use crate::set_commits::ParamSetCommitment;
-use crate::utils::convert_mess_to_bn;
-use crate::utils::polyfromroots;
+use crate::utils::convert_entry_to_bn;
 use crate::{
     utils::{Entry, PedersenOpen},
     zkp::Schnorr,
@@ -14,6 +13,7 @@ use crate::{
 };
 use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
+use amcl_wrapper::univar_poly::UnivarPolynomial;
 use amcl_wrapper::{
     field_elem::FieldElement, group_elem::GroupElement, group_elem_g1::G1, group_elem_g2::G2,
 };
@@ -94,7 +94,7 @@ impl MaxEntries {
 pub struct Signer {
     pub public_parameters: ParamSetCommitment,
     sk: Secret<Vec<FieldElement>>,
-    vk: Vec<VK>,
+    pub vk: Vec<VK>,
 }
 
 /// Verification Key
@@ -391,7 +391,7 @@ impl UserKey {
 /// - pub `public`: [`NymPublic`], proof of the user
 pub struct Nym {
     secret: Secret<FieldElement>,
-    public: NymPublic,
+    pub public: NymPublic,
 }
 
 /// Pseudonym Public information
@@ -610,8 +610,8 @@ impl Nym {
                 // if yes, then update the signature
                 // if no, then add the new commitment and opening to the signature
                 if index_l <= usign.len() {
-                    let set_l = convert_mess_to_bn(addl_attrs);
-                    let monypolcoefficient = polyfromroots(set_l);
+                    let set_l = convert_entry_to_bn(addl_attrs)?;
+                    let monypolcoefficient = UnivarPolynomial::new_with_roots(&set_l[..]);
 
                     let list = usign.get(index_l - 1).unwrap();
                     let sum_points_uk_i = list
@@ -819,7 +819,8 @@ pub fn verify_proof(
 mod tests {
 
     use super::*;
-    use crate::utils::{self, Attribute};
+    use crate::attributes::{attribute, Attribute};
+    use crate::utils::entry;
 
     struct TestMessages {
         message1_str: Vec<Attribute>,
@@ -829,22 +830,18 @@ mod tests {
 
     // make a setup fn that generates message_strs
     fn setup_tests() -> TestMessages {
-        let age = "age = 30";
-        let name = "name = Alice ";
-        let drivers = "driver license = 12";
-        let gender = "gender = male";
-        let company = "company = ACME";
-        let insurance = "Insurance = 2";
-        let car_type = "Car type = BMW";
+        let age = attribute("age = 30");
+        let name = attribute("name = Alice ");
+        let drivers = attribute("driver license = 12");
+        let gender = attribute("gender = male");
+        let company = attribute("company = ACME");
+        let insurance = attribute("Insurance = 2");
+        let car_type = attribute("Car type = BMW");
 
-        let message1_str = vec![utils::attribute(age), utils::attribute(name)];
+        let message1_str = vec![age, name];
 
-        let message2_str = vec![
-            utils::attribute(gender),
-            utils::attribute(company),
-            utils::attribute(drivers),
-        ];
-        let message3_str = vec![utils::attribute(insurance), utils::attribute(car_type)];
+        let message2_str = vec![gender, company, drivers];
+        let message3_str = vec![insurance, car_type];
 
         TestMessages {
             message1_str,
@@ -1255,32 +1252,24 @@ mod tests {
 
     #[test]
     fn test_prove_subset_creds() -> Result<(), SerzDeserzError> {
-        let age = "age = 30";
-        let name = "name = Alice";
-        let drivers = "driver license = 12";
-        let gender = "gender = male";
-        let company = "company = ACME";
-        let drivers_type_b = "driver license type = B";
-        let insurance = "Insurance = 2";
-        let car_type = "Car type = BMW";
+        let age = attribute("age = 30");
+        let name = attribute("name = Alice");
+        let drivers = attribute("driver license = 12");
+        let gender = attribute("gender = male");
+        let company = attribute("company = ACME");
+        let drivers_type_b = attribute("driver license type = B");
+        let insurance = attribute("Insurance = 2");
+        let car_type = attribute("Car type = BMW");
 
-        let message1_str = vec![
-            utils::attribute(age),
-            utils::attribute(name),
-            utils::attribute(drivers),
-        ];
-        let message2_str = vec![
-            utils::attribute(gender),
-            utils::attribute(company),
-            utils::attribute(drivers_type_b),
-        ];
-        let message3_str = vec![utils::attribute(insurance), utils::attribute(car_type)];
+        let message1_str = vec![age.clone(), name.clone(), drivers];
+        let message2_str = vec![gender.clone(), company.clone(), drivers_type_b];
+        let message3_str = vec![insurance, car_type];
 
         // Test proving a credential to verifiers
         let all_attributes = vec![
-            Entry(message1_str),
-            Entry(message2_str),
-            Entry(message3_str),
+            entry(&message1_str),
+            entry(&message2_str),
+            entry(&message3_str),
         ];
 
         let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
@@ -1291,8 +1280,14 @@ mod tests {
         let cred = signer.issue_cred(&all_attributes, k_prime, &nym_p.public)?;
 
         // subset of each message set
-        let sub_list1_str = vec![utils::attribute(age), utils::attribute(name)];
-        let sub_list2_str = vec![utils::attribute(gender), utils::attribute(company)];
+        // iteratre through message1_str and return vector if element is either `age` or `name` Attribute
+        let search_for = [age, name];
+        let sub_list1_str = message1_str
+            .iter()
+            .filter(|&x| search_for.contains(x))
+            .cloned()
+            .collect::<Vec<Attribute>>();
+        let sub_list2_str = vec![gender, company];
 
         // TODO: redesign the API to choose selected attrs as indexes of all attributes
         let selected_attrs = vec![Entry(sub_list1_str), Entry(sub_list2_str)];
@@ -1315,33 +1310,30 @@ mod tests {
 
     #[test]
     fn test_delegate_subset() -> Result<(), SerzDeserzError> {
-        // Delegate a subset of attributes
-        let age = "age = 30";
-        let name = "name = Alice";
-        let drivers = "driver license = 12";
-        let gender = "gender = male";
-        let company = "company = ACME";
-        let drivers_type_b = "driver license type = B";
-        let insurance = "Insurance = 2";
-        let car_type = "Car type = BMW";
+        //start timer
+        let start = std::time::Instant::now();
 
-        let message1_str = vec![
-            utils::attribute(age),
-            utils::attribute(name),
-            utils::attribute(drivers),
-        ];
-        let message2_str = vec![
-            utils::attribute(gender),
-            utils::attribute(company),
-            utils::attribute(drivers_type_b),
-        ];
-        let message3_str = vec![utils::attribute(insurance), utils::attribute(car_type)];
+        // Delegate a subset of attributes
+        let age = attribute("age = 30");
+        let name = attribute("name = Alice");
+        let drivers = attribute("driver license = 12");
+        let gender = attribute("gender = male");
+        let company = attribute("company = ACME");
+        let drivers_type_b = attribute("driver license type = B");
+        let insurance = attribute("Insurance = 2");
+        let car_type = attribute("Car type = BMW");
+
+        eprintln!("Age CID: {:?}", age.to_string());
+
+        let message1_str = vec![age.clone(), name.clone(), drivers];
+        let message2_str = vec![gender, company, drivers_type_b];
+        let message3_str = vec![insurance.clone(), car_type];
 
         // Test proving a credential to verifiers
         let all_attributes = vec![
-            Entry(message1_str),
-            Entry(message2_str),
-            Entry(message3_str),
+            entry(&message1_str),
+            entry(&message2_str),
+            entry(&message3_str),
         ];
 
         let l_message = MaxEntries::new(10);
@@ -1385,9 +1377,9 @@ mod tests {
         ));
 
         // subset of each message set
-        let sub_list1_str = vec![utils::attribute(age), utils::attribute(name)];
+        let sub_list1_str = vec![age, name];
         let sub_list2_str = vec![];
-        let sub_list3_str = vec![utils::attribute(insurance)];
+        let sub_list3_str = vec![insurance];
 
         let selected_attrs = vec![
             Entry(sub_list1_str),
@@ -1400,6 +1392,8 @@ mod tests {
 
         // verify_proof
         assert!(verify_proof(&signer.vk, &proof, &selected_attrs)?);
+
+        eprintln!("Point : {:?}", start.elapsed());
 
         Ok(())
     }
