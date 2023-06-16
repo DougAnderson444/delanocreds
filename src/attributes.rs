@@ -13,10 +13,25 @@
 //! thus opening and atrributes have a relationship with each other. The opening vector is held in the credential,
 //! ths the credential and the attributes have a relationship with each other.
 //!
-//! # API
+//! # Attributes API
+//! ```rust
+//! use delanocreds::attributes::{Attribute, attribute};
 //!
 //! // create a new Attribute
-//! let attribute: Attribute = attribute("age>21")
+//! let some_test_attr = "read";
+//! let read_attr = Attribute::new(some_test_attr); // using the new method
+//! let create_attr = Attribute::from(some_test_attr); // using the from method
+//! let update_attr = attribute(some_test_attr); // using the attribute convenience method
+//!
+//! // Try Attribute from cid. Fails if not SHAKE256 hash with length 48
+//! let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
+//! assert_eq!(read_attr, attr_from_cid);
+//!
+//! // Attribute from_cid
+//! let attr_from_cid = Attribute::from_cid(&read_attr).unwrap();
+//! assert_eq!(read_attr, attr_from_cid);
+//! ```
+//!
 //!
 //! // attributes have a `digest()` method which returns a &[u8]
 //! attributes.push(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
@@ -37,19 +52,52 @@ const SHAKE256_LEN: usize = 48;
 pub struct Attribute(cid::Cid);
 
 impl Attribute {
+    /// Create a new Attribute from a string
     pub fn new(val: impl AsRef<[u8]>) -> Self {
         attribute(val)
     }
 
+    /// Returns the Multihash of the Attribute
     pub fn hash(&self) -> &multihash::Multihash {
         self.0.hash()
     }
 
+    /// Returns the bytes representation of the hash digest
+    pub fn digest(&self) -> &[u8] {
+        self.0.hash().digest()
+    }
+
+    /// Returns teh CID of the Attribute
+    pub fn cid(&self) -> &cid::Cid {
+        &self.0
+    }
+
+    /// Returns the string representation of the Attribute CID
+    /// given the specified base (base64, base58, base36, etc)
     pub fn to_string_of_base(
         &self,
         base: multibase::Base,
     ) -> core::result::Result<String, cid::Error> {
         self.0.to_string_of_base(base)
+    }
+
+    /// Generate an attribute from a CID
+    /// Check to verify that the CID is a SHAKE256 hash with length 48
+    ///
+    /// Alternatively, use `TryFrom` to convert from a `CID` to an `Attribute`:
+    /// ```rs
+    /// use std::convert::TryFrom;
+    /// let attribute = Attribute::try_from(cid)?;
+    /// ```
+    pub fn from_cid(cid: &cid::Cid) -> Option<Self> {
+        if cid.codec() == RAW
+            && cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
+            && cid.hash().digest().len() == SHAKE256_LEN
+        {
+            Some(Attribute(*cid))
+        } else {
+            None
+        }
     }
 }
 
@@ -64,53 +112,47 @@ impl Display for Attribute {
 /// using the SHAKE256 hash function with length 48.
 ///
 /// This is an efficiency step to avoid re-hashing the raw input.
-pub fn attribute(attribute: impl AsRef<[u8]>) -> Attribute {
+pub fn attribute(bytes: impl AsRef<[u8]>) -> Attribute {
     // pre hash the input
     let mut digest = [0u8; SHAKE256_LEN];
-    let mhash = shake_multihash::shake256_mhash(attribute.as_ref(), &mut digest).unwrap();
+    let mhash = shake_multihash::shake256_mhash(bytes.as_ref(), &mut digest).expect(
+        "SHAKE256_LEN to be 48, which is less then 64 required by multihash::MultihashGeneric<64>",
+    );
     Attribute(cid::Cid::new_v1(RAW, mhash))
 }
 
-/// Generate an attribute from a CID
-/// Check to verify that the CID is a SHAKE256 hash with length 48
-///
-/// Alternatively, use `TryFrom` to convert from a `CID` to an `Attribute`:
-/// ```rs
-/// use std::convert::TryFrom;
-/// let attribute = Attribute::try_from(cid)?;
-/// ```
-pub fn from_cid(cid: cid::Cid) -> Option<Attribute> {
-    if cid.codec() == RAW
-        && cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
-        && cid.hash().digest().len() == SHAKE256_LEN
-    {
-        Some(Attribute(cid))
-    } else {
-        None
-    }
-}
-
 // implement TryFrom Cid to Attribute
-impl TryFrom<cid::Cid> for Attribute {
+impl TryFrom<&cid::Cid> for Attribute {
     type Error = &'static str;
 
-    fn try_from(cid: cid::Cid) -> Result<Self, Self::Error> {
+    fn try_from(cid: &cid::Cid) -> Result<Self, Self::Error> {
         if cid.codec() == RAW
             && cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
             && cid.hash().digest().len() == SHAKE256_LEN
         {
-            Ok(Attribute(cid))
+            Ok(Attribute(*cid))
         } else {
             Err("Invalid Cid")
         }
     }
 }
 
-// deref convert `&Attribute` to `&[u8]`
 impl Deref for Attribute {
-    type Target = [u8];
+    type Target = cid::Cid;
     fn deref(&self) -> &Self::Target {
-        self.0.hash().digest()
+        &self.0
+    }
+}
+
+impl From<String> for Attribute {
+    fn from(s: String) -> Self {
+        Attribute::new(s)
+    }
+}
+
+impl From<&str> for Attribute {
+    fn from(s: &str) -> Self {
+        Attribute::new(s)
     }
 }
 
@@ -146,31 +188,24 @@ impl TryFrom<Attribute> for FieldElement {
     }
 }
 
-impl AsRef<[u8]> for Attribute {
-    fn as_ref(&self) -> &[u8] {
-        self.0.hash().digest()
-    }
-}
-
-impl std::str::FromStr for Attribute {
-    type Err = cid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Attribute::new(s))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::str::FromStr;
 
     #[test]
     fn test_create_attribute() {
         let some_test_attr = "read";
         let read_attr = Attribute::new(some_test_attr); // using the new method
-        let create_attr = Attribute::from_str(some_test_attr).unwrap(); // using the from method
+        let create_attr = Attribute::from(some_test_attr); // using the from method
         let update_attr = attribute(some_test_attr); // using the attribute convenience method
+
+        // Try Attribute from cid
+        let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
+        assert_eq!(read_attr, attr_from_cid);
+
+        // Attribute from_cid
+        let attr_from_cid = Attribute::from_cid(&read_attr).unwrap();
+        assert_eq!(read_attr, attr_from_cid);
 
         // all CIDs shoudl match
         assert_eq!(read_attr, create_attr);
