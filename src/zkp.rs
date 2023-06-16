@@ -75,7 +75,7 @@ impl ZkpSchnorrFiatShamir {
     pub fn non_interact_prove(
         g_2: &G2,
         stms: &Vec<G2>,
-        secret_wit: &Vec<FieldElement>,
+        secret_wit: &Vec<Secret<FieldElement>>,
     ) -> Result<(Response, Challenge)> {
         // match on the statement
 
@@ -114,7 +114,7 @@ impl ZkpSchnorrFiatShamir {
         let r = (0..secret_wit.len())
             .map(|i| {
                 let a = w_list[i].clone();
-                let b = FieldElement::try_from(c).unwrap() * secret_wit[i].clone();
+                let b = FieldElement::try_from(c).unwrap() * secret_wit[i].expose_secret();
                 let mut r = BigNum::frombytes(&(a - b).to_bytes());
                 r.rmod(&CurveOrder);
                 r
@@ -275,16 +275,19 @@ mod tests {
         // 2. Prove
         // 3. Verify
         let g_2 = ZkpSchnorrFiatShamir::setup();
-        let x = FieldElement::random();
-        let h = x.clone() * g_2.clone();
+        let secret_x = Secret::new(FieldElement::random());
+        let public_h = g_2.scalar_mul_const_time(secret_x.expose_secret());
 
         // create a vec of secrets for iter 0 to 5
         let secrets = (0..5)
-            .map(|_| FieldElement::random())
-            .collect::<Vec<FieldElement>>();
+            .map(|_| Secret::new(FieldElement::random()))
+            .collect::<Vec<Secret<FieldElement>>>();
 
         // create stm for len of secrets, sec[i * g_2]
-        let stm = secrets.iter().map(|s| s * g_2.clone()).collect::<Vec<G2>>();
+        let stm = secrets
+            .iter()
+            .map(|s| g_2.scalar_mul_const_time(s.expose_secret()))
+            .collect::<Vec<G2>>();
 
         let proof_list /* (r, c) */ = ZkpSchnorrFiatShamir::non_interact_prove(&g_2, &stm, &secrets).unwrap();
         // let proof = (r, c);
@@ -292,19 +295,23 @@ mod tests {
         assert!(result);
 
         // create a proof for statement
-        let proof_single =
-            ZkpSchnorrFiatShamir::non_interact_prove(&g_2, &vec![h.clone()], &vec![x]).unwrap();
+        let proof_single = ZkpSchnorrFiatShamir::non_interact_prove(
+            &g_2,
+            &vec![public_h.clone()],
+            &vec![secret_x],
+        )
+        .unwrap();
         let result_single =
-            ZkpSchnorrFiatShamir::non_interact_verify(&g_2, &vec![h], &proof_single);
+            ZkpSchnorrFiatShamir::non_interact_verify(&g_2, &vec![public_h], &proof_single);
         assert!(result_single);
     }
 
     #[test]
     fn test_interact_prove() {
         // Create a random statement for testing
-        let x = Secret::new(FieldElement::random());
+        let secret_x = Secret::new(FieldElement::random());
         let zkpsch = ZKPSchnorr::new();
-        let stm = RandomizedPubKey(zkpsch.g_1.scalar_mul_const_time(x.expose_secret()));
+        let stm = RandomizedPubKey(zkpsch.g_1.scalar_mul_const_time(secret_x.expose_secret()));
 
         let announce = zkpsch.announce();
 
@@ -319,7 +326,7 @@ mod tests {
         let challenge = ZKPSchnorr::challenge(&state);
 
         // prover creates a respoonse (or proof)
-        let response = ZKPSchnorr::response(&challenge, &announce.1, &stm, &x);
+        let response = ZKPSchnorr::response(&challenge, &announce.1, &stm, &secret_x);
 
         //     assert(Schnorr.verify(challenge, W_element, stm, response))
         assert!(zkpsch.verify(&challenge, &announce.0, &stm, &response));
