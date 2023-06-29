@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["convert_entry_to_bn","convert_mhash_to_bn","ec_sum","entry","polyfromroots"],"struct":["Entry","Pedersen","PedersenOpen"],"type":["PedersenCommit","Trapdoor"]};
+window.SIDEBAR_ITEMS = {"fn":["convert_entry_to_bn","entry"],"struct":["Entry","Pedersen","PedersenOpen"],"type":["PedersenCommit","Trapdoor"]};

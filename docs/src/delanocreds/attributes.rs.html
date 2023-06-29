@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src\attributes.rs`."><title>attributes.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-f3501f0f5ae15dfb.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="delanocreds" data-themes="" data-resource-suffix="" data-rustdoc-version="1.71.0-nightly (cba14074b 2023-05-10)" data-search-js="search-4926e5fc22a5646a.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-6f6ffb5395b17c6e.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/source-script-11255107d0a65077.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-f0540c1d82cde29b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../delanocreds/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src\attributes.rs`."><title>attributes.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-d1c027e9fb12379c.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="delanocreds" data-themes="" data-resource-suffix="" data-rustdoc-version="1.72.0-nightly (6bba06146 2023-06-16)" data-search-js="search-ebd6511799447b38.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/source-script-11255107d0a65077.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-762bcae8c0777c4b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../delanocreds/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -167,6 +167,52 @@
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! A module for creating:
 //! - Individual Attibute, a Multihash generated from bytes (likely from a string)
 //! - Entry, a vector of Attibutes
@@ -182,10 +228,25 @@
 //! thus opening and atrributes have a relationship with each other. The opening vector is held in the credential,
 //! ths the credential and the attributes have a relationship with each other.
 //!
-//! # API
+//! # Attributes API
+//! ```rust
+//! use delanocreds::attributes::{Attribute, attribute};
 //!
 //! // create a new Attribute
-//! let attribute: Attribute = attribute(&quot;age&gt;21&quot;)
+//! let some_test_attr = &quot;read&quot;;
+//! let read_attr = Attribute::new(some_test_attr); // using the new method
+//! let create_attr = Attribute::from(some_test_attr); // using the from method
+//! let update_attr = attribute(some_test_attr); // using the attribute convenience method
+//!
+//! // Try Attribute from cid. Fails if not SHAKE256 hash with length 48
+//! let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
+//! assert_eq!(read_attr, attr_from_cid);
+//!
+//! // Attribute from_cid
+//! let attr_from_cid = Attribute::from_cid(&amp;read_attr).unwrap();
+//! assert_eq!(read_attr, attr_from_cid);
+//! ```
+//!
 //!
 //! // attributes have a `digest()` method which returns a &amp;[u8]
 //! attributes.push(vec![&quot;a&quot;.to_string(), &quot;b&quot;.to_string(), &quot;c&quot;.to_string()]);
@@ -199,8 +260,6 @@
 </span><span class="kw">use </span>amcl_wrapper::field_elem::FieldElement;
 <span class="kw">use </span>cid::multibase;
 
-<span class="kw">use </span><span class="kw">crate</span>::keypair::{MaxCardinality, MaxEntries};
-
 <span class="kw">const </span>RAW: u64 = <span class="number">0x55</span>;
 <span class="kw">const </span>SHAKE256_LEN: usize = <span class="number">48</span>;
 
@@ -208,19 +267,52 @@
 </span><span class="kw">pub struct </span>Attribute(cid::Cid);
 
 <span class="kw">impl </span>Attribute {
-    <span class="kw">pub fn </span>new(val: <span class="kw">impl </span>AsRef&lt;[u8]&gt;) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Create a new Attribute from a string
+    </span><span class="kw">pub fn </span>new(val: <span class="kw">impl </span>AsRef&lt;[u8]&gt;) -&gt; <span class="self">Self </span>{
         attribute(val)
     }
 
-    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>multihash::Multihash {
+    <span class="doccomment">/// Returns the Multihash of the Attribute
+    </span><span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>multihash::Multihash {
         <span class="self">self</span>.<span class="number">0</span>.hash()
     }
 
-    <span class="kw">pub fn </span>to_string_of_base(
+    <span class="doccomment">/// Returns the bytes representation of the hash digest
+    </span><span class="kw">pub fn </span>digest(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
+        <span class="self">self</span>.<span class="number">0</span>.hash().digest()
+    }
+
+    <span class="doccomment">/// Returns teh CID of the Attribute
+    </span><span class="kw">pub fn </span>cid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>cid::Cid {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+
+    <span class="doccomment">/// Returns the string representation of the Attribute CID
+    /// given the specified base (base64, base58, base36, etc)
+    </span><span class="kw">pub fn </span>to_string_of_base(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         base: multibase::Base,
     ) -&gt; core::result::Result&lt;String, cid::Error&gt; {
         <span class="self">self</span>.<span class="number">0</span>.to_string_of_base(base)
+    }
+
+    <span class="doccomment">/// Generate an attribute from a CID
+    /// Check to verify that the CID is a SHAKE256 hash with length 48
+    ///
+    /// Alternatively, use `TryFrom` to convert from a `CID` to an `Attribute`:
+    /// ```rs
+    /// use std::convert::TryFrom;
+    /// let attribute = Attribute::try_from(cid)?;
+    /// ```
+    </span><span class="kw">pub fn </span>from_cid(cid: <span class="kw-2">&amp;</span>cid::Cid) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">if </span>cid.codec() == RAW
+            &amp;&amp; cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
+            &amp;&amp; cid.hash().digest().len() == SHAKE256_LEN
+        {
+            <span class="prelude-val">Some</span>(Attribute(<span class="kw-2">*</span>cid))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>}
     }
 }
 
@@ -235,53 +327,47 @@
 /// using the SHAKE256 hash function with length 48.
 ///
 /// This is an efficiency step to avoid re-hashing the raw input.
-</span><span class="kw">pub fn </span>attribute(attribute: <span class="kw">impl </span>AsRef&lt;[u8]&gt;) -&gt; Attribute {
+</span><span class="kw">pub fn </span>attribute(bytes: <span class="kw">impl </span>AsRef&lt;[u8]&gt;) -&gt; Attribute {
     <span class="comment">// pre hash the input
     </span><span class="kw">let </span><span class="kw-2">mut </span>digest = [<span class="number">0u8</span>; SHAKE256_LEN];
-    <span class="kw">let </span>mhash = shake_multihash::shake256_mhash(attribute.as_ref(), <span class="kw-2">&amp;mut </span>digest).unwrap();
+    <span class="kw">let </span>mhash = shake_multihash::shake256_mhash(bytes.as_ref(), <span class="kw-2">&amp;mut </span>digest).expect(
+        <span class="string">&quot;SHAKE256_LEN to be 48, which is less then 64 required by multihash::MultihashGeneric&lt;64&gt;&quot;</span>,
+    );
     Attribute(cid::Cid::new_v1(RAW, mhash))
 }
 
-<span class="doccomment">/// Generate an attribute from a CID
-/// Check to verify that the CID is a SHAKE256 hash with length 48
-///
-/// Alternatively, use `TryFrom` to convert from a `CID` to an `Attribute`:
-/// ```rs
-/// use std::convert::TryFrom;
-/// let attribute = Attribute::try_from(cid)?;
-/// ```
-</span><span class="kw">pub fn </span>from_cid(cid: cid::Cid) -&gt; <span class="prelude-ty">Option</span>&lt;Attribute&gt; {
-    <span class="kw">if </span>cid.codec() == RAW
-        &amp;&amp; cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
-        &amp;&amp; cid.hash().digest().len() == SHAKE256_LEN
-    {
-        <span class="prelude-val">Some</span>(Attribute(cid))
-    } <span class="kw">else </span>{
-        <span class="prelude-val">None
-    </span>}
-}
-
 <span class="comment">// implement TryFrom Cid to Attribute
-</span><span class="kw">impl </span>TryFrom&lt;cid::Cid&gt; <span class="kw">for </span>Attribute {
+</span><span class="kw">impl </span>TryFrom&lt;<span class="kw-2">&amp;</span>cid::Cid&gt; <span class="kw">for </span>Attribute {
     <span class="kw">type </span>Error = <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
 
-    <span class="kw">fn </span>try_from(cid: cid::Cid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+    <span class="kw">fn </span>try_from(cid: <span class="kw-2">&amp;</span>cid::Cid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
         <span class="kw">if </span>cid.codec() == RAW
             &amp;&amp; cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
             &amp;&amp; cid.hash().digest().len() == SHAKE256_LEN
         {
-            <span class="prelude-val">Ok</span>(Attribute(cid))
+            <span class="prelude-val">Ok</span>(Attribute(<span class="kw-2">*</span>cid))
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(<span class="string">&quot;Invalid Cid&quot;</span>)
         }
     }
 }
 
-<span class="comment">// deref convert `&amp;Attribute` to `&amp;[u8]`
-</span><span class="kw">impl </span>Deref <span class="kw">for </span>Attribute {
-    <span class="kw">type </span>Target = [u8];
+<span class="kw">impl </span>Deref <span class="kw">for </span>Attribute {
+    <span class="kw">type </span>Target = cid::Cid;
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-        <span class="self">self</span>.<span class="number">0</span>.hash().digest()
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>From&lt;String&gt; <span class="kw">for </span>Attribute {
+    <span class="kw">fn </span>from(s: String) -&gt; <span class="self">Self </span>{
+        Attribute::new(s)
+    }
+}
+
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>str&gt; <span class="kw">for </span>Attribute {
+    <span class="kw">fn </span>from(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
+        Attribute::new(s)
     }
 }
 
@@ -317,23 +403,29 @@
     }
 }
 
-<span class="kw">impl </span>AsRef&lt;[u8]&gt; <span class="kw">for </span>Attribute {
-    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
-        <span class="self">self</span>.<span class="number">0</span>.hash().digest()
-    }
-}
-
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_create_attribute() {}
+    </span><span class="kw">fn </span>test_create_attribute() {
+        <span class="kw">let </span>some_test_attr = <span class="string">&quot;read&quot;</span>;
+        <span class="kw">let </span>read_attr = Attribute::new(some_test_attr); <span class="comment">// using the new method
+        </span><span class="kw">let </span>create_attr = Attribute::from(some_test_attr); <span class="comment">// using the from method
+        </span><span class="kw">let </span>update_attr = attribute(some_test_attr); <span class="comment">// using the attribute convenience method
 
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_full_entry() {
-        <span class="comment">// let max_card = MaxCardinality(2);
-        // let mut builder = EntryBuilder::new(&amp;MaxCardinality(2));
-    </span>}
+        // Try Attribute from cid
+        </span><span class="kw">let </span>attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
+        <span class="macro">assert_eq!</span>(read_attr, attr_from_cid);
+
+        <span class="comment">// Attribute from_cid
+        </span><span class="kw">let </span>attr_from_cid = Attribute::from_cid(<span class="kw-2">&amp;</span>read_attr).unwrap();
+        <span class="macro">assert_eq!</span>(read_attr, attr_from_cid);
+
+        <span class="comment">// all CIDs shoudl match
+        </span><span class="macro">assert_eq!</span>(read_attr, create_attr);
+        <span class="macro">assert_eq!</span>(read_attr, update_attr);
+        <span class="macro">assert_eq!</span>(create_attr, update_attr);
+    }
 }
 </code></pre></div></section></main></body></html>

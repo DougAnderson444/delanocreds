@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src\keypair.rs`."><title>keypair.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-f3501f0f5ae15dfb.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="delanocreds" data-themes="" data-resource-suffix="" data-rustdoc-version="1.71.0-nightly (cba14074b 2023-05-10)" data-search-js="search-4926e5fc22a5646a.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-6f6ffb5395b17c6e.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/source-script-11255107d0a65077.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-f0540c1d82cde29b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../delanocreds/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src\keypair.rs`."><title>keypair.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-d1c027e9fb12379c.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="delanocreds" data-themes="" data-resource-suffix="" data-rustdoc-version="1.72.0-nightly (6bba06146 2023-06-16)" data-search-js="search-ebd6511799447b38.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/source-script-11255107d0a65077.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-762bcae8c0777c4b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../delanocreds/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1398,6 +1398,42 @@
 <a href="#1398" id="1398">1398</a>
 <a href="#1399" id="1399">1399</a>
 <a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This is implementation of delegatable anonymous credential using SPSQE-UC signatures and set commitment.
 //! See  the following for the details:
 //! - Practical Delegatable Anonymous Credentials From Equivalence Class Signatures, PETS 2023.
@@ -1406,7 +1442,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::set_commits::CrossSetCommitment;
 <span class="kw">use </span><span class="kw">crate</span>::set_commits::ParamSetCommitment;
 <span class="kw">use </span><span class="kw">crate</span>::utils::convert_entry_to_bn;
-<span class="kw">use </span><span class="kw">crate</span>::utils::polyfromroots;
 <span class="kw">use crate</span>::{
     utils::{Entry, PedersenOpen},
     zkp::Schnorr,
@@ -1414,6 +1449,7 @@
 };
 <span class="kw">use </span>amcl_wrapper::errors::SerzDeserzError;
 <span class="kw">use </span>amcl_wrapper::extension_field_gt::GT;
+<span class="kw">use </span>amcl_wrapper::univar_poly::UnivarPolynomial;
 <span class="kw">use </span>amcl_wrapper::{
     field_elem::FieldElement, group_elem::GroupElement, group_elem_g1::G1, group_elem_g2::G2,
 };
@@ -1441,6 +1477,13 @@
         MaxCardinality(item)
     }
 }
+
+<span class="kw">impl </span>From&lt;u8&gt; <span class="kw">for </span>MaxCardinality {
+    <span class="kw">fn </span>from(item: u8) -&gt; <span class="self">Self </span>{
+        MaxCardinality(item <span class="kw">as </span>usize)
+    }
+}
+
 <span class="kw">impl </span>From&lt;MaxCardinality&gt; <span class="kw">for </span>usize {
     <span class="kw">fn </span>from(item: MaxCardinality) -&gt; <span class="self">Self </span>{
         item.<span class="number">0
@@ -1468,6 +1511,14 @@
         MaxEntries(item)
     }
 }
+
+<span class="comment">// from u8
+</span><span class="kw">impl </span>From&lt;u8&gt; <span class="kw">for </span>MaxEntries {
+    <span class="kw">fn </span>from(item: u8) -&gt; <span class="self">Self </span>{
+        MaxEntries(item <span class="kw">as </span>usize)
+    }
+}
+
 <span class="kw">impl </span>From&lt;MaxEntries&gt; <span class="kw">for </span>usize {
     <span class="kw">fn </span>from(item: MaxEntries) -&gt; <span class="self">Self </span>{
         item.<span class="number">0
@@ -1821,9 +1872,12 @@
 }
 
 <span class="kw">impl </span>Nym {
-    <span class="doccomment">/// Creates an offer for a credential.
-    /// Note: This orphan signture can be accepted by any holder once created,
-    /// so it is important to keep it secret until it is used (accepted).
+    <span class="doccomment">/// Creates an orphan offer for a credential.
+    ///
+    /// The orphan signture created by this offer can be used by
+    /// any holder who also has possesion of the associated attributes,
+    /// so it is important to either keep offers confidential or disassociated
+    /// with the attributes.
     </span><span class="kw">pub fn </span>offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cred: <span class="kw-2">&amp;</span>Credential,
@@ -2011,7 +2065,7 @@
                 // if no, then add the new commitment and opening to the signature
                 </span><span class="kw">if </span>index_l &lt;= usign.len() {
                     <span class="kw">let </span>set_l = convert_entry_to_bn(addl_attrs)<span class="question-mark">?</span>;
-                    <span class="kw">let </span>monypolcoefficient = polyfromroots(set_l);
+                    <span class="kw">let </span>monypolcoefficient = UnivarPolynomial::new_with_roots(<span class="kw-2">&amp;</span>set_l[..]);
 
                     <span class="kw">let </span>list = usign.get(index_l - <span class="number">1</span>).unwrap();
                     <span class="kw">let </span>sum_points_uk_i = list
@@ -2103,10 +2157,15 @@
 }
 
 <span class="kw">impl </span>DelegatedCred {
-    <span class="doccomment">/// Prove a Credential
+    <span class="doccomment">/// Prove a Credential, given selected [Entry]s to be disclosed and their corresponding
+    /// full/complete [Entry] in the original credential.
+    ///
+    /// If a selected [Entry] is empty, it is skipped (not proven) and there is no need to provide any of the corresponding
+    /// full/complete [Entry] as `prove()` filters out any selected [Entry]s which are empty and excludes them from the proof.
+    ///
     /// Generates a proof of a credential for a given pseudonym and selective disclosure attributes.
-    /// - `all_attributes`: &amp;[Entry], attributes of the user
-    /// - `selected_attrs`: &amp;[Entry], attributes to be disclosed
+    /// - `all_attributes`: &amp;[Entry], vector of complete attributes of the user corresponding to the selected attributes
+    /// - `selected_attrs`: &amp;[Entry], vector of selected attributes to be disclosed
     </span><span class="kw">pub fn </span>prove(<span class="kw-2">&amp;</span><span class="self">self</span>, all_attributes: <span class="kw-2">&amp;</span>[Entry], selected_attrs: <span class="kw-2">&amp;</span>[Entry]) -&gt; CredProof {
         <span class="kw">let </span>mu = FieldElement::one();
         <span class="kw">let </span>psi = FieldElement::random();
@@ -2149,22 +2208,27 @@
 
         <span class="comment">// create a witness for the attributes set that needed to be disclosed
         // selected_attrs needs to be of length equal to or less than cred_p.commitment_vector
-        </span><span class="kw">let </span>(witness_vector, commit_vector) = selected_attrs.iter().enumerate().fold(
-            (Vec::new(), Vec::new()),
-            |(<span class="kw-2">mut </span>witness, <span class="kw-2">mut </span>commitment_vectors), (i, selected_attr)| {
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(opened)) = CrossSetCommitment::open_subset(
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.nym_public.public_parameters,
-                    <span class="kw-2">&amp;</span>all_attributes[i],
-                    <span class="kw-2">&amp;</span>cred_p.opening_vector[i],
-                    selected_attr,
-                ) {
-                    witness.push(opened); <span class="comment">//can only have as many witnesses as there are openable selected attributes
-                    </span>commitment_vectors.push(cred_p.commitment_vector[i].clone());
-                    <span class="comment">// needs to be the same length as the witness vector
-                </span>}
-                (witness, commitment_vectors)
-            },
-        );
+
+        </span><span class="kw">let </span>(witness_vector, commit_vector) = selected_attrs
+            .iter()
+            .enumerate()
+            .filter(|(<span class="kw">_</span>, selected_attr)| !selected_attr.is_empty()) <span class="comment">// TODO: filter out selectec_attrs which is_empty()
+            </span>.fold(
+                (Vec::new(), Vec::new()),
+                |(<span class="kw-2">mut </span>witness, <span class="kw-2">mut </span>commitment_vectors), (i, selected_attr)| {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(opened)) = CrossSetCommitment::open_subset(
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.nym_public.public_parameters,
+                        <span class="kw-2">&amp;</span>all_attributes[i],
+                        <span class="kw-2">&amp;</span>cred_p.opening_vector[i],
+                        selected_attr,
+                    ) {
+                        witness.push(opened); <span class="comment">//can only have as many witnesses as there are openable selected attributes
+                        </span>commitment_vectors.push(cred_p.commitment_vector[i].clone());
+                        <span class="comment">// needs to be the same length as the witness vector
+                    </span>}
+                    (witness, commitment_vectors)
+                },
+            );
 
         <span class="kw">let </span>witness_pi = CrossSetCommitment::aggregate_cross(<span class="kw-2">&amp;</span>witness_vector, <span class="kw-2">&amp;</span>commit_vector);
 
@@ -2187,10 +2251,15 @@
     proof: <span class="kw-2">&amp;</span>CredProof,
     selected_attrs: <span class="kw-2">&amp;</span>[Entry],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;bool, SerzDeserzError&gt; {
-    <span class="comment">// filter set commitments regarding the selected attributes
-    // TODO: Make this either set of indexes or keys, so make selecting more flexible
-    // Get the selected attributes from the entire attributes vector (indexes or keys)
-    </span><span class="kw">let </span>commitment_vectors = proof.commitment_vector[..selected_attrs.len()].to_vec();
+    <span class="comment">// TODO: Get the selected_attr indexes which are not is_enpty(), use those indexes to select corresponding commitment_vectors
+    // zip together commitment_vector where selected_attr is not empty
+    </span><span class="kw">let </span>commitment_vectors = proof
+        .commitment_vector
+        .iter()
+        .zip(selected_attrs.iter())
+        .filter(|(<span class="kw">_</span>, selected_attr)| !selected_attr.is_empty())
+        .map(|(commitment_vector, <span class="kw">_</span>)| commitment_vector.clone())
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
     <span class="comment">// check the proof is valid for each
     </span><span class="kw">let </span>check_verify_cross = CrossSetCommitment::verify_cross(
@@ -2723,8 +2792,6 @@
         <span class="kw">let </span>insurance = attribute(<span class="string">&quot;Insurance = 2&quot;</span>);
         <span class="kw">let </span>car_type = attribute(<span class="string">&quot;Car type = BMW&quot;</span>);
 
-        <span class="macro">eprintln!</span>(<span class="string">&quot;Age CID: {:?}&quot;</span>, age.to_string());
-
         <span class="kw">let </span>message1_str = <span class="macro">vec!</span>[age.clone(), name.clone(), drivers];
         <span class="kw">let </span>message2_str = <span class="macro">vec!</span>[gender, company, drivers_type_b];
         <span class="kw">let </span>message3_str = <span class="macro">vec!</span>[insurance.clone(), car_type];
@@ -2750,15 +2817,16 @@
         <span class="kw">let </span>robert = UserKey::new();
         <span class="kw">let </span>bobby_nym = robert.nym(signer.public_parameters.clone());
 
-        <span class="kw">let </span>opening_vector_restricted = cred.opening_vector;
-        <span class="comment">// opening_vector_restricted[0] = FieldElement::zero(); // means the selected attributes cannot include the first commit in the vector
+        <span class="comment">// We can retrict proving a credential by zerioizing the opening vector of the Entry
+        </span><span class="kw">let </span><span class="kw-2">mut </span>opening_vector_restricted = cred.opening_vector;
+        opening_vector_restricted[<span class="number">0</span>] = FieldElement::zero(); <span class="comment">// means the selected attributes cannot include the first commit in the vector
+        </span>opening_vector_restricted[<span class="number">1</span>] = FieldElement::zero(); <span class="comment">// selected attributes exclude the second commit in the vector
 
         </span><span class="kw">let </span>cred_restricted = Credential {
             sigma: cred.sigma,
             commitment_vector: cred.commitment_vector,
-            <span class="comment">// restrict opening to read only
-            </span>opening_vector: opening_vector_restricted,
-            update_key: cred.update_key,
+            opening_vector: opening_vector_restricted, <span class="comment">// restrict opening to read only
+            </span>update_key: cred.update_key,
         };
 
         <span class="comment">// offer to bobby_nym
@@ -2776,15 +2844,11 @@
             <span class="kw-2">&amp;</span>bobby_cred.cred.sigma
         ));
 
-        <span class="comment">// subset of each message set
-        </span><span class="kw">let </span>sub_list1_str = <span class="macro">vec!</span>[age, name];
-        <span class="kw">let </span>sub_list2_str = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>sub_list3_str = <span class="macro">vec!</span>[insurance];
-
-        <span class="kw">let </span>selected_attrs = <span class="macro">vec!</span>[
-            Entry(sub_list1_str),
-            Entry(sub_list2_str),
-            Entry(sub_list3_str),
+        <span class="comment">// select subset of each message set Entry
+        </span><span class="kw">let </span>selected_attrs = <span class="macro">vec!</span>[
+            Entry(<span class="macro">vec!</span>[]), <span class="comment">// Root Issuer is the only one who could write to this entry
+            </span>Entry(<span class="macro">vec!</span>[]),
+            Entry(<span class="macro">vec!</span>[insurance.clone()]),
         ];
 
         <span class="comment">// prepare a proof
@@ -2793,7 +2857,15 @@
         <span class="comment">// verify_proof
         </span><span class="macro">assert!</span>(verify_proof(<span class="kw-2">&amp;</span>signer.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attrs)<span class="question-mark">?</span>);
 
-        <span class="macro">eprintln!</span>(<span class="string">&quot;Point : {:?}&quot;</span>, start.elapsed());
+        <span class="comment">// if we try to prove Entry[0] or Entry[1] it should fail
+        // age is from Entry[0]
+        </span><span class="kw">let </span>selected_attrs = <span class="macro">vec!</span>[Entry(<span class="macro">vec!</span>[age]), Entry(<span class="macro">vec!</span>[]), Entry(<span class="macro">vec!</span>[insurance])];
+
+        <span class="comment">// prepare a proof
+        </span><span class="kw">let </span>proof = bobby_cred.prove(<span class="kw-2">&amp;</span>all_attributes, <span class="kw-2">&amp;</span>selected_attrs);
+
+        <span class="comment">// verify_proof should fail
+        </span><span class="macro">assert!</span>(!verify_proof(<span class="kw-2">&amp;</span>signer.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attrs)<span class="question-mark">?</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
