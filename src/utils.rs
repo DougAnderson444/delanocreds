@@ -40,7 +40,7 @@ impl IntoIterator for Entry {
 pub fn convert_entry_to_bn(input: &Entry) -> Result<Vec<FieldElement>, SerzDeserzError> {
     input
         .iter()
-        .map(|attr| FieldElement::from_bytes(attr))
+        .map(|attr| FieldElement::from_bytes(attr.digest()))
         .collect()
 }
 
@@ -97,5 +97,17 @@ impl Pedersen {
                 .g
                 .scalar_mul_const_time(&pedersen_open.announce_randomness);
         &c2 == pedersen_commit
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_entry() {
+        // check whether Entry can be checked for is_empty
+        let entry = Entry(vec![]);
+        assert!(entry.is_empty());
     }
 }
