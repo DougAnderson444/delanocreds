@@ -6,6 +6,10 @@ Useful if you want the ability to delegate credentials, capabilities, or other d
 
 Holders can also selectively prove attributes and remove the ability for delegatees to prove selected attributes.
 
+## Project Status
+
+⚠️ New project, somewhat work in progress. API is not stable yet.
+
 ## Delegation
 
 What can be delegated is: the number of additional attribute Entries that can be added (zero to MaxEnties), but only if the credential is marked as _extendable_.
@@ -13,6 +17,7 @@ What can be delegated is: the number of additional attribute Entries that can be
 Even if there is no ability for a credential holder to add additional attributes, the follwoing is true:
 
 -   Credentials holders can always assign their credential to a new public key
+-   Attributes are always selectable for presentation by a holder
 -   Attributes are always removable by a holder
 
 It is important to note that the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.
@@ -22,17 +27,23 @@ able to assign the credential to a new public key for the attributes they _do_ h
 
 You may wish to apply a Credential Strategy such that the Credential is properly handled by the holder. This is left to the user, as the use cases of Credentials are varied too widely to provide a one-size-fits-all solution.
 
-## Speed
+### Attributes
 
-This library can generate, issue, delegate, prove and verify 30 selected credentials out of 100 issued attributes in less than 400ms on [Intel i5-3470 CPU @ 3.20GHz](https://cpu.userbenchmark.com/Intel-Core-i5-3470/Rating/2771).
+Attributes are hashed to curve, which means they are content addressable! Once an Attribute is created, it can be referenced by it's [Content Identifier (CID)](https://cid.ipfs.tech/) in the future. This means we can also refer to attributes by their CID, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
 
-That's fast enough for time-critical applications like public transportation, ticketing, etc.
+The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of 48 bytes which is longer than the typical 32 bytes. If you try to create an Attribute out of a CID with a different hash or length, it will fail. For this reason, use the Attribute methods provided by this library when creating Attributes.
 
-## Project Status
+## Bindings
 
-⚠️ New project, very work in progress. API is not stable yet.
+The intention is to provide the following bindings:
 
-## API
+-   Rust API
+-   wasm bindgen (wasm32-unknown-unknown)
+-   wasm interface types (WIT)
+
+## Target API (TODO)
+
+Current API is available by looking at the `keypair.rs` tests.
 
 ```rust
 use std::result::Result;
@@ -195,29 +206,39 @@ Run the built binary:
 
 `./target/release/delanocreds-bin.exe`
 
+## Speed
+
+This library can generate, issue, delegate, prove and verify 30 selected credentials out of 100 issued attributes in less than 400ms on [Intel i5-3470 CPU @ 3.20GHz](https://cpu.userbenchmark.com/Intel-Core-i5-3470/Rating/2771).
+
+That's fast enough for time-critical applications like public transportation, ticketing, etc.
+
 # Quick Bench
 
-For eight (8) attributes, the following benchmarks were observed for each step:
+It's fast. Selecting 30 attributes out of 96 total, the following benchmarks were observed for each step:
 
-| Step           | Time (ms) |
-| -------------- | --------- |
-| Setup          | 118       |
-| Issue          | 168       |
-| Offer          | 5         |
-| Accept         | 83        |
-| Prove          | 36        |
-| Verify         | 124       |
-| =============  | ========= |
-| **Total Time** | **535**   |
+After running `cargo run --release`:
+
+| Step          | Time (ms) |
+| ------------- | --------- |
+| Setup         | 100       |
+| Issue         | 81        |
+| Offer         | 5         |
+| Accept        | 69        |
+| Prove         | 19        |
+| Verify        | 72        |
+| ============= | ========= |
+| **Total**     | **346**   |
 
 Bench Variables:
-l - upper bound for the length of the commitment vector
-t - upper bound for the cardinality of the committed sets
-n < t - number of attributes in each attribute set A_i in commitment C_i (same for each commitment level)
-k - length of attribute set vector
-k_prime - number of attributes sets which can be delegated
 
-we set the above parameters as t = 25, l = 15, k = 4, k' = 7 and n = 10 to cover many different use-cases
+-   l - upper bound for the length of the commitment vector
+-   t - upper bound for the cardinality of the committed sets
+-   n < t - number of attributes in each attribute set A_i in commitment
+-   C_i (same for each commitment level)
+-   k - length of attribute set vector
+-   k_prime - number of attributes sets which can be delegated
+
+We set the above parameters as t = 25, l = 15, k = 4, k' = 7 and n = 10 to cover many different use-cases
 
 Assumption:
 
@@ -229,7 +250,7 @@ Assumption:
 
 To build the docs incrementally, use `cargo watch -x 'doc --workspace --no-deps --open'`.
 
-Build the docs in Windows for Github pages: `./build.bat`
+Build the docs in Windows for Github pages: `./build_docs.bat`
 
 ## References
 

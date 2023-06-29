@@ -688,7 +688,7 @@ pub struct Signature {
 /// CredOffer (cred_R)
 /// - `orphan`: [Signature], orphan signature of the user
 /// - `sig`: Credential, credential of the user
-/// - `vk`: Vec<VK>, verification key of the user
+/// - `vk`: `Vec<[VK]>`, verification key of the user
 pub struct CredOffer {
     orphan: Signature,
     cred: Credential,

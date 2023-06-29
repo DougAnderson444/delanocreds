@@ -90,7 +90,7 @@
 //! - Attributes (defaults to empty)
 //! - Delegatable (defaults to no `opening information` provided [false])
 //! - Can add attributes (defaults to no `update key` provided [false])
-//! - How many attributes can be added (`k_prime` defaults to zero(0) [none])
+//! - How many attributes can be added (`k_prime` defaults to zero(0))
 //!
 //! Show a credential proof:
 //! - Randomize your public key into a pseudonym
@@ -149,7 +149,6 @@
 //!
 //! 4. Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
 //! With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
-#![feature(type_alias_impl_trait)]
 
 use crate::attributes::Attribute;
 use amcl_wrapper::field_elem::FieldElement;

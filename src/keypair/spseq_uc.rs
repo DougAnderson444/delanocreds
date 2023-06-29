@@ -22,7 +22,7 @@ impl From<SerzDeserzError> for UpdateError {
     }
 }
 
-/// A [`DelegatableKey`] Credential is an EqcSignature signature returned by the sign function
+/// A [Credential] is an EqcSignature signature returned by the sign function
 /// It contains the sigma, update key, commitment vector
 /// - `sigma` [`Signature`] is the sigma value used in the signature
 /// - `commitment_vector` is the commitment vector used in the signature
