@@ -41,6 +41,13 @@ impl From<usize> for MaxCardinality {
         MaxCardinality(item)
     }
 }
+
+impl From<u8> for MaxCardinality {
+    fn from(item: u8) -> Self {
+        MaxCardinality(item as usize)
+    }
+}
+
 impl From<MaxCardinality> for usize {
     fn from(item: MaxCardinality) -> Self {
         item.0
@@ -68,6 +75,14 @@ impl From<usize> for MaxEntries {
         MaxEntries(item)
     }
 }
+
+// from u8
+impl From<u8> for MaxEntries {
+    fn from(item: u8) -> Self {
+        MaxEntries(item as usize)
+    }
+}
+
 impl From<MaxEntries> for usize {
     fn from(item: MaxEntries) -> Self {
         item.0
@@ -421,9 +436,12 @@ pub struct NymProof {
 }
 
 impl Nym {
-    /// Creates an offer for a credential.
-    /// Note: This orphan signture can be accepted by any holder once created,
-    /// so it is important to keep it secret until it is used (accepted).
+    /// Creates an orphan offer for a credential.
+    ///
+    /// The orphan signture created by this offer can be used by
+    /// any holder who also has possesion of the associated attributes,
+    /// so it is important to either keep offers confidential or disassociated
+    /// with the attributes.
     pub fn offer(
         &self,
         cred: &Credential,
@@ -703,10 +721,15 @@ pub struct DelegatedCred {
 }
 
 impl DelegatedCred {
-    /// Prove a Credential
+    /// Prove a Credential, given selected [Entry]s to be disclosed and their corresponding
+    /// full/complete [Entry] in the original credential.
+    ///
+    /// If a selected [Entry] is empty, it is skipped (not proven) and there is no need to provide any of the corresponding
+    /// full/complete [Entry] as `prove()` filters out any selected [Entry]s which are empty and excludes them from the proof.
+    ///
     /// Generates a proof of a credential for a given pseudonym and selective disclosure attributes.
-    /// - `all_attributes`: &[Entry], attributes of the user
-    /// - `selected_attrs`: &[Entry], attributes to be disclosed
+    /// - `all_attributes`: &[Entry], vector of complete attributes of the user corresponding to the selected attributes
+    /// - `selected_attrs`: &[Entry], vector of selected attributes to be disclosed
     pub fn prove(&self, all_attributes: &[Entry], selected_attrs: &[Entry]) -> CredProof {
         let mu = FieldElement::one();
         let psi = FieldElement::random();
@@ -749,22 +772,27 @@ impl DelegatedCred {
 
         // create a witness for the attributes set that needed to be disclosed
         // selected_attrs needs to be of length equal to or less than cred_p.commitment_vector
-        let (witness_vector, commit_vector) = selected_attrs.iter().enumerate().fold(
-            (Vec::new(), Vec::new()),
-            |(mut witness, mut commitment_vectors), (i, selected_attr)| {
-                if let Ok(Some(opened)) = CrossSetCommitment::open_subset(
-                    &self.nym_public.public_parameters,
-                    &all_attributes[i],
-                    &cred_p.opening_vector[i],
-                    selected_attr,
-                ) {
-                    witness.push(opened); //can only have as many witnesses as there are openable selected attributes
-                    commitment_vectors.push(cred_p.commitment_vector[i].clone());
-                    // needs to be the same length as the witness vector
-                }
-                (witness, commitment_vectors)
-            },
-        );
+
+        let (witness_vector, commit_vector) = selected_attrs
+            .iter()
+            .enumerate()
+            .filter(|(_, selected_attr)| !selected_attr.is_empty()) // TODO: filter out selectec_attrs which is_empty()
+            .fold(
+                (Vec::new(), Vec::new()),
+                |(mut witness, mut commitment_vectors), (i, selected_attr)| {
+                    if let Ok(Some(opened)) = CrossSetCommitment::open_subset(
+                        &self.nym_public.public_parameters,
+                        &all_attributes[i],
+                        &cred_p.opening_vector[i],
+                        selected_attr,
+                    ) {
+                        witness.push(opened); //can only have as many witnesses as there are openable selected attributes
+                        commitment_vectors.push(cred_p.commitment_vector[i].clone());
+                        // needs to be the same length as the witness vector
+                    }
+                    (witness, commitment_vectors)
+                },
+            );
 
         let witness_pi = CrossSetCommitment::aggregate_cross(&witness_vector, &commit_vector);
 
@@ -787,10 +815,15 @@ pub fn verify_proof(
     proof: &CredProof,
     selected_attrs: &[Entry],
 ) -> Result<bool, SerzDeserzError> {
-    // filter set commitments regarding the selected attributes
-    // TODO: Make this either set of indexes or keys, so make selecting more flexible
-    // Get the selected attributes from the entire attributes vector (indexes or keys)
-    let commitment_vectors = proof.commitment_vector[..selected_attrs.len()].to_vec();
+    // TODO: Get the selected_attr indexes which are not is_enpty(), use those indexes to select corresponding commitment_vectors
+    // zip together commitment_vector where selected_attr is not empty
+    let commitment_vectors = proof
+        .commitment_vector
+        .iter()
+        .zip(selected_attrs.iter())
+        .filter(|(_, selected_attr)| !selected_attr.is_empty())
+        .map(|(commitment_vector, _)| commitment_vector.clone())
+        .collect::<Vec<_>>();
 
     // check the proof is valid for each
     let check_verify_cross = CrossSetCommitment::verify_cross(
@@ -1323,8 +1356,6 @@ mod tests {
         let insurance = attribute("Insurance = 2");
         let car_type = attribute("Car type = BMW");
 
-        eprintln!("Age CID: {:?}", age.to_string());
-
         let message1_str = vec![age.clone(), name.clone(), drivers];
         let message2_str = vec![gender, company, drivers_type_b];
         let message3_str = vec![insurance.clone(), car_type];
@@ -1350,14 +1381,15 @@ mod tests {
         let robert = UserKey::new();
         let bobby_nym = robert.nym(signer.public_parameters.clone());
 
-        let opening_vector_restricted = cred.opening_vector;
-        // opening_vector_restricted[0] = FieldElement::zero(); // means the selected attributes cannot include the first commit in the vector
+        // We can retrict proving a credential by zerioizing the opening vector of the Entry
+        let mut opening_vector_restricted = cred.opening_vector;
+        opening_vector_restricted[0] = FieldElement::zero(); // means the selected attributes cannot include the first commit in the vector
+        opening_vector_restricted[1] = FieldElement::zero(); // selected attributes exclude the second commit in the vector
 
         let cred_restricted = Credential {
             sigma: cred.sigma,
             commitment_vector: cred.commitment_vector,
-            // restrict opening to read only
-            opening_vector: opening_vector_restricted,
+            opening_vector: opening_vector_restricted, // restrict opening to read only
             update_key: cred.update_key,
         };
 
@@ -1376,15 +1408,11 @@ mod tests {
             &bobby_cred.cred.sigma
         ));
 
-        // subset of each message set
-        let sub_list1_str = vec![age, name];
-        let sub_list2_str = vec![];
-        let sub_list3_str = vec![insurance];
-
+        // select subset of each message set Entry
         let selected_attrs = vec![
-            Entry(sub_list1_str),
-            Entry(sub_list2_str),
-            Entry(sub_list3_str),
+            Entry(vec![]), // Root Issuer is the only one who could write to this entry
+            Entry(vec![]),
+            Entry(vec![insurance.clone()]),
         ];
 
         // prepare a proof
@@ -1393,7 +1421,15 @@ mod tests {
         // verify_proof
         assert!(verify_proof(&signer.vk, &proof, &selected_attrs)?);
 
-        eprintln!("Point : {:?}", start.elapsed());
+        // if we try to prove Entry[0] or Entry[1] it should fail
+        // age is from Entry[0]
+        let selected_attrs = vec![Entry(vec![age]), Entry(vec![]), Entry(vec![insurance])];
+
+        // prepare a proof
+        let proof = bobby_cred.prove(&all_attributes, &selected_attrs);
+
+        // verify_proof should fail
+        assert!(!verify_proof(&signer.vk, &proof, &selected_attrs)?);
 
         Ok(())
     }

@@ -320,6 +320,8 @@ impl CrossSetCommitment {
     }
 
     /// Verifies an aggregate proof of valid subsets of a set of messages.
+    /// Filters out any selected [Entry]s that are empty
+    ///
     /// # Arguments
     /// param_sc: public parameters
     /// commit_vector: the commitment vector
@@ -331,14 +333,16 @@ impl CrossSetCommitment {
     pub fn verify_cross(
         param_sc: &ParamSetCommitment,
         commit_vector: &[G1],
-        entry_subsets_vector: &[Entry],
+        selected_entry_subset_vector: &[Entry],
         proof: &G1,
     ) -> Result<bool, SerzDeserzError> {
         // Steps:
         // 1. convert message str into the BN
-        let subsets_vector = entry_subsets_vector
+        let subsets_vector = selected_entry_subset_vector
             .iter()
-            .map(convert_entry_to_bn)
+            .enumerate()
+            .filter(|(_, entry)| !entry.is_empty())
+            .map(|(_, entry)| convert_entry_to_bn(entry))
             .collect::<Result<Vec<Vec<FieldElement>>, SerzDeserzError>>()?;
 
         // create a union of sets
@@ -368,7 +372,6 @@ impl CrossSetCommitment {
         // right_side is the pairing of proof and set_s_elements_sum
         let right_side = GT::ate_pairing(proof, &set_s_elements_sum);
 
-        // use into_iter() instead of code above to consume subsets_vector
         let set_s_not_t = subsets_vector
             .into_iter()
             .map(|x| not_intersection(&set_s, x))
@@ -380,7 +383,7 @@ impl CrossSetCommitment {
             .zip(set_s_not_t.iter())
             .map(|(commit, set_s_not_t)| {
                 let coeff_s_not_t = UnivarPolynomial::new_with_roots(set_s_not_t);
-                // use amcl_wrapper to multiply FieldElementVector by a FieldElement: `&coeff_s_not_t * param_sc.pp_commit_g2`
+
                 let listpoints_s_not_t = param_sc
                     .pp_commit_g2
                     .iter()
@@ -436,10 +439,7 @@ pub fn not_intersection(list_s: &[FieldElement], list_t: Vec<FieldElement>) -> V
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        attributes::attribute,
-        utils::{self},
-    };
+    use crate::attributes::attribute;
 
     use super::*;
 
