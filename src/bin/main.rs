@@ -22,9 +22,9 @@ use delanocreds::{
 
 pub fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     println!(" \nRunning a short basic test: \n");
-    basic_bench();
+    let _ = basic_bench();
     println!(" \nCreating and proving 30 of 100 credentials: \n");
-    bench_30_of_100();
+    let _ = bench_30_of_100();
 
     Ok(())
 }
@@ -164,15 +164,15 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     //start timer
     let start = std::time::Instant::now();
 
-    let n_cardinality = 16;
-    let l_max_entries = 6;
+    let n_cardinality = 16; // 6*16 = 96
+    let l_max_entries = 6; // 6*5 = 30
 
     // Delegate a subset of attributes
     let entry = |j| {
         entry(
             &[0..n_cardinality]
                 .iter()
-                .map(|n| attribute(format!("age > 21")))
+                .map(|_| Attribute::from(format!("age > 21")))
                 .collect::<Vec<_>>(),
         )
     };
