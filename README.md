@@ -1,6 +1,6 @@
 # **Del**egatable **Ano**nymous **Cred**ential**s** (Delanocreds)
 
-Create credentials, and delegate the ability to add more credentials, without revealing the identity of any of the holders in the delegation chain, including the prover.
+Create Root Credentials, then delegate the ability to add or remove credentials, without revealing the identity of any of the holders in the delegation chain, including the prover.
 
 Useful if you want the ability to delegate credentials, capabilities, or other data without revealing the identity of the delegation or holder(s).
 
@@ -12,9 +12,9 @@ Holders can also selectively prove attributes and remove the ability for delegat
 
 ## Delegation
 
-What can be delegated is: the number of additional attribute Entries that can be added (zero to MaxEnties), but only if the credential is marked as _extendable_.
+What can be delegated is the ability to add a number of additional attribute Entries (zero to MaxEntries), but only if the credential is marked as _extendable_.
 
-Even if there is no ability for a credential holder to add additional attributes, the follwoing is true:
+Even if there is no ability for a credential holder to add additional attributes, the following always holds true:
 
 -   Credentials holders can always assign their credential to a new public key
 -   Attributes are always selectable for presentation by a holder
@@ -29,9 +29,41 @@ You may wish to apply a Credential Strategy such that the Credential is properly
 
 ### Attributes
 
-Attributes are hashed to curve, which means they are content addressable! Once an Attribute is created, it can be referenced by it's [Content Identifier (CID)](https://cid.ipfs.tech/) in the future. This means we can also refer to attributes by their CID, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
+Attributes can be created from any bytes, such as "age > 21" or even a `jpg`. These bytes are hashed to the BLS12-381 curve, which means they are also content addressable! Once an Attribute is created, it can be referenced by it's [Content Identifier (CID)](https://cid.ipfs.tech/) instead of the value itself. This means we can also refer to attributes by their CID, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
 
-The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of 48 bytes which is longer than the typical 32 bytes. If you try to create an Attribute out of a CID with a different hash or length, it will fail. For this reason, use the Attribute methods provided by this library when creating Attributes.
+The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of 48 bytes which is longer than the typical 32 bytes. If you try to create an Attribute out of a CID with a different hash or length, it will fail and result in an error. For this reason, use the Attribute methods provided by this library when creating Attributes.
+
+```rust
+let some_test_attr = "read";
+
+let read_attr = Attribute::new(some_test_attr); // using the new method
+
+// Try Attribute from cid
+let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
+assert_eq!(read_attr, attr_from_cid);
+
+// Attribute from_cid
+let attr_from_cid = Attribute::from_cid(&read_attr).unwrap();
+assert_eq!(read_attr, attr_from_cid);
+```
+
+### Entries
+
+A Credential is comprised of one or more Entries. Each Entry contains one or more Attributes. Entries are used to group Attributes together, and are also used to delegate the ability to add or remove Attributes.
+
+```md
+//! Attribute Entries:
+//! ==> Entry Level 0: [Attribute, Attribute, Attribute]
+//! ==> Entry Level 1: [Attribute]
+//! ==> Entry Level 2: [Attribute, Attribute]
+//! ==> Additonal Entry? Only if 3 < Extendable < MaxEntries
+```
+
+### Redact
+
+Holders of a Credential can redact any [Entry] from the Credential, which will remove the ability to create proofs on any Attributes in that entry. This is useful if you want to remove the ability for a delegatee to prove a specific attribute, but still allow them to prove other attributes.
+
+This is done by zeroizing the Opening Information in the Credential.
 
 ## Bindings
 
