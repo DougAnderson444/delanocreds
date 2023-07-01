@@ -6,6 +6,8 @@ Useful if you want the ability to delegate credentials, capabilities, or other d
 
 Holders can also selectively prove attributes and remove the ability for delegatees to prove selected attributes.
 
+[![Example Explainer](https://github.com/hyperledger/aries-rfcs/raw/main/concepts/0104-chained-credentials/use-case.png)](https://github.com/hyperledger/aries-rfcs/blob/main/concepts/0104-chained-credentials/README.md)
+
 ## Project Status
 
 ⚠️ New project, somewhat work in progress. API is not stable yet.
