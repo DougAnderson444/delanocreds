@@ -164,8 +164,8 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     //start timer
     let start = std::time::Instant::now();
 
-    let n_cardinality = 16; // 6*16 = 96
-    let l_max_entries = 6; // 6*5 = 30
+    let n_cardinality = 16; // Allow up to 16 Attributes per Entry or per Proof, 6*16 = 96 max
+    let l_max_entries = 6; // Choose 5 from each Entry Level, 6*5 = 30 selected
 
     // Delegate a subset of attributes
     let entry = |j| {
