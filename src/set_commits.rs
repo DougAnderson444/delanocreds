@@ -1,6 +1,6 @@
+use crate::entry::convert_entry_to_bn;
+use crate::entry::Entry;
 use crate::keypair::MaxCardinality;
-use crate::utils::convert_entry_to_bn;
-use crate::utils::Entry;
 use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
@@ -21,7 +21,7 @@ use secrecy::Secret;
 pub struct ParamSetCommitment {
     pub pp_commit_g1: Vec<G1>,
     pub pp_commit_g2: Vec<G2>,
-    pub g_1: G1,
+    pub g_1: G1, // TODO: Netype this as a Generator type instead of plain G1.
     pub g_2: G2,
     pub max_cardinality: usize,
 }
@@ -558,5 +558,17 @@ mod test {
             &proof
         )?);
         Ok(())
+    }
+
+    #[test]
+    fn test_generator() {
+        let g1 = G1::generator();
+        let g2 = G2::generator();
+        println!("G1 generator: {:?}", g1);
+        println!("G2 generator: {:?}", g2);
+
+        // rand FE
+        let fe = FieldElement::random();
+        println!("Random FE: {:?}", fe);
     }
 }
