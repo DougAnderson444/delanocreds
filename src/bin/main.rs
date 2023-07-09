@@ -16,8 +16,8 @@
 
 use delanocreds::{
     attributes::{attribute, Attribute},
+    entry::{entry, Entry},
     keypair::{spseq_uc::Credential, verify_proof, MaxCardinality, MaxEntries, Signer, UserKey},
-    utils::{entry, Entry},
 };
 
 pub fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
@@ -168,7 +168,7 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     let l_max_entries = 6; // Choose 5 from each Entry Level, 6*5 = 30 selected
 
     // Delegate a subset of attributes
-    let entry = |j| {
+    let entry = |_| {
         entry(
             &[0..n_cardinality]
                 .iter()
