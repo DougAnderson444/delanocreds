@@ -1389,7 +1389,7 @@ mod tests {
         let user_r = UserKey::new();
         let nym_r = user_r.nym(signer.public.parameters.clone());
 
-        let addl_attrs = None;
+        let addl_attrs = Some(Entry::new(&[attribute("age > 21")]));
 
         // Create the Offer
         let offer = nym.offer(&cred, &signer.public.vk, &addl_attrs, &nym_r.public);
@@ -1497,7 +1497,7 @@ mod tests {
         let message3_str = vec![insurance.clone(), car_type];
 
         // Test proving a credential to verifiers
-        let all_attributes = vec![
+        let mut all_attributes = vec![
             entry(&message1_str),
             entry(&message2_str),
             entry(&message3_str),
@@ -1529,11 +1529,17 @@ mod tests {
             update_key: cred.update_key,
         };
 
+        // Add an additional Entry to the all_attributes and add the Entry to the Offer
+        let legal_age = Attribute::new("age > 21");
+        let addl_attrs = Some(Entry::new(&[legal_age.clone()]));
+
+        all_attributes.push(entry(&[legal_age.clone()]));
+
         // offer to bobby_nym
         let alice_del_to_bobby = alice_nym.offer(
             &cred_restricted,
             &signer.public.vk,
-            &None,
+            &addl_attrs,
             &bobby_nym.public,
         );
 
@@ -1553,6 +1559,7 @@ mod tests {
             Entry(vec![]), // Root Issuer is the only one who could write to this entry
             Entry(vec![]),
             Entry(vec![insurance.clone()]),
+            Entry(vec![legal_age.clone()]),
         ];
 
         // prepare a proof
@@ -1563,7 +1570,12 @@ mod tests {
 
         // if we try to prove Entry[0] or Entry[1] it should fail
         // age is from Entry[0]
-        let selected_attrs = vec![Entry(vec![age]), Entry(vec![]), Entry(vec![insurance])];
+        let selected_attrs = vec![
+            Entry(vec![age]),
+            Entry(vec![]),
+            Entry(vec![insurance]),
+            Entry(vec![legal_age]),
+        ];
 
         // prepare a proof
         let proof = bobby_cred.prove(&all_attributes, &selected_attrs);
