@@ -2,12 +2,13 @@
 //! See  the following for the details:
 //! - Practical Delegatable Anonymous Credentials From Equivalence Class Signatures, PETS 2023.
 //!    [https://eprint.iacr.org/2022/680](https://eprint.iacr.org/2022/680)
+use crate::entry::convert_entry_to_bn;
+use crate::entry::Entry;
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
 use crate::set_commits::ParamSetCommitment;
-use crate::utils::convert_entry_to_bn;
 use crate::{
-    utils::{Entry, PedersenOpen},
+    zkp::PedersenOpen,
     zkp::Schnorr,
     zkp::{ChallengeState, DamgardTransform, Generator},
 };
@@ -815,8 +816,9 @@ pub fn verify_proof(
     proof: &CredProof,
     selected_attrs: &[Entry],
 ) -> Result<bool, SerzDeserzError> {
-    // TODO: Get the selected_attr indexes which are not is_enpty(), use those indexes to select corresponding commitment_vectors
-    // zip together commitment_vector where selected_attr is not empty
+    // Get the selected_attr indexes which are not `is_enpty()`,
+    // use those indexes to select corresponding `commitment_vectors`
+    // zip together `commitment_vector` where `selected_attr` is not empty
     let commitment_vectors = proof
         .commitment_vector
         .iter()
@@ -853,7 +855,7 @@ mod tests {
 
     use super::*;
     use crate::attributes::{attribute, Attribute};
-    use crate::utils::entry;
+    use crate::entry::entry;
 
     struct TestMessages {
         message1_str: Vec<Attribute>,
@@ -1343,9 +1345,6 @@ mod tests {
 
     #[test]
     fn test_delegate_subset() -> Result<(), SerzDeserzError> {
-        //start timer
-        let start = std::time::Instant::now();
-
         // Delegate a subset of attributes
         let age = attribute("age = 30");
         let name = attribute("name = Alice");
@@ -1356,7 +1355,7 @@ mod tests {
         let insurance = attribute("Insurance = 2");
         let car_type = attribute("Car type = BMW");
 
-        let message1_str = vec![age.clone(), name.clone(), drivers];
+        let message1_str = vec![age.clone(), name, drivers];
         let message2_str = vec![gender, company, drivers_type_b];
         let message3_str = vec![insurance.clone(), car_type];
 
