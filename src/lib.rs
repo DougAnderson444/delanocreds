@@ -1,165 +1,13 @@
-//! # Delanocreds API
-//!
-//! **Del**egatable **Ano**nymous **Cred**ential**s**: Based on the Crypto paper
-//! [Practical Delegatable Anonymous Credentials From Equivalence Class Signatures](https://eprint.iacr.org/2022/680)
-//!
-//! This library enables you to create, issue, delegate/extend/restrict/transfer, and verify credentials in an anonymous way.
-//!
-//! # Roles
-//!
-//! The roles start with a Root Issuer, then delegated Credential Holder/Prover and Verifier.
-//!
-//! ## Root Issuer
-//!
-//! You are the issuer and your verification key (public key) will be the only non-anonymous key in the credentials process.
-//!
-//! #### Root Issuer Summary of Choices/Options:
-//!
-//! - **Maxiumum Attribute Entries**: Credntials have a maximum number of entries.
-//! Each entry holds up to MaxCardinality of Attributes.
-//! The Root Issuer sets a maximum number of entries (`message_l`)
-//! - **Maximum Cardinality (Attributes per Entry)**: There is a set maximum number of items total (`cardinality`, `message_l[n].len()` <= `cardinality`)
-//! - **Extendable Limit**: What the maximum number of additional entries may be (current entries length up to `k_prime`, `k_prime` is at most `message_l`.
-//! Or in other words: `current < k_prime < message_l`),
-//!
-//! Below is a markdown table with an example of attribute entries, and attributes in each entry, with yes/no for each feature
-//!
-//! ```md
-//! Attribute Entries:
-//! ==> Entry Level 0: [Attribute, Attribute, Attribute]
-//! ==> Entry Level 1: [Attribute]
-//! ==> Entry Level 2: [Attribute, Attribute]
-//! ==> Additonal Entry? Only if 3 < k_prime < message_l
-//! ```
-//!
-//! - Max Entries: `message_l`
-//! - Max total elements: `max_cardinality`
-//!
-//! ```md
-//! Opening Information
-//!
-//! ==> Entry Level 0: Valid opening information
-//! ==> Entry Level 1: Valid opening information
-//! ==> Entry Level 2: Zeroized opening information
-//! ```
-//!
-//! #### Delegated Credential Holder(s) Choice of Options:
-//!
-//! Delegation in the sence of DAC means the adding or generating proofs of attributes to a credential.
-//!
-//! Thus holders have the option to restrict:
-//!
-//! - **Restrict Adding Attributes**: Restrict adding attributes to the credential (by reducing the length of `Credential { UpdateKey } `).
-//! - **Restrict Showing certain `Attribute` Entry levels**: By zeroizing the opening information  corresponding
-//! to the attribute entry level you want to restrict.
-//!
-//! Every delegator can control how far delegations can go by further restricting the `update key`
-//! and a delegator can also restrict the possibility to show attributes from a certain level in
-//! the hierarchy (which corresponds to a commitment in the commitment vector) by not providing
-//! the opening of the commitment to the delegatee.
-//!
-//! Likewise, holders have the ability to extend the credential by adding attributes to the credential,
-//! as long as the total number of attributes doesn't exceed `k_prime`.
-//!
-//! ## Showing a credential
-//!
-//! Once a holder wants to show a credential, with any combination of attributes (as long as the opening information is available),
-//! the holder selects which attributes they want to prove, then they run `proof_cred` to generate a proof.
-//!
-//! Holders can only prove up to `max_cardinality` attributes at a time.
-//!
-//! ## Building a Credential
-//!
-//! Building credentials is a multiple step process:
-//!
-//! 1. First you generate the Verification Keys by choosing the max cardinality (total individual credentials)
-//! and max number of credential sets. Those verification keys (VK) can only be used up to those lengths. If you need longer
-//! attributes, you need to generate new VKs.
-//!
-//! 2. Second, you take the Issuer and add credential attributes, within the maxium allowed by the VK.
-//!
-//! 3. Lastly you then issue the credential to a user.
-//!
-//! A Credential Builder.
-//!
-//! Root Issuer Builder Options you can set:
-//! - Max number of attributes (defaults to 5)
-//! - Max cardinality (defaults to 10)
-//!
-//! Credential Builder Options you can set:
-//! - Attributes (defaults to empty)
-//! - Delegatable (defaults to no `opening information` provided [false])
-//! - Can add attributes (defaults to no `update key` provided [false])
-//! - How many attributes can be added (`k_prime` defaults to zero(0))
-//!
-//! Show a credential proof:
-//! - Randomize your public key into a pseudonym
-//! - Choose which attributes to show, even if they were issued by separate delegators
-//! - Generate a proof from the credential and
-//!
-//! Credential Constraints:
-//! - You can only add attributes if the current number of attributes is below `message_l`.
-//! - You can only issue a credential if the current number of attributes is below `max_cardinality`.
-//!
-//! If you want to restrict delegatees from showing proofs for attributes from
-//! a certain level in the hierarchy (which corresponds to a commitment in the
-//! commitment vector) by not providing the opening of the commitment to the delegatee.
-//!
-//! In Practical terms, this means that when the Root Level commit hold C.R.U.D.,
-//! the way to restrict the delegatee from showing the proof is to add a second
-//! level commit that holds only R.U.D., and not provide the opening of the first level.
-//! This way, the delegatee can only show the proof for the second level thus can only
-//! prove the ability to Read, Update, and Delete, but not Create.
-//!
-//! States and Sub-states:
-//! - State: Sub-states.
-//! - Configuration: Unconfigured, configured
-//! - Credential: Unissued, issued, delegated
-//! - Delegatable: True, False. A credential is only delegatable if `update_key` is provided.
-//! - Extendable: True, False. Only extendable if number of attribute commits is less than k_prime
-//! - Showable: Up to the number of attributes in the credential. restricted by `opening_info `
-//!
-//! BLS12-381 public keys are 48 bytes long. Private keys are 32 bytes long.
-
-//! Given all the the documentation above, the following code is a possible API and usage for Delanocreds in Rust:
-//!
-//! 1. Root Issuer builds Root Credential with:
-//! - max attributes,
-//! - max cardinality,
-//! - initial attribute entries,
-//! - extendable attributes (),
-//! - fully provable atrributes (all opening information provided)
-//! - k_prime set the number of additonal attributes available from the `update_key`
-//!
-//! 2. Root Issuer issues Root Credential to Credential Holder Alice's pseudonym (nym).
-//! Alice is the first holder of the Credential.
-//!
-//! 3. Alice take credential bytes and loads them into the Credential structure. With the Root Credential, Alice can:
-//! - generate proof
-//! - delegate to another nym (if allowed by the cred update_key)
-//! - add attributes (if allowed by the cred update_key)
-//!
-//! 3a. Alice generates a proof for the Root Credential with:
-//! - a list of attributes to prove
-//!
-//! 3b. Alice delegates to another nym with:
-//! - a list of attributes to delegate
-//! - a potentially shorter update key to restrict the delegatee from adding attribute entries
-//! - potentially redacted opening information to restrict the delegatee from showing attributes
-//!
-//! 4. Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
-//! With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
-
 use crate::attributes::Attribute;
 use amcl_wrapper::field_elem::FieldElement;
+use entry::Entry;
 use keypair::{MaxCardinality, MaxEntries, VK};
-use utils::Entry;
 
 pub mod attributes;
+pub mod entry;
 pub mod keypair;
 pub mod set_commits;
 pub mod types;
-pub mod utils;
 pub mod zkp;
 
 /// Default Max Attributes: The maximum number of attribute entries allowed in a credential.
@@ -168,7 +16,7 @@ const DEFAULT_MAX_ATTRIBUTES: usize = 10;
 const DEFAULT_MAX_CARDINALITY: usize = 5;
 
 // Test the README.md code snippets
-// #[doc = include_str!("../README.md")]
+// #![doc = include_str!("../README.md")]
 // #[cfg(doctest)]
 // pub struct ReadmeDoctests;
 
@@ -343,6 +191,23 @@ impl EntryBuilder {
         // return ownership of entries
         self.entries.drain(..).collect()
     }
+}
+
+// create a `selected_attrs` from `all_attributes` where the given selections match, make all other entries empty
+fn select_attrs(all_attributes: &[Entry], selections: &[Attribute]) -> Vec<Entry> {
+    all_attributes
+        .iter()
+        .map(|entry| {
+            Entry(
+                entry
+                    .0
+                    .iter()
+                    .filter(|attr| selections.contains(attr))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>()
 }
 
 #[cfg(test)]

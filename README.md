@@ -1,6 +1,8 @@
 # **Del**egatable **Ano**nymous **Cred**ential**s** (Delanocreds)
 
-Create Root Credentials, then delegate the ability to add or remove credentials, without revealing the identity of any of the holders in the delegation chain, including the prover.
+This library enables you to create, issue, delegate/extend/restrict/transfer, and verify credentials in an anonymous way.
+
+Create Root Credentials, then delegate the ability to add or remove credentials, without revealing the identity of any of the holders in the delegation chain, including the prover!
 
 Useful if you want the ability to delegate credentials, capabilities, or other data without revealing the identity of the delegation or holder(s).
 
@@ -11,6 +13,13 @@ Holders can also selectively prove attributes and remove the ability for delegat
 ## Project Status
 
 ⚠️ New project, somewhat work in progress. API is not stable yet.
+
+Roadmap:
+
+-   [x] Passing tests
+-   [ ] Stable Public API
+-   [ ] DelanoWallet (Store, Sign, Backup Credentials)
+-   [ ] DelanoNet (Data Exchange Network)
 
 ## Delegation
 
@@ -28,6 +37,15 @@ Therefore, while holders may restrict the ability of delegatees to _add_ attribu
 able to assign the credential to a new public key for the attributes they _do_ have.
 
 You may wish to apply a Credential Strategy such that the Credential is properly handled by the holder. This is left to the user, as the use cases of Credentials are varied too widely to provide a one-size-fits-all solution.
+
+### Root Issuer Summary of Choices/Options:
+
+-   **Maxiumum Attribute Entries**: Credntials have a maximum number of entries.
+    Each entry holds up to MaxCardinality of Attributes.
+    The Root Issuer sets a maximum number of entries (`message_l`)
+-   **Maximum Cardinality (Attributes per Entry)**: There is a set maximum number of items total (`cardinality`, `message_l[n].len()` <= `cardinality`)
+-   **Extendable Limit**: What the maximum number of additional entries may be (current entries length up to `k_prime`, `k_prime` is at most `message_l`.
+    Or in other words: `current < k_prime < message_l`),
 
 ### Attributes
 
