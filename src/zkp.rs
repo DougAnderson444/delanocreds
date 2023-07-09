@@ -11,7 +11,6 @@ use sha2::{Digest, Sha256};
 
 use crate::keypair::spseq_uc::RandomizedPubKey;
 use crate::keypair::NymProof;
-use crate::utils::{Pedersen, PedersenCommit, PedersenOpen};
 
 #[derive(Clone, Debug)]
 pub enum Generator {
@@ -261,6 +260,61 @@ impl Schnorr for DamgardTransform {
     fn new() -> Self {
         let pedersen = Pedersen::new();
         Self { pedersen }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Pedersen {
+    pub g: G1,
+    pub h: G1,
+    // trapdoor: FieldElement,
+}
+pub type PedersenCommit = G1;
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct PedersenOpen {
+    pub open_randomness: FieldElement,
+    pub announce_randomness: FieldElement,
+    pub announce_element: Option<G1>,
+}
+
+impl PedersenOpen {
+    pub fn element(&mut self, elem: G1) {
+        self.announce_element = Some(elem);
+    }
+}
+impl Default for Pedersen {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl Pedersen {
+    pub fn new() -> Self {
+        // h is the statement. d is the trapdoor. g is the generator. h = d*g
+        let g = G1::generator();
+        let d = Secret::new(FieldElement::random()); // trapdoor
+        let h = &g.scalar_mul_const_time(d.expose_secret());
+        Pedersen { g, h: h.clone() }
+    }
+    pub fn commit(&self, msg: FieldElement) -> (PedersenCommit, PedersenOpen) {
+        let r = FieldElement::random();
+        let pedersen_commit = &r * &self.h + &msg * &self.g;
+        let pedersen_open = PedersenOpen {
+            open_randomness: r,
+            announce_randomness: msg,
+            announce_element: None,
+        };
+
+        (pedersen_commit, pedersen_open)
+    }
+
+    /// Decrypts/Decommits the message
+    pub fn decommit(&self, pedersen_open: &PedersenOpen, pedersen_commit: &PedersenCommit) -> bool {
+        let c2 = &self.h.scalar_mul_const_time(&pedersen_open.open_randomness)
+            + &self
+                .g
+                .scalar_mul_const_time(&pedersen_open.announce_randomness);
+        &c2 == pedersen_commit
     }
 }
 
