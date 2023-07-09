@@ -17,3 +17,8 @@
 //! ## Credential Issuer
 //!
 //!
+
+/// Default Max Attributes: The maximum number of attribute entries allowed in a credential.
+pub const DEFAULT_MAX_ENTRIES: usize = 6;
+/// Default Max Cardinality: The maximum number of total attribute elements allowed in a credential.
+pub const DEFAULT_MAX_CARDINALITY: usize = 16;

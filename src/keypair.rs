@@ -2,6 +2,7 @@
 //! See  the following for the details:
 //! - Practical Delegatable Anonymous Credentials From Equivalence Class Signatures, PETS 2023.
 //!    [https://eprint.iacr.org/2022/680](https://eprint.iacr.org/2022/680)
+use crate::config;
 use crate::entry::convert_entry_to_bn;
 use crate::entry::Entry;
 use crate::set_commits::Commitment;
@@ -12,6 +13,7 @@ use crate::{
     zkp::Schnorr,
     zkp::{ChallengeState, DamgardTransform, Generator},
 };
+
 use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::univar_poly::UnivarPolynomial;
@@ -62,6 +64,12 @@ impl Deref for MaxCardinality {
     }
 }
 
+impl Default for MaxCardinality {
+    fn default() -> Self {
+        MaxCardinality(config::DEFAULT_MAX_CARDINALITY)
+    }
+}
+
 impl MaxCardinality {
     pub fn new(item: usize) -> Self {
         MaxCardinality(item)
@@ -97,9 +105,58 @@ impl Deref for MaxEntries {
     }
 }
 
+impl Default for MaxEntries {
+    fn default() -> Self {
+        MaxEntries(config::DEFAULT_MAX_ENTRIES)
+    }
+}
+
 impl MaxEntries {
     pub fn new(item: usize) -> Self {
         MaxEntries(item)
+    }
+}
+
+// enum Error of SerzDeserzError and TooLargeCardinality
+#[derive(Debug, Clone)]
+pub enum IssuerError {
+    SerzDeserzError(SerzDeserzError),
+    TooLargeCardinality,
+    TooLongEntries,
+}
+
+// impl fmt
+impl std::fmt::Display for IssuerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            IssuerError::SerzDeserzError(e) => write!(f, "SerzDeserzError: {}", e),
+            IssuerError::TooLargeCardinality => write!(f, "TooLargeCardinality. You passed too many attributes per Entry. Hint: reduce the number of attributes to be less than the max cardinality of this Issuer."),
+            IssuerError::TooLongEntries => write!(f, "TooLongEntries. You passed too many Entries. Hint: reduce the number of Entries to be less than the max entries of this Issuer."),
+        }
+    }
+}
+
+impl From<SerzDeserzError> for IssuerError {
+    fn from(item: SerzDeserzError) -> Self {
+        IssuerError::SerzDeserzError(item)
+    }
+}
+
+impl From<IssuerError> for SerzDeserzError {
+    fn from(item: IssuerError) -> Self {
+        match item {
+            IssuerError::SerzDeserzError(e) => e,
+            _ => panic!("Invalid IssuerError"),
+        }
+    }
+}
+
+impl From<IssuerError> for UpdateError {
+    fn from(item: IssuerError) -> Self {
+        match item {
+            IssuerError::SerzDeserzError(e) => UpdateError::SerzDeserzError(e),
+            _ => UpdateError::Error,
+        }
     }
 }
 
@@ -107,9 +164,13 @@ impl MaxEntries {
 /// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
 /// - `sk`: [`Secret`], secret keys of the user
 /// - `vk`: `Vec<VK>`, [VK] verification keys of the user
-pub struct Signer {
-    pub public_parameters: ParamSetCommitment,
+pub struct Issuer {
+    pub public: IssuerPublic,
     sk: Secret<Vec<FieldElement>>,
+}
+
+pub struct IssuerPublic {
+    pub parameters: ParamSetCommitment,
     pub vk: Vec<VK>,
 }
 
@@ -122,8 +183,16 @@ pub enum VK {
     G2(G2),
 }
 
-impl Signer {
-    pub fn new(t: MaxCardinality, l_message: MaxEntries) -> Signer {
+/// Default Issuer using MaxCardinality and
+/// MaxEntries setting from [config]
+impl Default for Issuer {
+    fn default() -> Self {
+        Self::new(MaxCardinality::default(), MaxEntries::default())
+    }
+}
+
+impl Issuer {
+    pub fn new(t: MaxCardinality, l_message: MaxEntries) -> Issuer {
         let public_parameters = CrossSetCommitment::new(t).public_parameters();
 
         // compute secret keys for each item in l_message
@@ -146,10 +215,12 @@ impl Signer {
             .scalar_mul_const_time(&sk.expose_secret()[0]);
         vk.insert(0, VK::G1(x_0)); // vk is now of length l_message + 1 (or sk + 1)
 
-        Signer {
-            public_parameters,
+        Issuer {
             sk,
-            vk,
+            public: IssuerPublic {
+                parameters: public_parameters,
+                vk: vk.clone(),
+            },
         }
     }
 
@@ -166,13 +237,13 @@ impl Signer {
         attr_vector: &[Entry],
         k_prime: Option<usize>,
         nym_public: &NymPublic,
-    ) -> Result<Credential, SerzDeserzError> {
+    ) -> Result<Credential, IssuerError> {
         // check if proof of nym is correct
         if DamgardTransform::verify(&nym_public.proof, &nym_public.damgard) {
             // check if delegate keys is provided
             let cred = self.sign(&nym_public.proof.public_key, attr_vector, k_prime)?;
             assert!(verify(
-                &self.vk,
+                &self.public.vk,
                 &nym_public.proof.public_key,
                 &cred.commitment_vector,
                 &cred.sigma
@@ -196,11 +267,27 @@ impl Signer {
         pk_u: &G1,
         messages_vector: &[Entry],
         k_prime: Option<usize>,
-    ) -> Result<Credential, SerzDeserzError> {
+    ) -> Result<Credential, IssuerError> {
+        // Validate that the Cardinality is within the bounds of the public parameters
+        // if not, return a Too Large Cardinality Error
+        // ensure each element in messages_vector is less than self.public.parameters.max_cardinality
+        if messages_vector
+            .iter()
+            .any(|mess| mess.len() > self.public.parameters.max_cardinality)
+        {
+            return Err(IssuerError::TooLargeCardinality);
+        }
+
+        // Too long entries if messages_vector.len() > Issuer vk - 2
+        // because Issuer vk has 2 more elements than messages_vector
+        if messages_vector.len() >= self.public.vk.len() - 2 {
+            return Err(IssuerError::TooLongEntries);
+        }
+
         // encode all messagse sets of the messages vector as set commitments
         let (commitment_vector, opening_vector): (Vec<G1>, Vec<FieldElement>) = messages_vector
             .iter()
-            .map(|mess| encode(&self.public_parameters, mess))
+            .map(|mess| encode(&self.public.parameters, mess))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .unzip();
@@ -222,10 +309,10 @@ impl Signer {
         let z = y_rand.inverse() * temp_point;
 
         // Y = y_rand * g_1
-        let y_g1 = self.public_parameters.g_1.scalar_mul_const_time(&y_rand);
+        let y_g1 = self.public.parameters.g_1.scalar_mul_const_time(&y_rand);
 
         // Y_hat = y_rand * g_2
-        let y_hat = self.public_parameters.g_2.scalar_mul_const_time(&y_rand);
+        let y_hat = self.public.parameters.g_2.scalar_mul_const_time(&y_rand);
 
         // t = sk[1] * Y + sk[0] * pk_u
         let t = y_g1.scalar_mul_const_time(&self.sk.expose_secret()[1])
@@ -250,8 +337,8 @@ impl Signer {
                 // only valid keys are between commitment length (k) an length (l), k_prime.length = k < k' < l
                 for k in (messages_vector.len() + 1)..=k_prime {
                     let mut uk = Vec::new();
-                    for i in 0..self.public_parameters.max_cardinality {
-                        let uk_i = self.public_parameters.pp_commit_g1[i]
+                    for i in 0..self.public.parameters.max_cardinality {
+                        let uk_i = self.public.parameters.pp_commit_g1[i]
                             .scalar_mul_const_time(&y_rand.inverse())
                             .scalar_mul_const_time(&self.sk.expose_secret()[k + 1]); // this is `k + 1` because sk[0] and sk[1] are used for t
                         uk.push(uk_i);
@@ -888,7 +975,7 @@ mod tests {
     #[test]
     fn test_sign() -> Result<(), SerzDeserzError> {
         // create new Signer with max_cardinality = 5 and max_entries = 10
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
         let user = UserKey::new();
@@ -907,7 +994,7 @@ mod tests {
         )?;
 
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &user.pk_u,
             &cred.commitment_vector,
             &cred.sigma
@@ -915,11 +1002,61 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_sign_too_large_cardinality_error() {
+        // create new Signer with max_cardinality = 5 and max_entries = 10
+        let signer = Issuer::new(MaxCardinality::new(1), MaxEntries::new(10));
+
+        // create a user key
+        let user = UserKey::new();
+
+        // get some test entries
+        let messages_vectors = setup_tests();
+
+        // create a signature
+        let cred = signer.sign(
+            &user.pk_u,
+            &[
+                Entry(messages_vectors.message1_str),
+                Entry(messages_vectors.message2_str),
+                Entry(messages_vectors.message3_str),
+            ],
+            None,
+        );
+
+        assert!(cred.is_err());
+    }
+
+    #[test]
+    fn test_sign_too_large_entries_error() {
+        // create new Signer with max_cardinality = 5 and max_entries = 10
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(2));
+
+        // create a user key
+        let user = UserKey::new();
+
+        // get some test entries
+        let messages_vectors = setup_tests();
+
+        // create a Entry vector 1 larger than allowed
+        let cred = signer.sign(
+            &user.pk_u,
+            &[
+                Entry(messages_vectors.message1_str),
+                Entry(messages_vectors.message2_str),
+                Entry(messages_vectors.message3_str),
+            ],
+            None,
+        );
+
+        assert!(cred.is_err());
+    }
+
     // Generate a signature, run changrep function and verify it
     #[test]
     fn test_changerep() -> Result<(), SerzDeserzError> {
         // Signer with 5 and 10
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
         let user = UserKey::new();
@@ -945,7 +1082,7 @@ mod tests {
         let psi = FieldElement::random();
 
         let (rndmz_pk_u, signature, _chi) = spseq_uc::change_rep(
-            &signer.vk,
+            &signer.public.vk,
             &user.pk_u,
             &signature_original,
             &mu,
@@ -954,7 +1091,7 @@ mod tests {
         );
 
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &rndmz_pk_u,
             &signature.commitment_vector,
             &signature.sigma
@@ -969,7 +1106,7 @@ mod tests {
     #[test]
     fn test_changerep_update_key() -> Result<(), SerzDeserzError> {
         // Signer with 5 and 10
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
         let user = UserKey::new();
@@ -995,7 +1132,7 @@ mod tests {
         let psi = FieldElement::random();
 
         let (rndmz_pk_u, signature, _chi) = spseq_uc::change_rep(
-            &signer.vk,
+            &signer.public.vk,
             &user.pk_u,
             &signature_original,
             &mu,
@@ -1004,7 +1141,7 @@ mod tests {
         );
 
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &rndmz_pk_u,
             &signature.commitment_vector,
             &signature.sigma
@@ -1020,13 +1157,13 @@ mod tests {
         // Generate a signature, run changrel function one the signature, add one additional commitment using update_key (uk) and verify it
 
         // Signer with 5 and 10
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
         let user = UserKey::new();
 
         // create a nym for this user and Signer
-        let nym = user.nym(signer.public_parameters.clone());
+        let nym = user.nym(signer.public.parameters.clone());
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1083,7 +1220,7 @@ mod tests {
 
         // assert!(sign_scheme.verify(&vk, &pk_u, &cred_chged.commitment_vector, &cred_chged.sigma));
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &nym.public.proof.public_key,
             &signature_changed.commitment_vector,
             &signature_changed.sigma
@@ -1096,13 +1233,13 @@ mod tests {
     #[test]
     fn test_changerel_from_rep() -> Result<(), UpdateError> {
         // Signer with 5 and 10
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
         let user = UserKey::new();
 
         // create a nym for this user and Signer
-        let nym = user.nym(signer.public_parameters.clone());
+        let nym = user.nym(signer.public.parameters.clone());
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1123,7 +1260,7 @@ mod tests {
         let psi = FieldElement::random();
 
         let (rndmz_pk_u, signature_prime, _chi) = spseq_uc::change_rep(
-            &signer.vk,
+            &signer.public.vk,
             &nym.public.proof.public_key,
             &signature_original,
             &mu,
@@ -1133,7 +1270,7 @@ mod tests {
 
         // verify the signature_prime
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &rndmz_pk_u,
             &signature_prime.commitment_vector,
             &signature_prime.sigma
@@ -1145,7 +1282,7 @@ mod tests {
 
         // verify the signature
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &rndmz_pk_u,
             &cred_tilde.commitment_vector,
             &cred_tilde.sigma
@@ -1158,11 +1295,11 @@ mod tests {
     #[test]
     fn test_convert() -> Result<(), SerzDeserzError> {
         // 1. sign_keygen
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // 2. user_keygen and nym
         let user = UserKey::new();
-        let nym = user.nym(signer.public_parameters.clone());
+        let nym = user.nym(signer.public.parameters.clone());
 
         // 3. sign
         let messages_vectors = setup_tests();
@@ -1178,17 +1315,17 @@ mod tests {
 
         // 4. create second user_keygen pk_u_new, sk_new
         let user_new = UserKey::new();
-        let nym_new = user_new.nym(signer.public_parameters.clone());
+        let nym_new = user_new.nym(signer.public.parameters.clone());
 
         // 5. send_convert_sig to create sig orphan
-        let orphan = nym.send_convert_sig(&signer.vk, signature_original.sigma);
+        let orphan = nym.send_convert_sig(&signer.public.vk, signature_original.sigma);
 
         // 6. receive_convert_sig takes sig orphan to create sk_new and sig orphan
-        let sigma_new = nym_new.receive_cred(&signer.vk, orphan);
+        let sigma_new = nym_new.receive_cred(&signer.public.vk, orphan);
 
         // 7. verify the signature using sigma_new
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &nym_new.public.proof.public_key,
             &signature_original.commitment_vector,
             &sigma_new
@@ -1200,11 +1337,11 @@ mod tests {
     #[test]
     fn test_issue_root_cred() -> Result<(), SerzDeserzError> {
         // 1. sign_keygen
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // 2. user_keygen and nym
         let user = UserKey::new();
-        let nym = user.nym(signer.public_parameters.clone());
+        let nym = user.nym(signer.public.parameters.clone());
 
         // 3. sign
         let messages_vectors = setup_tests();
@@ -1220,7 +1357,7 @@ mod tests {
         // check the correctness of root credential
         // assert (spseq_uc.verify(pp_sign, vk_ca, nym_u, commitment_vector, sigma))
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &nym.public.proof.public_key,
             &cred.commitment_vector,
             &cred.sigma
@@ -1235,9 +1372,9 @@ mod tests {
         // 3. prove
         // 4. verify proof
 
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
         let user = UserKey::new();
-        let nym = user.nym(signer.public_parameters.clone());
+        let nym = user.nym(signer.public.parameters.clone());
 
         let messages_vectors = setup_tests();
         let k_prime = Some(4);
@@ -1250,16 +1387,16 @@ mod tests {
 
         // User to whose Nym we will offer the credential
         let user_r = UserKey::new();
-        let nym_r = user_r.nym(signer.public_parameters.clone());
+        let nym_r = user_r.nym(signer.public.parameters.clone());
 
         let addl_attrs = None;
 
         // Create the Offer
-        let offer = nym.offer(&cred, &signer.vk, &addl_attrs, &nym_r.public);
+        let offer = nym.offer(&cred, &signer.public.vk, &addl_attrs, &nym_r.public);
 
         // verify change_rel
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &nym.public.proof.public_key,
             &cred.commitment_vector,
             &cred.sigma
@@ -1270,7 +1407,7 @@ mod tests {
 
         // verify the signature
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &cred_p.nym, // RandomizedPubKey, NOT nym_r.public.proof.public_key,
             &cred_p.cred.commitment_vector,
             &cred_p.cred.sigma
@@ -1280,7 +1417,7 @@ mod tests {
         let proof = cred_p.prove(messages_vector, messages_vector);
 
         // verify_proof
-        assert!(verify_proof(&signer.vk, &proof, messages_vector)?);
+        assert!(verify_proof(&signer.public.vk, &proof, messages_vector)?);
 
         Ok(())
     }
@@ -1307,9 +1444,9 @@ mod tests {
             entry(&message3_str),
         ];
 
-        let signer = Signer::new(MaxCardinality::new(5), MaxEntries::new(10));
+        let signer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
         let user = UserKey::new();
-        let nym_p = user.nym(signer.public_parameters.clone());
+        let nym_p = user.nym(signer.public.parameters.clone());
 
         let k_prime = Some(4);
         let cred = signer.issue_cred(&all_attributes, k_prime, &nym_p.public)?;
@@ -1332,13 +1469,13 @@ mod tests {
             nym: nym_p.public.proof.public_key.clone(),
             cred,
             secret: nym_p.secret,
-            vk: signer.vk.clone(),
+            vk: signer.public.vk.clone(),
             nym_public: nym_p.public,
         };
         let proof = self_delegated_cred.prove(&all_attributes, &selected_attrs);
 
         // verify_proof
-        assert!(verify_proof(&signer.vk, &proof, &selected_attrs)?);
+        assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
 
         Ok(())
     }
@@ -1367,9 +1504,9 @@ mod tests {
         ];
 
         let l_message = MaxEntries::new(10);
-        let signer = Signer::new(MaxCardinality::new(8), l_message);
+        let signer = Issuer::new(MaxCardinality::new(8), l_message);
         let alice = UserKey::new();
-        let alice_nym = alice.nym(signer.public_parameters.clone());
+        let alice_nym = alice.nym(signer.public.parameters.clone());
 
         let position = 5; // index of the update key to be used for the added element
         let index_l = all_attributes.len() + position;
@@ -1378,7 +1515,7 @@ mod tests {
         let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.public)?;
 
         let robert = UserKey::new();
-        let bobby_nym = robert.nym(signer.public_parameters.clone());
+        let bobby_nym = robert.nym(signer.public.parameters.clone());
 
         // We can retrict proving a credential by zerioizing the opening vector of the Entry
         let mut opening_vector_restricted = cred.opening_vector;
@@ -1393,15 +1530,19 @@ mod tests {
         };
 
         // offer to bobby_nym
-        let alice_del_to_bobby =
-            alice_nym.offer(&cred_restricted, &signer.vk, &None, &bobby_nym.public);
+        let alice_del_to_bobby = alice_nym.offer(
+            &cred_restricted,
+            &signer.public.vk,
+            &None,
+            &bobby_nym.public,
+        );
 
         // bobby_nym accepts
         let bobby_cred = bobby_nym.accept(&alice_del_to_bobby);
 
         // verify signature
         assert!(verify(
-            &signer.vk,
+            &signer.public.vk,
             &bobby_cred.nym,
             &bobby_cred.cred.commitment_vector,
             &bobby_cred.cred.sigma
@@ -1418,7 +1559,7 @@ mod tests {
         let proof = bobby_cred.prove(&all_attributes, &selected_attrs);
 
         // verify_proof
-        assert!(verify_proof(&signer.vk, &proof, &selected_attrs)?);
+        assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
 
         // if we try to prove Entry[0] or Entry[1] it should fail
         // age is from Entry[0]
@@ -1428,7 +1569,7 @@ mod tests {
         let proof = bobby_cred.prove(&all_attributes, &selected_attrs);
 
         // verify_proof should fail
-        assert!(!verify_proof(&signer.vk, &proof, &selected_attrs)?);
+        assert!(!verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
 
         Ok(())
     }

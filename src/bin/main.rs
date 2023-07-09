@@ -17,7 +17,7 @@
 use delanocreds::{
     attributes::{attribute, Attribute},
     entry::{entry, Entry},
-    keypair::{spseq_uc::Credential, verify_proof, MaxCardinality, MaxEntries, Signer, UserKey},
+    keypair::{spseq_uc::Credential, verify_proof, Issuer, MaxCardinality, MaxEntries, UserKey},
 };
 
 pub fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
@@ -58,13 +58,13 @@ pub fn basic_bench() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     eprintln!("Time to setup attributes: {:?}", last);
 
     let l_message = MaxEntries::new(10);
-    let signer = Signer::new(MaxCardinality::new(8), l_message);
+    let signer = Issuer::new(MaxCardinality::new(8), l_message);
 
     let alice = UserKey::new();
-    let alice_nym = alice.nym(signer.public_parameters.clone());
+    let alice_nym = alice.nym(signer.public.parameters.clone());
 
     let robert = UserKey::new();
-    let bobby_nym = robert.nym(signer.public_parameters.clone());
+    let bobby_nym = robert.nym(signer.public.parameters.clone());
 
     let position = 5; // index of the update key to be used for the added element
     let index_l = all_attributes.len() + position;
@@ -98,8 +98,12 @@ pub fn basic_bench() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby =
-        alice_nym.offer(&cred_restricted, &signer.vk, &None, &bobby_nym.public);
+    let alice_del_to_bobby = alice_nym.offer(
+        &cred_restricted,
+        &signer.public.vk,
+        &None,
+        &bobby_nym.public,
+    );
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -140,7 +144,7 @@ pub fn basic_bench() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     let last = start.elapsed();
 
     // verify_proof
-    assert!(verify_proof(&signer.vk, &proof, &selected_attrs)?);
+    assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -182,13 +186,13 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     eprintln!("Time to setup attributes: {:?}", last);
 
     let l_message = MaxEntries::new(l_max_entries);
-    let signer = Signer::new(MaxCardinality::new(8), l_message);
+    let signer = Issuer::new(MaxCardinality::new(8), l_message);
 
     let alice = UserKey::new();
-    let alice_nym = alice.nym(signer.public_parameters.clone());
+    let alice_nym = alice.nym(signer.public.parameters.clone());
 
     let robert = UserKey::new();
-    let bobby_nym = robert.nym(signer.public_parameters.clone());
+    let bobby_nym = robert.nym(signer.public.parameters.clone());
 
     let position = 1; // index of the update key to be used for the added element
     let index_l = all_attributes.len() + position;
@@ -222,8 +226,12 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby =
-        alice_nym.offer(&cred_restricted, &signer.vk, &None, &bobby_nym.public);
+    let alice_del_to_bobby = alice_nym.offer(
+        &cred_restricted,
+        &signer.public.vk,
+        &None,
+        &bobby_nym.public,
+    );
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -259,7 +267,7 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     let last = start.elapsed();
 
     // verify_proof
-    assert!(verify_proof(&signer.vk, &proof, &selected_attrs)?);
+    assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
