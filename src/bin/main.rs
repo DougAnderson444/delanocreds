@@ -95,15 +95,11 @@ pub fn basic_bench() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
         // restrict opening to read only
         opening_vector: opening_vector_restricted,
         update_key: cred.update_key,
+        vk: cred.vk,
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(
-        &cred_restricted,
-        &signer.public.vk,
-        &None,
-        &bobby_nym.public,
-    );
+    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public);
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -223,15 +219,11 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
         // restrict opening to read only
         opening_vector: opening_vector_restricted,
         update_key: cred.update_key,
+        vk: cred.vk,
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(
-        &cred_restricted,
-        &signer.public.vk,
-        &None,
-        &bobby_nym.public,
-    );
+    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public);
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
