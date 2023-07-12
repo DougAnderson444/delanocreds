@@ -32,6 +32,13 @@ impl IntoIterator for Entry {
     }
 }
 
+// implement `std::iter::FromIterator<attributes::Attribute>` for `entry::Entry`
+impl std::iter::FromIterator<Attribute> for Entry {
+    fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
+        Entry(iter.into_iter().collect())
+    }
+}
+
 /// Iterates through each Attribute in the Entry and converts it to a FieldElement
 pub fn convert_entry_to_bn(input: &Entry) -> Result<Vec<FieldElement>, SerzDeserzError> {
     input
