@@ -30,6 +30,7 @@ impl From<SerzDeserzError> for UpdateError {
 /// - `update_key` [`UpdateKey`] enables holder to extend the attributes in credential, up to the update_key limit. `initial Entry len < current Entry len < update_key.len()`
 /// for the next level in the delegation hierarchy. If no further delegations are allowed, then no
 /// update key is provided.
+/// - `vk` [`VK`] is the verification key used in the signature
 ///
 #[derive(Clone)]
 pub struct Credential {
@@ -37,6 +38,7 @@ pub struct Credential {
     pub update_key: UpdateKey, // Called DelegatableKey (dk for k prime) in the paper
     pub commitment_vector: Vec<G1>,
     pub opening_vector: Vec<FieldElement>,
+    pub vk: Vec<VK>,
 }
 
 /// Change representation of the signature message pair to a new commitment vector and user public key.
@@ -112,6 +114,7 @@ pub fn change_rep(
                 update_key: fresh_update_key,
                 commitment_vector: rndmz_commit_vector,
                 opening_vector: rndmz_opening_vector,
+                vk: vk.to_vec(),
             },
             chi,
         )
