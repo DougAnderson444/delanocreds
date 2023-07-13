@@ -16,6 +16,18 @@ pub enum UpdateError {
     Error,
 }
 
+// `std::error::Error`
+impl std::error::Error for UpdateError {}
+
+impl std::fmt::Display for UpdateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            UpdateError::SerzDeserzError(e) => write!(f, "SerzDeserzError: {}", e),
+            UpdateError::Error => write!(f, "Error"),
+        }
+    }
+}
+
 impl From<SerzDeserzError> for UpdateError {
     fn from(err: SerzDeserzError) -> Self {
         UpdateError::SerzDeserzError(err)
@@ -41,7 +53,7 @@ pub struct Credential {
     pub vk: Vec<VK>,
 }
 
-/// Change representation of the signature message pair to a new commitment vector and user public key.
+/// Change the Representative of the signature message pair to a new commitment vector and user public key.
 /// This is used to update the signature message pair to a new user public key.
 /// The new commitment vector is computed using the old commitment vector and the new user public key.
 /// The new user public key is computed using the old user public key and the update key.
