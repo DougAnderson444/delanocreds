@@ -14,13 +14,14 @@
 //! | =============  | ========= |
 //! | **Total Time** | **535**   |
 
+use anyhow::Result;
 use delanocreds::{
     attributes::{attribute, Attribute},
     entry::{entry, Entry},
     keypair::{spseq_uc::Credential, verify_proof, Issuer, MaxCardinality, MaxEntries, UserKey},
 };
 
-pub fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
+pub fn main() -> Result<()> {
     println!(" \nRunning a short basic test: \n");
     let _ = basic_bench();
     println!(" \nCreating and proving 30 of 100 credentials: \n");
@@ -29,7 +30,7 @@ pub fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     Ok(())
 }
 
-pub fn basic_bench() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
+pub fn basic_bench() -> Result<()> {
     //start timer
     let start = std::time::Instant::now();
 
@@ -99,7 +100,7 @@ pub fn basic_bench() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public);
+    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public)?;
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -151,7 +152,7 @@ pub fn basic_bench() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     Ok(())
 }
 
-fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
+fn bench_30_of_100() -> Result<()> {
     // Bench Variables:
     // l - upper bound for the length of the commitment vector
     // t - upper bound for the cardinality of the committed sets
@@ -223,7 +224,7 @@ fn bench_30_of_100() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public);
+    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public)?;
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
