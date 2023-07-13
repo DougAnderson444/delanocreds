@@ -21,6 +21,7 @@ use amcl_wrapper::univar_poly::UnivarPolynomial;
 use amcl_wrapper::{
     field_elem::FieldElement, group_elem::GroupElement, group_elem_g1::G1, group_elem_g2::G2,
 };
+use anyhow::Result;
 use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
 use spseq_uc::OpeningInformation;
@@ -118,6 +119,12 @@ impl MaxEntries {
     }
 }
 
+impl std::cmp::PartialEq<MaxEntries> for usize {
+    fn eq(&self, other: &MaxEntries) -> bool {
+        self == &other.0
+    }
+}
+
 // enum Error of SerzDeserzError and TooLargeCardinality
 #[derive(Debug, Clone)]
 pub enum IssuerError {
@@ -126,6 +133,9 @@ pub enum IssuerError {
     TooLongEntries,
     InvalidNymProof,
 }
+
+// implement `std::error::Error` for IssuerError
+impl std::error::Error for IssuerError {}
 
 // impl fmt
 impl std::fmt::Display for IssuerError {
@@ -232,7 +242,7 @@ impl Issuer {
         CredentialBuilder::new(self)
     }
 
-    /// Issues a root credential to a user.
+    /// Creates a root credential to a user's pseudonym ([NymPublic]).
     /// # Arguments
     /// - `vk`: Vector of [VK] verification keys of the set
     /// - attr_vector: `&Vec<Entry>`, attributes of the user
@@ -568,7 +578,7 @@ impl Nym {
         cred: &Credential,
         addl_attrs: &Option<Entry>,
         their_nym: &NymPublic,
-    ) -> CredOffer {
+    ) -> Result<CredOffer, anyhow::Error> {
         // check the proof
         // assert self.zkp.verify(challenge, pedersen_open, pedersen_commit, stm, response)
         assert!(DamgardTransform::verify(
@@ -579,19 +589,20 @@ impl Nym {
         let mut cred_r = cred.clone();
         if let Some(addl_attrs) = addl_attrs {
             let mu = FieldElement::one();
-            if let Ok(cred_pushed) = self.change_rel(addl_attrs, cred_r.clone(), &mu) {
-                cred_r = cred_pushed;
+
+            cred_r = match self.change_rel(addl_attrs, cred_r.clone(), &mu) {
+                Ok(cred_pushed) => cred_pushed,
+                Err(e) => return Err(anyhow::anyhow!("Change Rel Failed: {}", e)),
             }
         }
 
         let orphan = self.send_convert_sig(&cred_r.vk, cred_r.sigma.clone());
 
-        // (orphan sig, commitment_l, cred_r, opening_info)
-        CredOffer {
+        Ok(CredOffer {
             orphan,
             cred: cred_r,
             vk: cred.vk.clone(),
-        }
+        })
     }
 
     /// Delegated User (delegatee) uses this function to anonimize the credential to a pseudonym of themself.
@@ -621,7 +632,7 @@ impl Nym {
         };
 
         // pick randomness mu, psi
-        let updatable = false;
+        let updatable = true;
         let mu = FieldElement::one();
         let psi = FieldElement::random();
 
@@ -700,6 +711,8 @@ impl Nym {
     /// Updates the signature for a new commitment vector including 𝐶_L for message_l using update_key
     ///
     /// Referred to as `change_rel` or "Change Relations" in the paper.
+    ///
+    /// TODO: We shouldn't even be able to call change_rel unless there is an `update_key` present int he cred.
     ///
     /// # Arguments
     /// - `message_l`: message set at index `index_l` that will be added in message vector
@@ -802,7 +815,7 @@ pub struct Signature {
 /// - `vk`: `Vec<[VK]>`, verification key of the user
 pub struct CredOffer {
     orphan: Signature,
-    cred: Credential,
+    pub(crate) cred: Credential,
     vk: Vec<VK>,
 }
 
@@ -890,7 +903,7 @@ impl DelegatedCred {
         let (witness_vector, commit_vector) = selected_attrs
             .iter()
             .enumerate()
-            .filter(|(_, selected_attr)| !selected_attr.is_empty()) // TODO: filter out selectec_attrs which is_empty()
+            .filter(|(_, selected_attr)| !selected_attr.is_empty()) // filter out selected_attrs which is_empty()
             .fold(
                 (Vec::new(), Vec::new()),
                 |(mut witness, mut commitment_vectors), (i, selected_attr)| {
@@ -928,7 +941,7 @@ pub fn verify_proof(
     vk: &[VK],
     proof: &CredProof,
     selected_attrs: &[Entry],
-) -> Result<bool, SerzDeserzError> {
+) -> Result<bool, IssuerError> {
     // Get the selected_attr indexes which are not `is_enpty()`,
     // use those indexes to select corresponding `commitment_vectors`
     // zip together `commitment_vector` where `selected_attr` is not empty
@@ -1407,7 +1420,7 @@ mod tests {
     }
 
     #[test]
-    fn test_delegate_only() -> Result<(), SerzDeserzError> {
+    fn test_delegate_only() -> Result<()> {
         // 1. offer
         // 2. accept
         // 3. prove
@@ -1433,7 +1446,7 @@ mod tests {
         let addl_attrs = Some(Entry::new(&[attribute("age > 21")]));
 
         // Create the Offer
-        let offer = nym.offer(&cred, &addl_attrs, &nym_r.public);
+        let offer = nym.offer(&cred, &addl_attrs, &nym_r.public)?;
 
         // verify change_rel
         assert!(verify(
@@ -1464,7 +1477,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prove_subset_creds() -> Result<(), SerzDeserzError> {
+    fn test_prove_subset_creds() -> Result<(), IssuerError> {
         let age = attribute("age = 30");
         let name = attribute("name = Alice");
         let drivers = attribute("driver license = 12");
@@ -1522,7 +1535,7 @@ mod tests {
     }
 
     #[test]
-    fn test_delegate_subset() -> Result<(), SerzDeserzError> {
+    fn test_delegate_subset() -> Result<()> {
         // Delegate a subset of attributes
         let age = attribute("age = 30");
         let name = attribute("name = Alice");
@@ -1579,7 +1592,7 @@ mod tests {
 
         // offer to bobby_nym
         let alice_del_to_bobby =
-            alice_nym.offer(&cred_restricted, &Some(addl_entry), &bobby_nym.public);
+            alice_nym.offer(&cred_restricted, &Some(addl_entry), &bobby_nym.public)?;
 
         // bobby_nym accepts
         let bobby_cred = bobby_nym.accept(&alice_del_to_bobby);
@@ -1626,7 +1639,7 @@ mod tests {
 
     #[test]
     // second offer chain
-    fn test_second_offer() -> Result<(), SerzDeserzError> {
+    fn test_second_offer() -> Result<()> {
         // Delegate a subset of attributes
         let age = attribute("age = 30");
         let name = attribute("name = Alice");
@@ -1663,7 +1676,7 @@ mod tests {
         let bobby_nym = robert.nym(issuer.public.parameters.clone());
 
         // offer to bobby_nym
-        let alice_offer = alice_nym.offer(&alice_cred, &None, &bobby_nym.public);
+        let alice_offer = alice_nym.offer(&alice_cred, &None, &bobby_nym.public)?;
 
         // bobby_nym accepts
         let bobby_cred: DelegatedCred = bobby_nym.accept(&alice_offer);
@@ -1676,7 +1689,7 @@ mod tests {
         let charlie = UserKey::new();
         let charlie_nym = charlie.nym(issuer.public.parameters.clone());
 
-        let bobby_offer = bobby_offerer.offer(&cred_copy, &None, &charlie_nym.public);
+        let bobby_offer = bobby_offerer.offer(&cred_copy, &None, &charlie_nym.public)?;
 
         // charlie accepts
         let charlie_cred = charlie_nym.accept(&bobby_offer);
