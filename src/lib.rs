@@ -1,7 +1,7 @@
 use anyhow::Result;
 use attributes::Attribute;
 use entry::Entry;
-use keypair::{spseq_uc::Credential, DelegatedCred, Issuer, IssuerError, NymPublic};
+use keypair::{spseq_uc::Credential, Issuer, IssuerError, NymPublic};
 
 pub mod attributes;
 pub mod config;
@@ -40,7 +40,7 @@ impl<'a> CredentialBuilder<'a> {
     }
 
     /// Set the number of Entries that can be added to the Credential
-    pub fn extendable(&mut self, extendable: &usize) -> &mut Self {
+    pub fn max_entries(&mut self, extendable: &usize) -> &mut Self {
         self.extendable = *extendable;
         self
     }
@@ -71,6 +71,7 @@ pub struct OfferBuilder<'a> {
     unprovable_attributes: Vec<Attribute>,
     current_entries: Vec<Entry>,
     additional_entry: Option<Entry>,
+    max_entries: usize,
 }
 
 impl<'a> OfferBuilder<'a> {
@@ -85,6 +86,8 @@ impl<'a> OfferBuilder<'a> {
             unprovable_attributes: Vec::new(),
             current_entries: current_entries.to_vec(),
             additional_entry: None,
+            // set to cred update_key length
+            max_entries: credential.update_key.as_ref().map_or(0, |k| k.len()),
         }
     }
 
@@ -102,13 +105,22 @@ impl<'a> OfferBuilder<'a> {
     /// as pubically parameterized ([set_commits::ParamSetCommitment]) for this [Issuer].
     ///
     /// If used multiple times, last one will overwrite all previous additions
-    pub fn add_entry(&mut self, entry: Entry) -> &mut Self {
+    pub fn additional_entry(&mut self, entry: Entry) -> &mut Self {
         self.additional_entry = Some(entry);
         self
     }
 
+    /// Set the maximum number of Entries that can be added to the Credential by a delegatee Nym.
+    pub fn max_entries(&mut self, limit: usize) -> &mut Self {
+        self.max_entries = std::cmp::min(
+            limit,
+            self.credential.update_key.as_ref().map_or(0, |k| k.len()),
+        );
+        self
+    }
+
     /// Build the Offer
-    pub fn offer_to(&self, their_nym: &NymPublic) -> Result<(keypair::CredOffer, Vec<Entry>)> {
+    pub fn offer_to(&self, their_nym: &NymPublic) -> Result<(keypair::Offer, Vec<Entry>)> {
         let mut cred_redacted = self.credential.clone();
         let mut provable_entries = self.current_entries.clone();
 
@@ -133,7 +145,7 @@ impl<'a> OfferBuilder<'a> {
             // create copy of cred, replace opening_vector with opening_vector_restricted
             cred_redacted = Credential {
                 opening_vector: opening_vector_restricted,
-                ..self.credential.clone()
+                ..cred_redacted
             };
         }
 
@@ -142,36 +154,52 @@ impl<'a> OfferBuilder<'a> {
             provable_entries.push(entry.clone());
         }
 
-        // TODO: Third, limit update key to given max
-        // TODO: restrict delegation in how many further levels can be delegated (reduce update_key length)
+        // Third, limit update_key to given extendable limit
+        // which restricts delegation in how many further levels can be delegated (reduce update_key length in cred)
+        cred_redacted.update_key = match self.max_entries {
+            0 => None,
+            _ => Some(
+                self.credential
+                    .update_key
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .take(self.max_entries)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            ),
+        };
 
         let offer = self
             .our_nym
             .offer(&cred_redacted, &self.additional_entry, their_nym)?;
+
         Ok((offer, provable_entries))
     }
 }
 
 /// Proof Builder
 /// Takes selected [Attribute]s and a [Credential] and generates a [keypair::CredProof] for them.
-struct ProofBuilder<'a> {
+pub struct ProofBuilder<'a> {
+    nym: &'a keypair::Nym,
+    cred: &'a Credential,
     all_attributes: Vec<Entry>,
     selected_attributes: Vec<Attribute>,
-    cred: &'a DelegatedCred,
 }
 
 impl<'a> ProofBuilder<'a> {
     /// Create a new ProofBuilder
-    pub fn new(all_attributes: &[Entry], cred: &'a DelegatedCred) -> Self {
+    pub fn new(nym: &'a keypair::Nym, cred: &'a Credential, all_attributes: &[Entry]) -> Self {
         Self {
+            nym,
+            cred,
             all_attributes: all_attributes.to_vec(),
             selected_attributes: Vec::new(),
-            cred,
         }
     }
 
     /// Add an [Attribute] to the Proof
-    pub fn with_attribute(&mut self, attribute: Attribute) -> &mut Self {
+    pub fn select_attribute(&mut self, attribute: Attribute) -> &mut Self {
         self.selected_attributes.push(attribute);
         self
     }
@@ -195,20 +223,22 @@ impl<'a> ProofBuilder<'a> {
             .collect::<Vec<Entry>>();
 
         // create proof
-        let proof = self.cred.prove(&self.all_attributes, &selected_attr);
+        let proof = self
+            .nym
+            .prove(self.cred, &self.all_attributes, &selected_attr);
 
         (proof, selected_attr)
     }
 }
 
 #[cfg(test)]
-mod test {
+mod lib_api_tests {
 
     use super::*;
     use crate::{
         attributes::Attribute,
         entry::Entry,
-        keypair::{MaxEntries, Nym, UserKey},
+        keypair::{MaxEntries, UserKey},
     };
 
     #[test]
@@ -226,7 +256,7 @@ mod test {
         let cred = match issuer
             .builder() // CredentialBuilder for this Issuer
             .with_entry(age_entry.clone())
-            .extendable(&MaxEntries::default())
+            .max_entries(&MaxEntries::default())
             .issue_to(&nym.public)
         {
             Ok(cred) => cred,
@@ -238,7 +268,7 @@ mod test {
         // Method B: as parameter
         let cred = match CredentialBuilder::new(&issuer)
             .with_entry(age_entry.clone())
-            .extendable(&MaxEntries::default())
+            .max_entries(&MaxEntries::default())
             .issue_to(&nym.public)
         {
             Ok(cred) => cred,
@@ -250,7 +280,7 @@ mod test {
         // Variant A: extendable, single Entry
         let cred = match CredentialBuilder::new(&issuer)
             .with_entry(age_entry.clone())
-            .extendable(&MaxEntries::default())
+            .max_entries(&MaxEntries::default())
             .issue_to(&nym.public)
         {
             Ok(cred) => cred,
@@ -284,10 +314,10 @@ mod test {
     #[test]
     fn offer_tests() -> Result<()> {
         // Given a Root Credential, holder can:
-        // 1. Offer the unchanged Credential to another Nym
-        // 2. Offer with additional Attributes (use update_key to extend Entrys)
-        // 3. Offer with redact proving of Entry(s) (zeroized opening_info)
-        // 4. Offer with restricted further levels of delegation (update_key length)
+        // 1. Offer the unchanged Credential to another Nym (Alice to Bob)
+        // 2. Offer with additional Attributes (Bob to Charlie)
+        // 3. Offer with redact proving of Entry(s) (Charlie to Douglas)
+        // 4. Offer with restricted further levels of delegation, cannot add additonal_entrys past a certain limit (Douglas to Evan)
         // 5. Generate a Proof themselves
 
         // create an Issuer, a User, and issue a cred to a Nym
@@ -309,92 +339,128 @@ mod test {
         let douglas = UserKey::new();
         let doug_nym = douglas.nym(issuer.public.parameters.clone());
 
+        // Evan
+        let evan = UserKey::new();
+        let evan_nym = evan.nym(issuer.public.parameters.clone());
+
         let over_21 = Attribute::new("age > 21");
         let seniors_discount = Attribute::new("age > 65");
-        let age_entry = Entry::new(&[over_21, seniors_discount]);
+        let root_entry = Entry::new(&[over_21.clone(), seniors_discount]);
 
+        // Issue the (Powerful) Root Credential to Alice
         let cred = match issuer
             .builder()
-            .with_entry(age_entry.clone())
-            .extendable(&MaxEntries::default())
+            .with_entry(root_entry.clone())
+            .max_entries(&MaxEntries::default()) // DEFAULT_MAX_ENTRIES: usize = 6
             .issue_to(&alice_nym.public)
         {
             Ok(cred) => cred,
             Err(e) => panic!("Error issuing cred: {:?}", e),
         };
 
-        // cred should have Some update_key
-        assert!(cred.update_key.is_some());
-
-        // 1. Offer the unchanged Credential to another Nym
-        let offer = alice_nym.offer(&cred, &None, &bobby_nym.public)?;
-
-        // offer.cred should have Some update_key
-        assert!(offer.cred.update_key.is_some());
+        // 1. Offer the unchanged Credential to Bob's Nym
+        let (offer, provable_entries) = alice_nym
+            .offer_builder(&cred, &[root_entry])
+            .offer_to(&bobby_nym.public)?;
 
         // Bob can accept
         let bobby_cred = bobby_nym.accept(&offer);
 
-        // bobby_cred.cred shoudl have Some update_key too
-        assert!(bobby_cred.cred.update_key.is_some());
+        // and prove all entries
+        let proof = bobby_nym.prove(&bobby_cred, &provable_entries, &provable_entries);
+        assert!(keypair::verify_proof(&issuer.public.vk, &proof, &provable_entries).unwrap());
 
-        // and prove age_entry
-        let proof = bobby_cred.prove(&[age_entry.clone()], &[age_entry.clone()]);
-
-        // which can be verified
-        assert!(keypair::verify_proof(&issuer.public.vk, &proof, &[age_entry.clone()]).unwrap());
+        // or Bob can prove just the selected attribute `over_21` using ProofBuilder
+        let (proof, selected_entries) = bobby_nym
+            .proof_builder(&bobby_cred, &provable_entries)
+            .select_attribute(over_21)
+            .prove();
+        assert!(keypair::verify_proof(&issuer.public.vk, &proof, &selected_entries).unwrap());
 
         // 2. Offer with additional Attributes, using OfferBuilder
         let handsome_attribute = Attribute::new("also handsome");
         let additional_entry = Entry::new(&[handsome_attribute.clone()]);
 
-        let cred = bobby_cred.cred.clone(); //grab a copy before it's moved out in Nym::from()
-
-        // let offer = Nym::from(bobby_cred).offer(
-        //     &cred,
-        //     &None, // Some(additional_entry),
-        //     &charlie_nym.public,
-        // );
-
-        let (offer, provable_entries) =
-            OfferBuilder::new(&Nym::from(bobby_cred), &cred, &[age_entry.clone()])
-                .add_entry(additional_entry)
-                .offer_to(&charlie_nym.public)?;
-
-        // Should be 2 Entry(s) in the provable_entries
-        assert_eq!(provable_entries.len(), 2);
-
-        // CredOffer should have 2 opening_vectors
-        assert_eq!(offer.cred.opening_vector.len(), 2);
+        let (offer, provable_entries) = bobby_nym
+            .offer_builder(&bobby_cred, &provable_entries)
+            .additional_entry(additional_entry)
+            .offer_to(&charlie_nym.public)?;
 
         // Charlie can accept
         let charlie_cred = charlie_nym.accept(&offer);
 
-        // credential should have commit length of 2 as well
-        assert_eq!(charlie_cred.cred.commitment_vector.len(), 2);
-
-        // cred opening_vector should have 2 entries
-        assert_eq!(charlie_cred.cred.opening_vector.len(), 2);
-
-        // and Charlie can prove additional entry using ProofBuilder
-        let (proof, selected_entries) = ProofBuilder::new(&provable_entries, &charlie_cred)
-            .with_attribute(handsome_attribute.clone())
+        // and Charlie's Nym can prove additional selected attribute using ProofBuilder
+        let (proof, selected_entries) = charlie_nym
+            .proof_builder(&charlie_cred, &provable_entries)
+            .select_attribute(handsome_attribute.clone())
             .prove();
-
-        // which can be verified
         assert!(keypair::verify_proof(&issuer.public.vk, &proof, &selected_entries).unwrap());
 
         // 3. Charlie can Offer a redacted version of the Entry(s) to Doug
-        let cred = charlie_cred.cred.clone(); //grab a copy before it's moved out in Nym::from()
-        let (offer, provable_entries) =
-            OfferBuilder::new(&Nym::from(charlie_cred), &cred, &provable_entries)
-                .without_attribute(handsome_attribute.clone())
-                .offer_to(&doug_nym.public)?;
+        let (offer, provable_entries) = charlie_nym
+            .offer_builder(&charlie_cred, &provable_entries)
+            .without_attribute(handsome_attribute.clone())
+            .offer_to(&doug_nym.public)?;
 
-        // Should be 2 Entry(s) in the provable_entries, but only 1 non-empty
-        assert_eq!(provable_entries.len(), 2);
+        assert_eq!(provable_entries.len(), 2); // Should be 2 Entry(s) in the provable_entries, but only 1 non-empty
         assert_eq!(provable_entries[0].len(), 2); // over_21, seniors_discount
         assert_eq!(provable_entries[1].len(), 0); // empty, redacted entry with the handsome attribute
+
+        // Doug can accept
+        let doug_cred = doug_nym.accept(&offer);
+
+        // and Doug's proof excludes the handsome_attribute
+        let (_proof, selected_entries) = doug_nym
+            .proof_builder(&doug_cred, &provable_entries)
+            .select_attribute(handsome_attribute.clone())
+            .prove();
+
+        // show handsome_attribute is not contained within the selected_entries
+        let contains_handsome = selected_entries
+            .into_iter()
+            .any(|entry| entry.contains(&handsome_attribute));
+
+        // Verify handsome_attribute is not contained within the selected_entries
+        assert!(!contains_handsome);
+
+        // 4. Douglas can Offer a restricted version of the Credential to Evan
+        let (offer, provable_entries) = doug_nym
+            .offer_builder(&doug_cred, &provable_entries)
+            .max_entries(3)
+            .offer_to(&evan_nym.public)?;
+
+        // there are already 2 entries, so Even can add one more but not two more
+        let evan_entry = Entry::new(&[Attribute::new("evan entry #1")]);
+
+        // Evan can accept
+        let evan_cred = evan_nym.accept(&offer);
+
+        // Evan can adds an entry
+        let even_nym_2 = evan.nym(issuer.public.parameters.clone());
+        let (offer, provable_entries) = evan_nym
+            .offer_builder(&evan_cred, &provable_entries)
+            .additional_entry(evan_entry)
+            .offer_to(&even_nym_2.public)?;
+
+        // Evan2 can accept
+        let evan_2_cred = even_nym_2.accept(&offer);
+
+        // Evan2 can prove added entry attributes
+        let (proof, selected_entries) = even_nym_2
+            .proof_builder(&evan_2_cred, &provable_entries)
+            .select_attribute(Attribute::new("evan entry #1"))
+            .prove();
+        assert!(keypair::verify_proof(&issuer.public.vk, &proof, &selected_entries).unwrap());
+
+        // Adding beyond Max Entries of 3 should fail
+        let even_nym_3 = evan.nym(issuer.public.parameters);
+
+        let res = even_nym_2
+            .offer_builder(&evan_2_cred, &provable_entries)
+            .additional_entry(Entry::new(&[Attribute::new("bigger than Max Entry")]))
+            .offer_to(&even_nym_3.public);
+
+        assert!(res.is_err());
 
         Ok(())
     }
