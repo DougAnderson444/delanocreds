@@ -131,7 +131,7 @@ pub fn basic_bench() -> Result<()> {
     ];
 
     // prepare a proof
-    let proof = bobby_cred.prove(&all_attributes, &selected_attrs);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
@@ -250,7 +250,7 @@ fn bench_30_of_100() -> Result<()> {
         .collect();
 
     // prepare a proof
-    let proof = bobby_cred.prove(&all_attributes, &selected_attrs);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
