@@ -1,6 +1,7 @@
 use crate::entry::convert_entry_to_bn;
 use crate::entry::Entry;
 use crate::keypair::MaxCardinality;
+use crate::types::{GeneratorG1, GeneratorG2};
 use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
@@ -21,8 +22,8 @@ use secrecy::Secret;
 pub struct ParamSetCommitment {
     pub pp_commit_g1: Vec<G1>,
     pub pp_commit_g2: Vec<G2>,
-    pub g_1: G1, // TODO: Netype this as a Generator type instead of plain G1.
-    pub g_2: G2,
+    pub g_1: GeneratorG1,
+    pub g_2: GeneratorG2,
     pub max_cardinality: usize,
 }
 
@@ -59,8 +60,8 @@ impl ParamSetCommitment {
         ParamSetCommitment {
             pp_commit_g2,
             pp_commit_g1,
-            g_2,
-            g_1,
+            g_2: GeneratorG2(g_2),
+            g_1: GeneratorG1(g_1),
             max_cardinality: *t,
         }
     }
@@ -103,7 +104,6 @@ pub trait Commitment {
         param_sc: &ParamSetCommitment,
         mess_set_str: &Entry,
     ) -> Result<(G1, FieldElement), SerzDeserzError> {
-        // TODO: Verify the message set string length is no more than the max cardinality in ParamSetCommitment
         let mess_set = convert_entry_to_bn(mess_set_str)?;
         let monypol_coeff = UnivarPolynomial::new_with_roots(&mess_set);
         let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
@@ -305,10 +305,6 @@ impl CrossSetCommitment {
     /// # Returns
     /// a proof which is a aggregate of witnesses and shows all subsets are valid for respective sets
     pub fn aggregate_cross(witness_vector: &[G1], commit_vector: &[G1]) -> G1 {
-        // TODO: Needs to ensure that elements in the witness_vector are no longer than the max_cardinality in ParamSetCommitment
-        // check number of entries in `witness_vector` against `self.param_sc.max_cardinality` to ensure within bounds
-        // ie. witness_vector.len() <= self.param_sc.max_cardinality
-
         // sum all elements in all witness_vectors
         witness_vector.iter().zip(commit_vector.iter()).fold(
             G1::identity(),
@@ -546,8 +542,7 @@ mod test {
             CrossSetCommitment::open_subset(&pp, &set_str2, &opening_info_2, &subset_str_2)?
                 .expect("Some Witness");
 
-        // aggregate all witnesses for a subset is correct-> proof
-        // TODO: System should not allow you to aggregate witnesses of a higher cardinality than the max cardinality in ParamSetCommitment
+        // aggregate all witnesses for a subset is correct -> proof
         let proof = CrossSetCommitment::aggregate_cross(&vec![witness_1, witness_2], commit_vector);
 
         // verification aggregated witnesses
