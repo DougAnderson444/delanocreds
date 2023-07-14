@@ -11,12 +11,7 @@ use sha2::{Digest, Sha256};
 
 use crate::keypair::spseq_uc::RandomizedPubKey;
 use crate::keypair::NymProof;
-
-#[derive(Clone, Debug)]
-pub enum Generator {
-    G1(G1),
-    G2(G2),
-}
+use crate::types::{Generator, GeneratorG1, GeneratorG2, Group};
 
 impl Display for Generator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -27,17 +22,37 @@ impl Display for Generator {
     }
 }
 
+impl Display for Group {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Group::G1(g) => write!(f, "{g}"),
+            Group::G2(g) => write!(f, "{g}"),
+        }
+    }
+}
+
 pub struct ChallengeState {
     pub name: String,
     pub g: Generator,
-    pub statement: Vec<Generator>,
+    pub statement: Vec<Group>,
     pub hash: [u8; 32],
+}
+
+impl ChallengeState {
+    pub fn new(generator: Generator, statement: Vec<Group>, announcement: &[u8]) -> Self {
+        Self {
+            name: crate::config::CHALLENGE_STATE_NAME.to_string(),
+            g: generator,
+            statement,
+            hash: Sha256::digest(announcement).into(),
+        }
+    }
 }
 
 pub type Challenge = FieldElement;
 pub type Response = Vec<FieldElement>; // Vec<BigNum>;
 /// Schnorr proof (non-interactive using Fiat Shamir heuristic) of the statement
-/// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generilized version
+/// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generalized version
 pub struct ZkpSchnorrFiatShamir {}
 
 impl Default for ZkpSchnorrFiatShamir {
@@ -91,15 +106,15 @@ impl ZkpSchnorrFiatShamir {
 
         // SHAKE3 hash the &announcement.to_bytes(false)
         let hash: [u8; 32] = Sha256::digest(announcement.to_bytes(false)).into();
-        // cast stms to Generator::G2
+        // cast stms to Group::G2
         let stms = stms
             .iter()
-            .map(|x| Generator::G2(x.clone()))
-            .collect::<Vec<Generator>>();
+            .map(|x| Group::G2(x.clone()))
+            .collect::<Vec<Group>>();
 
         let state = ChallengeState {
             name: "schnorr".to_string(),
-            g: Generator::G2(g_2.clone()),
+            g: Generator::G2(GeneratorG2(g_2.clone())),
             statement: stms,
             hash,
         };
@@ -143,12 +158,12 @@ impl ZkpSchnorrFiatShamir {
         // cast stms to Generator::G2
         let stms = stms
             .iter()
-            .map(|x| Generator::G2(x.clone()))
-            .collect::<Vec<Generator>>();
+            .map(|x| Group::G2(x.clone()))
+            .collect::<Vec<Group>>();
 
         let state = ChallengeState {
             name: "schnorr".to_string(),
-            g: Generator::G2(g_2.clone()),
+            g: Generator::G2(GeneratorG2(g_2.clone())),
             statement: stms,
             hash: Sha256::digest(announcement.to_bytes(false)).into(),
         };
@@ -238,9 +253,9 @@ pub struct DamgardTransform {
 impl DamgardTransform {
     pub fn announce(&self) -> (PedersenCommit, PedersenOpen) {
         let w_random = FieldElement::random();
-        let w_element = &w_random * &self.pedersen.g;
+        let w_element = &self.pedersen.g.scalar_mul_const_time(&w_random);
         let (pedersen_commit, mut pedersen_open) = self.pedersen.commit(w_random);
-        pedersen_open.element(w_element);
+        pedersen_open.element(w_element.clone());
         (pedersen_commit, pedersen_open)
     }
     pub fn verify(nym_proof: &NymProof, nym_damgard: &DamgardTransform) -> bool {
@@ -265,7 +280,7 @@ impl Schnorr for DamgardTransform {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Pedersen {
-    pub g: G1,
+    pub g: GeneratorG1,
     pub h: G1,
     // trapdoor: FieldElement,
 }
@@ -291,14 +306,14 @@ impl Default for Pedersen {
 impl Pedersen {
     pub fn new() -> Self {
         // h is the statement. d is the trapdoor. g is the generator. h = d*g
-        let g = G1::generator();
+        let g: GeneratorG1 = G1::generator().into();
         let d = Secret::new(FieldElement::random()); // trapdoor
         let h = &g.scalar_mul_const_time(d.expose_secret());
         Pedersen { g, h: h.clone() }
     }
     pub fn commit(&self, msg: FieldElement) -> (PedersenCommit, PedersenOpen) {
         let r = FieldElement::random();
-        let pedersen_commit = &r * &self.h + &msg * &self.g;
+        let pedersen_commit = &r * &self.h + &self.g.scalar_mul_const_time(&msg);
         let pedersen_open = PedersenOpen {
             open_randomness: r,
             announce_randomness: msg,
@@ -372,8 +387,8 @@ mod tests {
         // verifier creates a challenge
         let state = ChallengeState {
             name: "schnorr".to_string(),
-            g: Generator::G1(zkpsch.g_1.clone()),
-            statement: vec![Generator::G1(stm.as_ref().clone())],
+            g: Generator::G1(zkpsch.g_1.clone().into()),
+            statement: vec![Group::G1(stm.as_ref().clone())],
             hash: Sha256::digest(announce.0.to_bytes(false)).into(),
         };
 
@@ -402,13 +417,11 @@ mod tests {
 
         let (pedersen_commit, pedersen_open) = damgard.announce();
 
-        // TODO: create func or Builder for this
-        let state = ChallengeState {
-            name: "schnorr".to_owned(),
-            g: Generator::G1(damgard.pedersen.g.clone()),
-            hash: Sha256::digest(pedersen_commit.to_bytes(false)).into(),
-            statement: vec![Generator::G1(statement.as_ref().clone())],
-        };
+        let state = ChallengeState::new(
+            Generator::G1(damgard.pedersen.g.clone()),
+            vec![Group::G1(statement.as_ref().clone())],
+            &pedersen_commit.to_bytes(false),
+        );
 
         let challenge = DamgardTransform::challenge(&state);
 

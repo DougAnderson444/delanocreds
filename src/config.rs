@@ -22,3 +22,5 @@
 pub const DEFAULT_MAX_ENTRIES: usize = 6;
 /// Default Max Cardinality: The maximum number of total attribute elements allowed in a credential.
 pub const DEFAULT_MAX_CARDINALITY: usize = 16;
+
+pub const CHALLENGE_STATE_NAME: &str = "schnorr";
