@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["attributes","keypair","set_commits","types","utils","zkp"],"struct":["EntryBuilder","RootIssuer","RootIssuerBuilder"]};
+window.SIDEBAR_ITEMS = {"mod":["attributes","config","entry","keypair","set_commits","types","zkp"],"struct":["CredentialBuilder","OfferBuilder","ProofBuilder"]};

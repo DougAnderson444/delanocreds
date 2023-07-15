@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Generator"],"struct":["ChallengeState","DamgardTransform","ZKPSchnorr","ZkpSchnorrFiatShamir"],"trait":["Schnorr"],"type":["Challenge","Response"]};
+window.SIDEBAR_ITEMS = {"struct":["ChallengeState","DamgardTransform","Pedersen","PedersenOpen","ZKPSchnorr","ZkpSchnorrFiatShamir"],"trait":["Schnorr"],"type":["Challenge","PedersenCommit","Response"]};

@@ -368,374 +368,542 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
-</pre></div><pre class="rust"><code><span class="doccomment">//! # Delanocreds API
-//!
-//! **Del**egatable **Ano**nymous **Cred**ential**s**: Based on the Crypto paper
-//! [Practical Delegatable Anonymous Credentials From Equivalence Class Signatures](https://eprint.iacr.org/2022/680)
-//!
-//! This library enables you to create, issue, delegate/extend/restrict/transfer, and verify credentials in an anonymous way.
-//!
-//! # Roles
-//!
-//! The roles start with a Root Issuer, then delegated Credential Holder/Prover and Verifier.
-//!
-//! ## Root Issuer
-//!
-//! You are the issuer and your verification key (public key) will be the only non-anonymous key in the credentials process.
-//!
-//! #### Root Issuer Summary of Choices/Options:
-//!
-//! - **Maxiumum Attribute Entries**: Credntials have a maximum number of entries.
-//! Each entry holds up to MaxCardinality of Attributes.
-//! The Root Issuer sets a maximum number of entries (`message_l`)
-//! - **Maximum Cardinality (Attributes per Entry)**: There is a set maximum number of items total (`cardinality`, `message_l[n].len()` &lt;= `cardinality`)
-//! - **Extendable Limit**: What the maximum number of additional entries may be (current entries length up to `k_prime`, `k_prime` is at most `message_l`.
-//! Or in other words: `current &lt; k_prime &lt; message_l`),
-//!
-//! Below is a markdown table with an example of attribute entries, and attributes in each entry, with yes/no for each feature
-//!
-//! ```md
-//! Attribute Entries:
-//! ==&gt; Entry Level 0: [Attribute, Attribute, Attribute]
-//! ==&gt; Entry Level 1: [Attribute]
-//! ==&gt; Entry Level 2: [Attribute, Attribute]
-//! ==&gt; Additonal Entry? Only if 3 &lt; k_prime &lt; message_l
-//! ```
-//!
-//! - Max Entries: `message_l`
-//! - Max total elements: `max_cardinality`
-//!
-//! ```md
-//! Opening Information
-//!
-//! ==&gt; Entry Level 0: Valid opening information
-//! ==&gt; Entry Level 1: Valid opening information
-//! ==&gt; Entry Level 2: Zeroized opening information
-//! ```
-//!
-//! #### Delegated Credential Holder(s) Choice of Options:
-//!
-//! Delegation in the sence of DAC means the adding or generating proofs of attributes to a credential.
-//!
-//! Thus holders have the option to restrict:
-//!
-//! - **Restrict Adding Attributes**: Restrict adding attributes to the credential (by reducing the length of `Credential { UpdateKey } `).
-//! - **Restrict Showing certain `Attribute` Entry levels**: By zeroizing the opening information  corresponding
-//! to the attribute entry level you want to restrict.
-//!
-//! Every delegator can control how far delegations can go by further restricting the `update key`
-//! and a delegator can also restrict the possibility to show attributes from a certain level in
-//! the hierarchy (which corresponds to a commitment in the commitment vector) by not providing
-//! the opening of the commitment to the delegatee.
-//!
-//! Likewise, holders have the ability to extend the credential by adding attributes to the credential,
-//! as long as the total number of attributes doesn&#39;t exceed `k_prime`.
-//!
-//! ## Showing a credential
-//!
-//! Once a holder wants to show a credential, with any combination of attributes (as long as the opening information is available),
-//! the holder selects which attributes they want to prove, then they run `proof_cred` to generate a proof.
-//!
-//! Holders can only prove up to `max_cardinality` attributes at a time.
-//!
-//! ## Building a Credential
-//!
-//! Building credentials is a multiple step process:
-//!
-//! 1. First you generate the Verification Keys by choosing the max cardinality (total individual credentials)
-//! and max number of credential sets. Those verification keys (VK) can only be used up to those lengths. If you need longer
-//! attributes, you need to generate new VKs.
-//!
-//! 2. Second, you take the Issuer and add credential attributes, within the maxium allowed by the VK.
-//!
-//! 3. Lastly you then issue the credential to a user.
-//!
-//! A Credential Builder.
-//!
-//! Root Issuer Builder Options you can set:
-//! - Max number of attributes (defaults to 5)
-//! - Max cardinality (defaults to 10)
-//!
-//! Credential Builder Options you can set:
-//! - Attributes (defaults to empty)
-//! - Delegatable (defaults to no `opening information` provided [false])
-//! - Can add attributes (defaults to no `update key` provided [false])
-//! - How many attributes can be added (`k_prime` defaults to zero(0) [none])
-//!
-//! Show a credential proof:
-//! - Randomize your public key into a pseudonym
-//! - Choose which attributes to show, even if they were issued by separate delegators
-//! - Generate a proof from the credential and
-//!
-//! Credential Constraints:
-//! - You can only add attributes if the current number of attributes is below `message_l`.
-//! - You can only issue a credential if the current number of attributes is below `max_cardinality`.
-//!
-//! If you want to restrict delegatees from showing proofs for attributes from
-//! a certain level in the hierarchy (which corresponds to a commitment in the
-//! commitment vector) by not providing the opening of the commitment to the delegatee.
-//!
-//! In Practical terms, this means that when the Root Level commit hold C.R.U.D.,
-//! the way to restrict the delegatee from showing the proof is to add a second
-//! level commit that holds only R.U.D., and not provide the opening of the first level.
-//! This way, the delegatee can only show the proof for the second level thus can only
-//! prove the ability to Read, Update, and Delete, but not Create.
-//!
-//! States and Sub-states:
-//! - State: Sub-states.
-//! - Configuration: Unconfigured, configured
-//! - Credential: Unissued, issued, delegated
-//! - Delegatable: True, False. A credential is only delegatable if `update_key` is provided.
-//! - Extendable: True, False. Only extendable if number of attribute commits is less than k_prime
-//! - Showable: Up to the number of attributes in the credential. restricted by `opening_info `
-//!
-//! BLS12-381 public keys are 48 bytes long. Private keys are 32 bytes long.
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+</pre></div><pre class="rust"><code><span class="attr">#![doc = <span class="macro">include_str!</span>(<span class="string">&quot;../README.md&quot;</span>)]
 
-//! Given all the the documentation above, the following code is a possible API and usage for Delanocreds in Rust:
-//!
-//! 1. Root Issuer builds Root Credential with:
-//! - max attributes,
-//! - max cardinality,
-//! - initial attribute entries,
-//! - extendable attributes (),
-//! - fully provable atrributes (all opening information provided)
-//! - k_prime set the number of additonal attributes available from the `update_key`
-//!
-//! 2. Root Issuer issues Root Credential to Credential Holder Alice&#39;s pseudonym (nym).
-//! Alice is the first holder of the Credential.
-//!
-//! 3. Alice take credential bytes and loads them into the Credential structure. With the Root Credential, Alice can:
-//! - generate proof
-//! - delegate to another nym (if allowed by the cred update_key)
-//! - add attributes (if allowed by the cred update_key)
-//!
-//! 3a. Alice generates a proof for the Root Credential with:
-//! - a list of attributes to prove
-//!
-//! 3b. Alice delegates to another nym with:
-//! - a list of attributes to delegate
-//! - a potentially shorter update key to restrict the delegatee from adding attribute entries
-//! - potentially redacted opening information to restrict the delegatee from showing attributes
-//!
-//! 4. Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
-//! With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.
-
-</span><span class="kw">use </span><span class="kw">crate</span>::attributes::Attribute;
-<span class="kw">use </span>amcl_wrapper::field_elem::FieldElement;
-<span class="kw">use </span>keypair::{MaxCardinality, MaxEntries, VK};
-<span class="kw">use </span>utils::Entry;
+</span><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>attributes::Attribute;
+<span class="kw">use </span>entry::Entry;
+<span class="kw">use </span>keypair::{spseq_uc::Credential, Issuer, IssuerError, NymPublic};
 
 <span class="kw">pub mod </span>attributes;
+<span class="kw">pub mod </span>config;
+<span class="kw">pub mod </span>entry;
 <span class="kw">pub mod </span>keypair;
 <span class="kw">pub mod </span>set_commits;
 <span class="kw">pub mod </span>types;
-<span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>zkp;
 
-<span class="doccomment">/// Default Max Attributes: The maximum number of attribute entries allowed in a credential.
-</span><span class="kw">const </span>DEFAULT_MAX_ATTRIBUTES: usize = <span class="number">10</span>;
-<span class="doccomment">/// Default Max Cardinality: The maximum number of total attribute elements allowed in a credential.
-</span><span class="kw">const </span>DEFAULT_MAX_CARDINALITY: usize = <span class="number">5</span>;
-
 <span class="comment">// Test the README.md code snippets
-// #[doc = include_str!(&quot;../README.md&quot;)]
-// #[cfg(doctest)]
-// pub struct ReadmeDoctests;
+</span><span class="attr">#[cfg(doctest)]
+</span><span class="kw">pub struct </span>ReadmeDoctests;
 
-</span><span class="attr">#[derive(Debug)]
-</span><span class="doccomment">/// The Root Issuer, the one with the Verification Key that issues the first credential.
-</span><span class="kw">pub struct </span>RootIssuerBuilder {
-    max_entries: MaxEntries,
-    max_card: MaxCardinality,
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>RootIssuerBuilder {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new()
-    }
-}
-
-<span class="kw">impl </span>RootIssuerBuilder {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="comment">// generate keys for the root issuer
-
-        </span><span class="self">Self </span>{
-            max_entries: MaxEntries(DEFAULT_MAX_ATTRIBUTES),
-            max_card: MaxCardinality(DEFAULT_MAX_CARDINALITY),
-        }
-    }
-
-    <span class="doccomment">/// Add attributes to the credential. Attribute Type checks to ensure it is within the
-    /// maximum number of attributes and maximum cardinality.
-    </span><span class="kw">pub fn </span>max_entries(<span class="kw-2">&amp;mut </span><span class="self">self</span>, attributes: MaxEntries) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
-        <span class="self">self</span>.max_entries = attributes;
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Add cardinality to the credential. Attribute Type checks to ensure it is within the
-    /// maximum number of attributes and maximum cardinality.
-    </span><span class="kw">pub fn </span>max_cardinality(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cardinality: MaxCardinality) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
-        <span class="self">self</span>.max_card = cardinality;
-        <span class="self">self
-    </span>}
-
-    <span class="comment">// /// Terminal function to build CrentialBuilder
-    // pub fn build(self) -&gt; RootIssuer {
-    //     // generate signing keys
-    //     // let dac = dac::Dac::new(self.max_card, self.max_attrs);
-
-    //     // RootIssuer::new(self)
-    // }
-</span>}
-
-<span class="attr">#[derive(Debug)]
-</span><span class="doccomment">/// The Root Issuer, the one with the Verification Key that issues the first credential.
-</span><span class="kw">pub struct </span>RootIssuer {
-    max_entries: MaxEntries,
-    max_card: MaxCardinality,
+<span class="doccomment">/// Builds a Credential
+</span><span class="kw">pub struct </span>CredentialBuilder&lt;<span class="lifetime">&#39;a</span>&gt; {
     entries: Vec&lt;Entry&gt;,
-    extendable_limit: usize,
-    vk_ca: Vec&lt;VK&gt;,
-    sk_ca: Vec&lt;FieldElement&gt;,
+    extendable: usize,
+    issuer: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Issuer,
 }
 
-<span class="kw">impl </span>RootIssuer {
-    <span class="comment">// pub fn new(root_issuer_builder: RootIssuerBuilder) -&gt; Self {
-    //     let dac = Dac::new(MaxCardinality(*root_issuer_builder.max_card));
-    //     let (sk_ca, vk_ca) = dac.spseq_uc.sign_keygen(root_issuer_builder.max_entries);
-
-    //     Self {
-    //         max_entries: root_issuer_builder.max_entries,
-    //         max_card: root_issuer_builder.max_card,
-    //         entries: Vec::new(),
-    //         extendable_limit: 0,
-    //         vk_ca,
-    //         sk_ca,
-    //     }
-    // }
-
-    // /// Terminal function to build CrentialBuilder
-    // pub fn entry_builder(self) -&gt; EntryBuilder {
-    //     EntryBuilder::new(self)
-    // }
-
-    // /// Set the current entries for th Root Credential.
-    // pub fn entries(self, entries: Vec&lt;Entry&gt;) -&gt; Self {
-    //     Self { entries, ..self }
-    // }
-
-    // /// Set the Root Credential as extendable to the given limit
-    // /// Limit must be no more then max_entries - `entries.len()`
-    // pub fn extendable(self, limit: usize) -&gt; Self {
-    //     Self {
-    //         extendable_limit: limit,
-    //         ..self
-    //     }
-    // }
-
-    // /// Issues (Builds) the Root Credential.
-    // /// # Returns
-    // /// - [`Credential`]: The Root Credential
-    // pub fn issue_to(self, proof: NymProof) -&gt; Credential {
-    //     // use `dac.issue_cred()` to build the credential
-    //     let dac = Dac::new(MaxCardinality(*self.max_card));
-
-    //     match dac.issue_cred(
-    //         &amp;self.vk_ca,
-    //         &amp;self.entries,
-    //         &amp;self.sk_ca,
-    //         Some(self.extendable_limit),
-    //         proof,
-    //     ) {
-    //         Ok(cred) =&gt; cred,
-    //         Err(e) =&gt; panic!(&quot;Error issuing credential: {:?}&quot;, e),
-    //     }
-    // }
-</span>}
-
-<span class="doccomment">/// Builds the entries for the Root Credential. Ensures that the number of attributes
-/// in each entry are within the max cardinality. Ensures the number of entries are
-/// within the max entries.
-/// - `entry_count`: The current number of entries in the credential.
-/// - `root_issuer`: The Root Issuer that issued the credential.
-///
-</span><span class="kw">pub struct </span>EntryBuilder {
-    entry_count: usize,
-    entries: Vec&lt;Entry&gt;,
-    root_issuer: RootIssuer,
-}
-
-<span class="kw">impl </span>EntryBuilder {
-    <span class="kw">pub fn </span>new(root_issuer: RootIssuer) -&gt; <span class="self">Self </span>{
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; CredentialBuilder&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="doccomment">/// Create a new CredentialBuilder
+    </span><span class="kw">pub fn </span>new(issuer: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Issuer) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            entry_count: <span class="number">0</span>,
+            issuer,
             entries: Vec::new(),
-            root_issuer,
+            extendable: <span class="number">0</span>,
         }
     }
 
-    <span class="doccomment">/// Wraps the value as an Attribute for an entry.
-    /// An attribute is vectors of strings up to max cardinality in length.
-    /// Attributes are vectors of strings up to max attributes in length.
-    /// # Returns
-    /// - `Attibute`
-    </span><span class="kw">pub fn </span>attribute(<span class="kw-2">&amp;mut </span><span class="self">self</span>, attribute: String) -&gt; Attribute {
-        attributes::attribute(attribute)
+    <span class="doccomment">/// Add an Entry to the Credential
+    </span><span class="kw">pub fn </span>with_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, entry: Entry) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.entries.push(entry);
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Set the number of Entries that can be added to the Credential
+    </span><span class="kw">pub fn </span>max_entries(<span class="kw-2">&amp;mut </span><span class="self">self</span>, extendable: <span class="kw-2">&amp;</span>usize) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.extendable = <span class="kw-2">*</span>extendable;
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Finish building the Credetials, and Issue the Credential to a Nym
+    </span><span class="kw">pub fn </span>issue_to(<span class="kw-2">&amp;</span><span class="self">self</span>, nym_public: <span class="kw-2">&amp;</span>NymPublic) -&gt; <span class="prelude-ty">Result</span>&lt;Credential, IssuerError&gt; {
+        <span class="comment">// if self.extendable &gt; 0, set to Some(self.extendable), else None
+        </span><span class="kw">let </span>k_prime = <span class="self">self</span>.extendable.checked_sub(<span class="number">0</span>);
+        <span class="self">self</span>.issuer.issue_cred(<span class="kw-2">&amp;</span><span class="self">self</span>.entries, k_prime, nym_public)
+    }
+}
+
+<span class="doccomment">/// Builds a Credential Offer
+///
+/// - `our_nym` is the Nym of the holder of the Credential
+/// - `credential` is the Credential to offer
+/// - `unprovable_attributes` is a Vec of Attributes that the holder will not prove
+/// - `current_entries` is a Vec of Entries currently associated with the [Credential]
+/// - `additional_entry` is an optional Entry to add to the [Credential] Offer
+///
+/// Given a Credential, holder can:
+/// 1. Offer with redacted proving of Entry(s) to another Nym
+/// 2. Offer with additional Attributes
+/// 3. Generate a Proof themselves
+</span><span class="kw">pub struct </span>OfferBuilder&lt;<span class="lifetime">&#39;a</span>&gt; {
+    our_nym: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>keypair::Nym,
+    credential: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Credential,
+    unprovable_attributes: Vec&lt;Attribute&gt;,
+    current_entries: Vec&lt;Entry&gt;,
+    additional_entry: <span class="prelude-ty">Option</span>&lt;Entry&gt;,
+    max_entries: usize,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; OfferBuilder&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">pub fn </span>new(
+        our_nym: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>keypair::Nym,
+        credential: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Credential,
+        current_entries: <span class="kw-2">&amp;</span>[Entry],
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            our_nym,
+            credential,
+            unprovable_attributes: Vec::new(),
+            current_entries: current_entries.to_vec(),
+            additional_entry: <span class="prelude-val">None</span>,
+            <span class="comment">// set to cred update_key length
+            </span>max_entries: credential.update_key.as_ref().map_or(<span class="number">0</span>, |k| k.len()),
+        }
     }
 
-    <span class="doccomment">/// Builds an Entry out of a vector of attributes
-    /// # Returns
-    /// `Some(Entry)` if the attributes are within the max entries.
-    /// `None` if the attributes are not within the max entries.
-    </span><span class="kw">pub fn </span>entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, attributes: <span class="kw-2">&amp;</span>[Attribute]) -&gt; <span class="prelude-ty">Option</span>&lt;Entry&gt; {
-        <span class="comment">// check if entries are within max entries
-        // if not, return None
-        </span><span class="kw">if </span><span class="self">self</span>.entry_count == <span class="self">self</span>.root_issuer.max_card.<span class="number">0 </span>{
-            <span class="kw">return </span><span class="prelude-val">None</span>;
+    <span class="doccomment">/// Allows the proving of [Attribute]s in an [Entry] in the [Credential] Offer.
+    /// The [keypair::Nym] who accepts this offer can prove the allowed [Entry]s to a Verifier.
+    ///
+    /// Can add up to [entry::MaxEntries] attributes as defined for this [Issuer].
+    </span><span class="kw">pub fn </span>without_attribute(<span class="kw-2">&amp;mut </span><span class="self">self</span>, redacted: Attribute) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.unprovable_attributes.push(redacted);
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Add one (1) additional Entry to the Credential Offer.
+    /// Additional [Entry] Can contain up to [keypair::MaxCardinality] [Attribute]s
+    /// as pubically parameterized ([set_commits::ParamSetCommitment]) for this [Issuer].
+    ///
+    /// If used multiple times, last one will overwrite all previous additions
+    </span><span class="kw">pub fn </span>additional_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, entry: Entry) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.additional_entry = <span class="prelude-val">Some</span>(entry);
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Set the maximum number of Entries that can be added to the Credential by a delegatee Nym.
+    </span><span class="kw">pub fn </span>max_entries(<span class="kw-2">&amp;mut </span><span class="self">self</span>, limit: usize) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.max_entries = std::cmp::min(
+            limit,
+            <span class="self">self</span>.credential.update_key.as_ref().map_or(<span class="number">0</span>, |k| k.len()),
+        );
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Build the Offer
+    </span><span class="kw">pub fn </span>offer_to(<span class="kw-2">&amp;</span><span class="self">self</span>, their_nym: <span class="kw-2">&amp;</span>NymPublic) -&gt; <span class="prelude-ty">Result</span>&lt;(keypair::Offer, Vec&lt;Entry&gt;)&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>cred_redacted = <span class="self">self</span>.credential.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>provable_entries = <span class="self">self</span>.current_entries.clone();
+
+        <span class="comment">// First, zerioize any attributes that are not authorized to be provable
+        </span><span class="kw">if </span>!<span class="self">self</span>.unprovable_attributes.is_empty() {
+            <span class="comment">// 1. iterate through the self.unprovable_attributes, set self.credential.opening_info to amcl_wrapper::field_elem::FieldElement::zero() for any current_entries containing matching unprovable_attributes
+            // 2. create new self.credential with the new opening_vector_restricted value
+            // 3. use new self.credential in `.offer()`
+            </span><span class="kw">let </span><span class="kw-2">mut </span>opening_vector_restricted = <span class="self">self</span>.credential.opening_vector.clone();
+            <span class="kw">for </span>unprovable_attribute <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.unprovable_attributes {
+                <span class="kw">for </span>(index, entry) <span class="kw">in </span><span class="self">self</span>.current_entries.iter().enumerate() {
+                    <span class="kw">if </span>entry.contains(unprovable_attribute) {
+                        opening_vector_restricted[index] =
+                            amcl_wrapper::field_elem::FieldElement::zero();
+
+                        <span class="comment">// also update provable_entries
+                        </span>provable_entries[index] = Entry::new(<span class="kw-2">&amp;</span>[]);
+                    }
+                }
+            }
+
+            <span class="comment">// create copy of cred, replace opening_vector with opening_vector_restricted
+            </span>cred_redacted = Credential {
+                opening_vector: opening_vector_restricted,
+                ..cred_redacted
+            };
         }
 
-        <span class="comment">// increment entry count
-        </span><span class="self">self</span>.entry_count += <span class="number">1</span>;
+        <span class="comment">// Second, add any additional entries
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(entry) = <span class="kw-2">&amp;</span><span class="self">self</span>.additional_entry {
+            provable_entries.push(entry.clone());
+        }
 
-        <span class="kw">if </span>attributes.len() &lt; <span class="self">self</span>.root_issuer.max_entries.<span class="number">0 </span>{
-            <span class="prelude-val">Some</span>(Entry(attributes.to_vec()))
-        } <span class="kw">else </span>{
-            <span class="prelude-val">None
-        </span>}
+        <span class="comment">// Third, limit update_key to given extendable limit
+        // which restricts delegation in how many further levels can be delegated (reduce update_key length in cred)
+        </span>cred_redacted.update_key = <span class="kw">match </span><span class="self">self</span>.max_entries {
+            <span class="number">0 </span>=&gt; <span class="prelude-val">None</span>,
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Some</span>(
+                <span class="self">self</span>.credential
+                    .update_key
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .take(<span class="self">self</span>.max_entries)
+                    .cloned()
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+            ),
+        };
+
+        <span class="kw">let </span>offer = <span class="self">self
+            </span>.our_nym
+            .offer(<span class="kw-2">&amp;</span>cred_redacted, <span class="kw-2">&amp;</span><span class="self">self</span>.additional_entry, their_nym)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>((offer, provable_entries))
+    }
+}
+
+<span class="doccomment">/// Proof Builder
+/// Takes selected [Attribute]s and a [Credential] and generates a [keypair::CredProof] for them.
+</span><span class="kw">pub struct </span>ProofBuilder&lt;<span class="lifetime">&#39;a</span>&gt; {
+    nym: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>keypair::Nym,
+    cred: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Credential,
+    all_attributes: Vec&lt;Entry&gt;,
+    selected_attributes: Vec&lt;Attribute&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ProofBuilder&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="doccomment">/// Create a new ProofBuilder
+    </span><span class="kw">pub fn </span>new(nym: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>keypair::Nym, cred: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Credential, all_attributes: <span class="kw-2">&amp;</span>[Entry]) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            nym,
+            cred,
+            all_attributes: all_attributes.to_vec(),
+            selected_attributes: Vec::new(),
+        }
     }
 
-    <span class="doccomment">/// Build all entires from each entry
-    /// # Returns
-    /// - `Entries`
-    </span><span class="kw">pub fn </span>drain(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Vec&lt;Entry&gt; {
-        <span class="comment">// reset count
-        </span><span class="self">self</span>.entry_count = <span class="number">0</span>;
-        <span class="comment">// return ownership of entries
-        </span><span class="self">self</span>.entries.drain(..).collect()
+    <span class="doccomment">/// Add an [Attribute] to the Proof
+    </span><span class="kw">pub fn </span>select_attribute(<span class="kw-2">&amp;mut </span><span class="self">self</span>, attribute: Attribute) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.selected_attributes.push(attribute);
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Finish building the Proof
+    </span><span class="kw">pub fn </span>prove(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (keypair::CredProof, Vec&lt;Entry&gt;) {
+        <span class="comment">// create selected_attr by filtering all_attributes for those in selected_attributes
+        </span><span class="kw">let </span>selected_attr = <span class="self">self
+            </span>.all_attributes
+            .iter()
+            .map(
+                <span class="comment">// returns either an empty Entry or an Entry with only the selected attributes
+                </span>|entry| {
+                    entry
+                        .iter()
+                        .filter(|attr| <span class="self">self</span>.selected_attributes.contains(attr))
+                        .cloned()
+                        .collect::&lt;Entry&gt;()
+                },
+            )
+            .collect::&lt;Vec&lt;Entry&gt;&gt;();
+
+        <span class="comment">// create proof
+        </span><span class="kw">let </span>proof = <span class="self">self
+            </span>.nym
+            .prove(<span class="self">self</span>.cred, <span class="kw-2">&amp;</span><span class="self">self</span>.all_attributes, <span class="kw-2">&amp;</span>selected_attr);
+
+        (proof, selected_attr)
     }
 }
 
 <span class="attr">#[cfg(test)]
-</span><span class="kw">mod </span>test_api {
+</span><span class="kw">mod </span>lib_api_tests {
+
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use crate</span>::{
+        attributes::Attribute,
+        entry::{Entry, MaxEntries},
+        keypair::UserKey,
+    };
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_root_issuer() {
-        <span class="kw">let </span><span class="kw-2">mut </span>root_issuer = RootIssuerBuilder::new();
+    </span><span class="kw">fn </span>test_credential_building() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="comment">// create an Issuer, a User, and issue a cred to a Nym
+        </span><span class="kw">let </span>issuer = Issuer::default();
+        <span class="kw">let </span>alice = UserKey::new();
+        <span class="kw">let </span>nym = alice.nym(issuer.public.parameters.clone());
 
-        <span class="comment">// check defaults
-        </span><span class="macro">assert_eq!</span>(root_issuer.max_entries.<span class="number">0</span>, DEFAULT_MAX_ATTRIBUTES);
-        <span class="macro">assert_eq!</span>(root_issuer.max_card.<span class="number">0</span>, DEFAULT_MAX_CARDINALITY);
+        <span class="kw">let </span>over_21 = Attribute::new(<span class="string">&quot;age &gt; 21&quot;</span>);
+        <span class="kw">let </span>seniors_discount = Attribute::new(<span class="string">&quot;age &gt; 65&quot;</span>);
+        <span class="kw">let </span>root_entry = Entry::new(<span class="kw-2">&amp;</span>[over_21, seniors_discount]);
 
-        <span class="comment">// set new ones
-        </span><span class="kw">let </span>attributes = <span class="number">12</span>;
-        <span class="kw">let </span>cardinality = <span class="number">8</span>;
+        <span class="comment">// Method A: as chained methods
+        </span><span class="kw">let </span>cred = issuer
+            .credential() <span class="comment">// CredentialBuilder for this Issuer
+            </span>.with_entry(root_entry.clone()) <span class="comment">// adds a Root Entry
+            </span>.max_entries(<span class="kw-2">&amp;</span>MaxEntries::default()) <span class="comment">// set the Entry ceiling
+            </span>.issue_to(<span class="kw-2">&amp;</span>nym.public)<span class="question-mark">?</span>; <span class="comment">// issues to a Nym
 
-        root_issuer.max_entries(MaxEntries(attributes));
-        root_issuer.max_cardinality(MaxCardinality(cardinality));
+        </span><span class="macro">assert_eq!</span>(cred.commitment_vector.len(), <span class="number">1</span>);
 
-        <span class="macro">assert_eq!</span>(root_issuer.max_entries, MaxEntries(attributes));
-        <span class="macro">assert_eq!</span>(root_issuer.max_card, MaxCardinality(cardinality));
+        <span class="comment">// Method B: as parameter
+        </span><span class="kw">let </span>cred = CredentialBuilder::new(<span class="kw-2">&amp;</span>issuer)
+            .with_entry(root_entry.clone())
+            .max_entries(<span class="kw-2">&amp;</span>MaxEntries::default())
+            .issue_to(<span class="kw-2">&amp;</span>nym.public)<span class="question-mark">?</span>;
+
+        <span class="macro">assert_eq!</span>(cred.commitment_vector.len(), <span class="number">1</span>);
+
+        <span class="comment">// Variant A: extendable, single Entry
+        </span><span class="kw">let </span>cred = CredentialBuilder::new(<span class="kw-2">&amp;</span>issuer)
+            .with_entry(root_entry.clone())
+            .max_entries(<span class="kw-2">&amp;</span>MaxEntries::default())
+            .issue_to(<span class="kw-2">&amp;</span>nym.public)<span class="question-mark">?</span>;
+
+        <span class="macro">assert_eq!</span>(cred.commitment_vector.len(), <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(
+            cred.update_key.as_ref().unwrap().len(),
+            MaxEntries::default()
+        );
+
+        <span class="comment">// Variant B: not extendable, multiple Entry
+        </span><span class="kw">let </span>another_entry = Entry::new(<span class="kw-2">&amp;</span>[Attribute::new(<span class="string">&quot;another entry&quot;</span>)]);
+        <span class="kw">let </span>cred = issuer
+            .credential()
+            .with_entry(root_entry)
+            .with_entry(another_entry)
+            .issue_to(<span class="kw-2">&amp;</span>nym.public)<span class="question-mark">?</span>;
+
+        <span class="macro">assert_eq!</span>(cred.commitment_vector.len(), <span class="number">2</span>);
+
+        <span class="comment">// cred should have update_key is_none
+        </span><span class="macro">assert!</span>(cred.update_key.is_none());
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>offer_tests() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="comment">// Given a Root Credential, holder can:
+        // 1. Offer the unchanged Credential to another Nym (Alice to Bob)
+        // 2. Offer with additional Attributes (Bob to Charlie)
+        // 3. Offer with redact proving of Entry(s) (Charlie to Douglas)
+        // 4. Offer with restricted further levels of delegation, cannot add additonal_entrys past a certain limit (Douglas to Evan)
+        // 5. Generate a Proof themselves
+
+        // create an Issuer, a User, and issue a cred to a Nym
+        </span><span class="kw">let </span>issuer = Issuer::default();
+
+        <span class="comment">// Alice
+        </span><span class="kw">let </span>alice = UserKey::new();
+        <span class="kw">let </span>alice_nym = alice.nym(issuer.public.parameters.clone());
+
+        <span class="comment">// Bob
+        </span><span class="kw">let </span>bob = UserKey::new();
+        <span class="kw">let </span>bobby_nym = bob.nym(issuer.public.parameters.clone());
+
+        <span class="comment">// Charlie
+        </span><span class="kw">let </span>charlie = UserKey::new();
+        <span class="kw">let </span>charlie_nym = charlie.nym(issuer.public.parameters.clone());
+
+        <span class="comment">// Douglas
+        </span><span class="kw">let </span>douglas = UserKey::new();
+        <span class="kw">let </span>doug_nym = douglas.nym(issuer.public.parameters.clone());
+
+        <span class="comment">// Evan
+        </span><span class="kw">let </span>evan = UserKey::new();
+        <span class="kw">let </span>evan_nym = evan.nym(issuer.public.parameters.clone());
+
+        <span class="kw">let </span>over_21 = Attribute::new(<span class="string">&quot;age &gt; 21&quot;</span>);
+        <span class="kw">let </span>seniors_discount = Attribute::new(<span class="string">&quot;age &gt; 65&quot;</span>);
+        <span class="kw">let </span>root_entry = Entry::new(<span class="kw-2">&amp;</span>[over_21.clone(), seniors_discount]);
+
+        <span class="comment">// Issue the (Powerful) Root Credential to Alice
+        </span><span class="kw">let </span>cred = <span class="kw">match </span>issuer
+            .credential()
+            .with_entry(root_entry.clone())
+            .max_entries(<span class="kw-2">&amp;</span>MaxEntries::default()) <span class="comment">// DEFAULT_MAX_ENTRIES: usize = 6
+            </span>.issue_to(<span class="kw-2">&amp;</span>alice_nym.public)
+        {
+            <span class="prelude-val">Ok</span>(cred) =&gt; cred,
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Error issuing cred: {:?}&quot;</span>, e),
+        };
+
+        <span class="comment">// 1. Offer the unchanged Credential to Bob&#39;s Nym
+        </span><span class="kw">let </span>(offer, provable_entries) = alice_nym
+            .offer_builder(<span class="kw-2">&amp;</span>cred, <span class="kw-2">&amp;</span>[root_entry])
+            .offer_to(<span class="kw-2">&amp;</span>bobby_nym.public)<span class="question-mark">?</span>;
+
+        <span class="comment">// Bob can accept
+        </span><span class="kw">let </span>bobby_cred = bobby_nym.accept(<span class="kw-2">&amp;</span>offer);
+
+        <span class="comment">// and prove all entries
+        </span><span class="kw">let </span>proof = bobby_nym.prove(<span class="kw-2">&amp;</span>bobby_cred, <span class="kw-2">&amp;</span>provable_entries, <span class="kw-2">&amp;</span>provable_entries);
+        <span class="macro">assert!</span>(keypair::verify_proof(<span class="kw-2">&amp;</span>issuer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>provable_entries).unwrap());
+
+        <span class="comment">// or Bob can prove just the selected attribute `over_21` using ProofBuilder
+        </span><span class="kw">let </span>(proof, selected_entries) = bobby_nym
+            .proof_builder(<span class="kw-2">&amp;</span>bobby_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .select_attribute(over_21)
+            .prove();
+        <span class="macro">assert!</span>(keypair::verify_proof(<span class="kw-2">&amp;</span>issuer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_entries).unwrap());
+
+        <span class="comment">// 2. Offer with additional Attributes, using OfferBuilder
+        </span><span class="kw">let </span>handsome_attribute = Attribute::new(<span class="string">&quot;also handsome&quot;</span>);
+        <span class="kw">let </span>additional_entry = Entry::new(<span class="kw-2">&amp;</span>[handsome_attribute.clone()]);
+
+        <span class="kw">let </span>(offer, provable_entries) = bobby_nym
+            .offer_builder(<span class="kw-2">&amp;</span>bobby_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .additional_entry(additional_entry)
+            .offer_to(<span class="kw-2">&amp;</span>charlie_nym.public)<span class="question-mark">?</span>;
+
+        <span class="comment">// Charlie can accept
+        </span><span class="kw">let </span>charlie_cred = charlie_nym.accept(<span class="kw-2">&amp;</span>offer);
+
+        <span class="comment">// and Charlie&#39;s Nym can prove additional selected attribute using ProofBuilder
+        </span><span class="kw">let </span>(proof, selected_entries) = charlie_nym
+            .proof_builder(<span class="kw-2">&amp;</span>charlie_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .select_attribute(handsome_attribute.clone())
+            .prove();
+        <span class="macro">assert!</span>(keypair::verify_proof(<span class="kw-2">&amp;</span>issuer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_entries).unwrap());
+
+        <span class="comment">// 3. Charlie can Offer a redacted version of the Entry(s) to Doug
+        </span><span class="kw">let </span>(offer, provable_entries) = charlie_nym
+            .offer_builder(<span class="kw-2">&amp;</span>charlie_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .without_attribute(handsome_attribute.clone())
+            .offer_to(<span class="kw-2">&amp;</span>doug_nym.public)<span class="question-mark">?</span>;
+
+        <span class="macro">assert_eq!</span>(provable_entries.len(), <span class="number">2</span>); <span class="comment">// Should be 2 Entry(s) in the provable_entries, but only 1 non-empty
+        </span><span class="macro">assert_eq!</span>(provable_entries[<span class="number">0</span>].len(), <span class="number">2</span>); <span class="comment">// over_21, seniors_discount
+        </span><span class="macro">assert_eq!</span>(provable_entries[<span class="number">1</span>].len(), <span class="number">0</span>); <span class="comment">// empty, redacted entry with the handsome attribute
+
+        // Doug can accept
+        </span><span class="kw">let </span>doug_cred = doug_nym.accept(<span class="kw-2">&amp;</span>offer);
+
+        <span class="comment">// and Doug&#39;s proof excludes the handsome_attribute
+        </span><span class="kw">let </span>(_proof, selected_entries) = doug_nym
+            .proof_builder(<span class="kw-2">&amp;</span>doug_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .select_attribute(handsome_attribute.clone())
+            .prove();
+
+        <span class="comment">// show handsome_attribute is not contained within the selected_entries
+        </span><span class="kw">let </span>contains_handsome = selected_entries
+            .into_iter()
+            .any(|entry| entry.contains(<span class="kw-2">&amp;</span>handsome_attribute));
+
+        <span class="comment">// Verify handsome_attribute is not contained within the selected_entries
+        </span><span class="macro">assert!</span>(!contains_handsome);
+
+        <span class="comment">// 4. Douglas can Offer a restricted version of the Credential to Evan
+        </span><span class="kw">let </span>(offer, provable_entries) = doug_nym
+            .offer_builder(<span class="kw-2">&amp;</span>doug_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .max_entries(<span class="number">3</span>)
+            .offer_to(<span class="kw-2">&amp;</span>evan_nym.public)<span class="question-mark">?</span>;
+
+        <span class="comment">// there are already 2 entries, so Even can add one more but not two more
+        </span><span class="kw">let </span>evan_entry = Entry::new(<span class="kw-2">&amp;</span>[Attribute::new(<span class="string">&quot;evan entry #1&quot;</span>)]);
+
+        <span class="comment">// Evan can accept
+        </span><span class="kw">let </span>evan_cred = evan_nym.accept(<span class="kw-2">&amp;</span>offer);
+
+        <span class="comment">// Evan can adds an entry
+        </span><span class="kw">let </span>even_nym_2 = evan.nym(issuer.public.parameters.clone());
+        <span class="kw">let </span>(offer, provable_entries) = evan_nym
+            .offer_builder(<span class="kw-2">&amp;</span>evan_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .additional_entry(evan_entry)
+            .offer_to(<span class="kw-2">&amp;</span>even_nym_2.public)<span class="question-mark">?</span>;
+
+        <span class="comment">// Evan2 can accept
+        </span><span class="kw">let </span>evan_2_cred = even_nym_2.accept(<span class="kw-2">&amp;</span>offer);
+
+        <span class="comment">// Evan2 can prove added entry attributes
+        </span><span class="kw">let </span>(proof, selected_entries) = even_nym_2
+            .proof_builder(<span class="kw-2">&amp;</span>evan_2_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .select_attribute(Attribute::new(<span class="string">&quot;evan entry #1&quot;</span>))
+            .prove();
+        <span class="macro">assert!</span>(keypair::verify_proof(<span class="kw-2">&amp;</span>issuer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_entries).unwrap());
+
+        <span class="comment">// Adding beyond Max Entries of 3 should fail
+        </span><span class="kw">let </span>even_nym_3 = evan.nym(issuer.public.parameters);
+
+        <span class="kw">let </span>res = even_nym_2
+            .offer_builder(<span class="kw-2">&amp;</span>evan_2_cred, <span class="kw-2">&amp;</span>provable_entries)
+            .additional_entry(Entry::new(<span class="kw-2">&amp;</span>[Attribute::new(<span class="string">&quot;bigger than Max Entry&quot;</span>)]))
+            .offer_to(<span class="kw-2">&amp;</span>even_nym_3.public);
+
+        <span class="macro">assert!</span>(res.is_err());
+
+        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div></section></main></body></html>

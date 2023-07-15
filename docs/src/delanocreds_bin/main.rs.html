@@ -269,6 +269,7 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! A quick binary to test the library and
 //! get some --release compile time stats
 //! # Quick Bench
@@ -285,13 +286,14 @@
 //! | =============  | ========= |
 //! | **Total Time** | **535**   |
 
-</span><span class="kw">use </span>delanocreds::{
+</span><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>delanocreds::{
     attributes::{attribute, Attribute},
-    keypair::{spseq_uc::Credential, verify_proof, MaxCardinality, MaxEntries, Signer, UserKey},
-    utils::{entry, Entry},
+    entry::{entry, Entry, MaxEntries},
+    keypair::{spseq_uc::Credential, verify_proof, Issuer, MaxCardinality, UserKey},
 };
 
-<span class="kw">pub fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), amcl_wrapper::errors::SerzDeserzError&gt; {
+<span class="kw">pub fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="macro">println!</span>(<span class="string">&quot; \nRunning a short basic test: \n&quot;</span>);
     <span class="kw">let _ </span>= basic_bench();
     <span class="macro">println!</span>(<span class="string">&quot; \nCreating and proving 30 of 100 credentials: \n&quot;</span>);
@@ -300,7 +302,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub fn </span>basic_bench() -&gt; <span class="prelude-ty">Result</span>&lt;(), amcl_wrapper::errors::SerzDeserzError&gt; {
+<span class="kw">pub fn </span>basic_bench() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="comment">//start timer
     </span><span class="kw">let </span>start = std::time::Instant::now();
 
@@ -329,13 +331,13 @@
     <span class="macro">eprintln!</span>(<span class="string">&quot;Time to setup attributes: {:?}&quot;</span>, last);
 
     <span class="kw">let </span>l_message = MaxEntries::new(<span class="number">10</span>);
-    <span class="kw">let </span>signer = Signer::new(MaxCardinality::new(<span class="number">8</span>), l_message);
+    <span class="kw">let </span>signer = Issuer::new(MaxCardinality::new(<span class="number">8</span>), l_message);
 
     <span class="kw">let </span>alice = UserKey::new();
-    <span class="kw">let </span>alice_nym = alice.nym(signer.public_parameters.clone());
+    <span class="kw">let </span>alice_nym = alice.nym(signer.public.parameters.clone());
 
     <span class="kw">let </span>robert = UserKey::new();
-    <span class="kw">let </span>bobby_nym = robert.nym(signer.public_parameters.clone());
+    <span class="kw">let </span>bobby_nym = robert.nym(signer.public.parameters.clone());
 
     <span class="kw">let </span>position = <span class="number">5</span>; <span class="comment">// index of the update key to be used for the added element
     </span><span class="kw">let </span>index_l = all_attributes.len() + position;
@@ -366,11 +368,11 @@
         <span class="comment">// restrict opening to read only
         </span>opening_vector: opening_vector_restricted,
         update_key: cred.update_key,
+        vk: cred.vk,
     };
 
     <span class="comment">// offer to bobby_nym
-    </span><span class="kw">let </span>alice_del_to_bobby =
-        alice_nym.offer(<span class="kw-2">&amp;</span>cred_restricted, <span class="kw-2">&amp;</span>signer.vk, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>bobby_nym.public);
+    </span><span class="kw">let </span>alice_del_to_bobby = alice_nym.offer(<span class="kw-2">&amp;</span>cred_restricted, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>bobby_nym.public)<span class="question-mark">?</span>;
 
     <span class="macro">eprintln!</span>(
         <span class="string">&quot;Time to offer cred: {:?} (+{:?})&quot;</span>,
@@ -401,7 +403,7 @@
     ];
 
     <span class="comment">// prepare a proof
-    </span><span class="kw">let </span>proof = bobby_cred.prove(<span class="kw-2">&amp;</span>all_attributes, <span class="kw-2">&amp;</span>selected_attrs);
+    </span><span class="kw">let </span>proof = bobby_nym.prove(<span class="kw-2">&amp;</span>bobby_cred, <span class="kw-2">&amp;</span>all_attributes, <span class="kw-2">&amp;</span>selected_attrs);
 
     <span class="macro">eprintln!</span>(
         <span class="string">&quot;Time to prove: {:?} (+{:?})&quot;</span>,
@@ -411,7 +413,7 @@
     <span class="kw">let </span>last = start.elapsed();
 
     <span class="comment">// verify_proof
-    </span><span class="macro">assert!</span>(verify_proof(<span class="kw-2">&amp;</span>signer.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attrs)<span class="question-mark">?</span>);
+    </span><span class="macro">assert!</span>(verify_proof(<span class="kw-2">&amp;</span>signer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attrs)<span class="question-mark">?</span>);
 
     <span class="macro">eprintln!</span>(
         <span class="string">&quot;Time to verify : {:?} (+{:?})&quot;</span>,
@@ -422,7 +424,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">fn </span>bench_30_of_100() -&gt; <span class="prelude-ty">Result</span>&lt;(), amcl_wrapper::errors::SerzDeserzError&gt; {
+<span class="kw">fn </span>bench_30_of_100() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="comment">// Bench Variables:
     // l - upper bound for the length of the commitment vector
     // t - upper bound for the cardinality of the committed sets
@@ -435,11 +437,11 @@
     //start timer
     </span><span class="kw">let </span>start = std::time::Instant::now();
 
-    <span class="kw">let </span>n_cardinality = <span class="number">16</span>; <span class="comment">// 6*16 = 96
-    </span><span class="kw">let </span>l_max_entries = <span class="number">6</span>; <span class="comment">// 6*5 = 30
+    <span class="kw">let </span>n_cardinality = <span class="number">16</span>; <span class="comment">// Allow up to 16 Attributes per Entry or per Proof, 6*16 = 96 max
+    </span><span class="kw">let </span>l_max_entries = <span class="number">6</span>; <span class="comment">// Choose 5 from each Entry Level, 6*5 = 30 selected
 
     // Delegate a subset of attributes
-    </span><span class="kw">let </span>entry = |j| {
+    </span><span class="kw">let </span>entry = |<span class="kw">_</span>| {
         entry(
             <span class="kw-2">&amp;</span>[<span class="number">0</span>..n_cardinality]
                 .iter()
@@ -453,13 +455,13 @@
     <span class="macro">eprintln!</span>(<span class="string">&quot;Time to setup attributes: {:?}&quot;</span>, last);
 
     <span class="kw">let </span>l_message = MaxEntries::new(l_max_entries);
-    <span class="kw">let </span>signer = Signer::new(MaxCardinality::new(<span class="number">8</span>), l_message);
+    <span class="kw">let </span>signer = Issuer::new(MaxCardinality::new(<span class="number">8</span>), l_message);
 
     <span class="kw">let </span>alice = UserKey::new();
-    <span class="kw">let </span>alice_nym = alice.nym(signer.public_parameters.clone());
+    <span class="kw">let </span>alice_nym = alice.nym(signer.public.parameters.clone());
 
     <span class="kw">let </span>robert = UserKey::new();
-    <span class="kw">let </span>bobby_nym = robert.nym(signer.public_parameters.clone());
+    <span class="kw">let </span>bobby_nym = robert.nym(signer.public.parameters.clone());
 
     <span class="kw">let </span>position = <span class="number">1</span>; <span class="comment">// index of the update key to be used for the added element
     </span><span class="kw">let </span>index_l = all_attributes.len() + position;
@@ -490,11 +492,11 @@
         <span class="comment">// restrict opening to read only
         </span>opening_vector: opening_vector_restricted,
         update_key: cred.update_key,
+        vk: cred.vk,
     };
 
     <span class="comment">// offer to bobby_nym
-    </span><span class="kw">let </span>alice_del_to_bobby =
-        alice_nym.offer(<span class="kw-2">&amp;</span>cred_restricted, <span class="kw-2">&amp;</span>signer.vk, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>bobby_nym.public);
+    </span><span class="kw">let </span>alice_del_to_bobby = alice_nym.offer(<span class="kw-2">&amp;</span>cred_restricted, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>bobby_nym.public)<span class="question-mark">?</span>;
 
     <span class="macro">eprintln!</span>(
         <span class="string">&quot;Time to offer cred: {:?} (+{:?})&quot;</span>,
@@ -520,7 +522,7 @@
         .collect();
 
     <span class="comment">// prepare a proof
-    </span><span class="kw">let </span>proof = bobby_cred.prove(<span class="kw-2">&amp;</span>all_attributes, <span class="kw-2">&amp;</span>selected_attrs);
+    </span><span class="kw">let </span>proof = bobby_nym.prove(<span class="kw-2">&amp;</span>bobby_cred, <span class="kw-2">&amp;</span>all_attributes, <span class="kw-2">&amp;</span>selected_attrs);
 
     <span class="macro">eprintln!</span>(
         <span class="string">&quot;Time to prove: {:?} (+{:?})&quot;</span>,
@@ -530,7 +532,7 @@
     <span class="kw">let </span>last = start.elapsed();
 
     <span class="comment">// verify_proof
-    </span><span class="macro">assert!</span>(verify_proof(<span class="kw-2">&amp;</span>signer.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attrs)<span class="question-mark">?</span>);
+    </span><span class="macro">assert!</span>(verify_proof(<span class="kw-2">&amp;</span>signer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attrs)<span class="question-mark">?</span>);
 
     <span class="macro">eprintln!</span>(
         <span class="string">&quot;Time to verify : {:?} (+{:?})&quot;</span>,

@@ -377,6 +377,73 @@
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 
 <span class="kw">use </span>amcl_wrapper::field_elem::FieldElement;
@@ -390,13 +457,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::keypair::spseq_uc::RandomizedPubKey;
 <span class="kw">use </span><span class="kw">crate</span>::keypair::NymProof;
-<span class="kw">use </span><span class="kw">crate</span>::utils::{Pedersen, PedersenCommit, PedersenOpen};
-
-<span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">pub enum </span>Generator {
-    G1(G1),
-    G2(G2),
-}
+<span class="kw">use </span><span class="kw">crate</span>::types::{Generator, GeneratorG1, GeneratorG2, Group};
 
 <span class="kw">impl </span>Display <span class="kw">for </span>Generator {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
@@ -407,17 +468,37 @@
     }
 }
 
+<span class="kw">impl </span>Display <span class="kw">for </span>Group {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="kw">match </span><span class="self">self </span>{
+            Group::G1(g) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{g}&quot;</span>),
+            Group::G2(g) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{g}&quot;</span>),
+        }
+    }
+}
+
 <span class="kw">pub struct </span>ChallengeState {
     <span class="kw">pub </span>name: String,
     <span class="kw">pub </span>g: Generator,
-    <span class="kw">pub </span>statement: Vec&lt;Generator&gt;,
+    <span class="kw">pub </span>statement: Vec&lt;Group&gt;,
     <span class="kw">pub </span>hash: [u8; <span class="number">32</span>],
+}
+
+<span class="kw">impl </span>ChallengeState {
+    <span class="kw">pub fn </span>new(generator: Generator, statement: Vec&lt;Group&gt;, announcement: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            name: <span class="kw">crate</span>::config::CHALLENGE_STATE_NAME.to_string(),
+            g: generator,
+            statement,
+            hash: Sha256::digest(announcement).into(),
+        }
+    }
 }
 
 <span class="kw">pub type </span>Challenge = FieldElement;
 <span class="kw">pub type </span>Response = Vec&lt;FieldElement&gt;; <span class="comment">// Vec&lt;BigNum&gt;;
 </span><span class="doccomment">/// Schnorr proof (non-interactive using Fiat Shamir heuristic) of the statement
-/// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generilized version
+/// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generalized version
 </span><span class="kw">pub struct </span>ZkpSchnorrFiatShamir {}
 
 <span class="kw">impl </span>Default <span class="kw">for </span>ZkpSchnorrFiatShamir {
@@ -471,15 +552,15 @@
 
         <span class="comment">// SHAKE3 hash the &amp;announcement.to_bytes(false)
         </span><span class="kw">let </span>hash: [u8; <span class="number">32</span>] = Sha256::digest(announcement.to_bytes(<span class="bool-val">false</span>)).into();
-        <span class="comment">// cast stms to Generator::G2
+        <span class="comment">// cast stms to Group::G2
         </span><span class="kw">let </span>stms = stms
             .iter()
-            .map(|x| Generator::G2(x.clone()))
-            .collect::&lt;Vec&lt;Generator&gt;&gt;();
+            .map(|x| Group::G2(x.clone()))
+            .collect::&lt;Vec&lt;Group&gt;&gt;();
 
         <span class="kw">let </span>state = ChallengeState {
             name: <span class="string">&quot;schnorr&quot;</span>.to_string(),
-            g: Generator::G2(g_2.clone()),
+            g: Generator::G2(GeneratorG2(g_2.clone())),
             statement: stms,
             hash,
         };
@@ -523,12 +604,12 @@
         <span class="comment">// cast stms to Generator::G2
         </span><span class="kw">let </span>stms = stms
             .iter()
-            .map(|x| Generator::G2(x.clone()))
-            .collect::&lt;Vec&lt;Generator&gt;&gt;();
+            .map(|x| Group::G2(x.clone()))
+            .collect::&lt;Vec&lt;Group&gt;&gt;();
 
         <span class="kw">let </span>state = ChallengeState {
             name: <span class="string">&quot;schnorr&quot;</span>.to_string(),
-            g: Generator::G2(g_2.clone()),
+            g: Generator::G2(GeneratorG2(g_2.clone())),
             statement: stms,
             hash: Sha256::digest(announcement.to_bytes(<span class="bool-val">false</span>)).into(),
         };
@@ -618,9 +699,9 @@
 <span class="kw">impl </span>DamgardTransform {
     <span class="kw">pub fn </span>announce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (PedersenCommit, PedersenOpen) {
         <span class="kw">let </span>w_random = FieldElement::random();
-        <span class="kw">let </span>w_element = <span class="kw-2">&amp;</span>w_random * <span class="kw-2">&amp;</span><span class="self">self</span>.pedersen.g;
+        <span class="kw">let </span>w_element = <span class="kw-2">&amp;</span><span class="self">self</span>.pedersen.g.scalar_mul_const_time(<span class="kw-2">&amp;</span>w_random);
         <span class="kw">let </span>(pedersen_commit, <span class="kw-2">mut </span>pedersen_open) = <span class="self">self</span>.pedersen.commit(w_random);
-        pedersen_open.element(w_element);
+        pedersen_open.element(w_element.clone());
         (pedersen_commit, pedersen_open)
     }
     <span class="kw">pub fn </span>verify(nym_proof: <span class="kw-2">&amp;</span>NymProof, nym_damgard: <span class="kw-2">&amp;</span>DamgardTransform) -&gt; bool {
@@ -640,6 +721,61 @@
     <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>pedersen = Pedersen::new();
         <span class="self">Self </span>{ pedersen }
+    }
+}
+
+<span class="attr">#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+</span><span class="kw">pub struct </span>Pedersen {
+    <span class="kw">pub </span>g: GeneratorG1,
+    <span class="kw">pub </span>h: G1,
+    <span class="comment">// trapdoor: FieldElement,
+</span>}
+<span class="kw">pub type </span>PedersenCommit = G1;
+
+<span class="attr">#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+</span><span class="kw">pub struct </span>PedersenOpen {
+    <span class="kw">pub </span>open_randomness: FieldElement,
+    <span class="kw">pub </span>announce_randomness: FieldElement,
+    <span class="kw">pub </span>announce_element: <span class="prelude-ty">Option</span>&lt;G1&gt;,
+}
+
+<span class="kw">impl </span>PedersenOpen {
+    <span class="kw">pub fn </span>element(<span class="kw-2">&amp;mut </span><span class="self">self</span>, elem: G1) {
+        <span class="self">self</span>.announce_element = <span class="prelude-val">Some</span>(elem);
+    }
+}
+<span class="kw">impl </span>Default <span class="kw">for </span>Pedersen {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new()
+    }
+}
+<span class="kw">impl </span>Pedersen {
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="comment">// h is the statement. d is the trapdoor. g is the generator. h = d*g
+        </span><span class="kw">let </span>g: GeneratorG1 = G1::generator().into();
+        <span class="kw">let </span>d = Secret::new(FieldElement::random()); <span class="comment">// trapdoor
+        </span><span class="kw">let </span>h = <span class="kw-2">&amp;</span>g.scalar_mul_const_time(d.expose_secret());
+        Pedersen { g, h: h.clone() }
+    }
+    <span class="kw">pub fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: FieldElement) -&gt; (PedersenCommit, PedersenOpen) {
+        <span class="kw">let </span>r = FieldElement::random();
+        <span class="kw">let </span>pedersen_commit = <span class="kw-2">&amp;</span>r * <span class="kw-2">&amp;</span><span class="self">self</span>.h + <span class="kw-2">&amp;</span><span class="self">self</span>.g.scalar_mul_const_time(<span class="kw-2">&amp;</span>msg);
+        <span class="kw">let </span>pedersen_open = PedersenOpen {
+            open_randomness: r,
+            announce_randomness: msg,
+            announce_element: <span class="prelude-val">None</span>,
+        };
+
+        (pedersen_commit, pedersen_open)
+    }
+
+    <span class="doccomment">/// Decrypts/Decommits the message
+    </span><span class="kw">pub fn </span>decommit(<span class="kw-2">&amp;</span><span class="self">self</span>, pedersen_open: <span class="kw-2">&amp;</span>PedersenOpen, pedersen_commit: <span class="kw-2">&amp;</span>PedersenCommit) -&gt; bool {
+        <span class="kw">let </span>c2 = <span class="kw-2">&amp;</span><span class="self">self</span>.h.scalar_mul_const_time(<span class="kw-2">&amp;</span>pedersen_open.open_randomness)
+            + <span class="kw-2">&amp;</span><span class="self">self
+                </span>.g
+                .scalar_mul_const_time(<span class="kw-2">&amp;</span>pedersen_open.announce_randomness);
+        <span class="kw-2">&amp;</span>c2 == pedersen_commit
     }
 }
 
@@ -697,8 +833,8 @@
         <span class="comment">// verifier creates a challenge
         </span><span class="kw">let </span>state = ChallengeState {
             name: <span class="string">&quot;schnorr&quot;</span>.to_string(),
-            g: Generator::G1(zkpsch.g_1.clone()),
-            statement: <span class="macro">vec!</span>[Generator::G1(stm.as_ref().clone())],
+            g: Generator::G1(zkpsch.g_1.clone().into()),
+            statement: <span class="macro">vec!</span>[Group::G1(stm.as_ref().clone())],
             hash: Sha256::digest(announce.<span class="number">0</span>.to_bytes(<span class="bool-val">false</span>)).into(),
         };
 
@@ -727,13 +863,11 @@
 
         </span><span class="kw">let </span>(pedersen_commit, pedersen_open) = damgard.announce();
 
-        <span class="comment">// TODO: create func or Builder for this
-        </span><span class="kw">let </span>state = ChallengeState {
-            name: <span class="string">&quot;schnorr&quot;</span>.to_owned(),
-            g: Generator::G1(damgard.pedersen.g.clone()),
-            hash: Sha256::digest(pedersen_commit.to_bytes(<span class="bool-val">false</span>)).into(),
-            statement: <span class="macro">vec!</span>[Generator::G1(statement.as_ref().clone())],
-        };
+        <span class="kw">let </span>state = ChallengeState::new(
+            Generator::G1(damgard.pedersen.g.clone()),
+            <span class="macro">vec!</span>[Group::G1(statement.as_ref().clone())],
+            <span class="kw-2">&amp;</span>pedersen_commit.to_bytes(<span class="bool-val">false</span>),
+        );
 
         <span class="kw">let </span>challenge = DamgardTransform::challenge(<span class="kw-2">&amp;</span>state);
 

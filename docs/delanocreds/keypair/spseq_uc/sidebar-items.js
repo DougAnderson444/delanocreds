@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["UpdateError"],"fn":["change_rep","rndmz_pk"],"struct":["Credential","RandomizedPubKey"],"type":["OpeningInformation","UpdateKey"]};
+window.SIDEBAR_ITEMS = {"enum":["UpdateError"],"fn":["change_rel","change_rep","rndmz_pk"],"struct":["Credential","RandomizedPubKey"],"type":["OpeningInformation","UpdateKey"]};

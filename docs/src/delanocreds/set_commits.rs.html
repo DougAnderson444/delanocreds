@@ -560,9 +560,17 @@
 <a href="#560" id="560">560</a>
 <a href="#561" id="561">561</a>
 <a href="#562" id="562">562</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keypair::MaxCardinality;
-<span class="kw">use </span><span class="kw">crate</span>::utils::convert_entry_to_bn;
-<span class="kw">use </span><span class="kw">crate</span>::utils::Entry;
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::entry::convert_entry_to_bn;
+<span class="kw">use </span><span class="kw">crate</span>::entry::Entry;
+<span class="kw">use </span><span class="kw">crate</span>::keypair::MaxCardinality;
+<span class="kw">use </span><span class="kw">crate</span>::types::{GeneratorG1, GeneratorG2};
 <span class="kw">use </span>amcl_wrapper::errors::SerzDeserzError;
 <span class="kw">use </span>amcl_wrapper::extension_field_gt::GT;
 <span class="kw">use </span>amcl_wrapper::field_elem::FieldElement;
@@ -583,8 +591,8 @@
 </span><span class="kw">pub struct </span>ParamSetCommitment {
     <span class="kw">pub </span>pp_commit_g1: Vec&lt;G1&gt;,
     <span class="kw">pub </span>pp_commit_g2: Vec&lt;G2&gt;,
-    <span class="kw">pub </span>g_1: G1,
-    <span class="kw">pub </span>g_2: G2,
+    <span class="kw">pub </span>g_1: GeneratorG1,
+    <span class="kw">pub </span>g_2: GeneratorG2,
     <span class="kw">pub </span>max_cardinality: usize,
 }
 
@@ -621,8 +629,8 @@
         ParamSetCommitment {
             pp_commit_g2,
             pp_commit_g1,
-            g_2,
-            g_1,
+            g_2: GeneratorG2(g_2),
+            g_1: GeneratorG1(g_1),
             max_cardinality: <span class="kw-2">*</span>t,
         }
     }
@@ -665,8 +673,7 @@
         param_sc: <span class="kw-2">&amp;</span>ParamSetCommitment,
         mess_set_str: <span class="kw-2">&amp;</span>Entry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(G1, FieldElement), SerzDeserzError&gt; {
-        <span class="comment">// TODO: Verify the message set string length is no more than the max cardinality in ParamSetCommitment
-        </span><span class="kw">let </span>mess_set = convert_entry_to_bn(mess_set_str)<span class="question-mark">?</span>;
+        <span class="kw">let </span>mess_set = convert_entry_to_bn(mess_set_str)<span class="question-mark">?</span>;
         <span class="kw">let </span>monypol_coeff = UnivarPolynomial::new_with_roots(<span class="kw-2">&amp;</span>mess_set);
         <span class="kw">let </span>pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
@@ -867,11 +874,7 @@
     /// # Returns
     /// a proof which is a aggregate of witnesses and shows all subsets are valid for respective sets
     </span><span class="kw">pub fn </span>aggregate_cross(witness_vector: <span class="kw-2">&amp;</span>[G1], commit_vector: <span class="kw-2">&amp;</span>[G1]) -&gt; G1 {
-        <span class="comment">// TODO: Needs to ensure that elements in the witness_vector are no longer than the max_cardinality in ParamSetCommitment
-        // check number of entries in `witness_vector` against `self.param_sc.max_cardinality` to ensure within bounds
-        // ie. witness_vector.len() &lt;= self.param_sc.max_cardinality
-
-        // sum all elements in all witness_vectors
+        <span class="comment">// sum all elements in all witness_vectors
         </span>witness_vector.iter().zip(commit_vector.iter()).fold(
             G1::identity(),
             |acc, (witness, commit)| {
@@ -1108,8 +1111,7 @@
             CrossSetCommitment::open_subset(<span class="kw-2">&amp;</span>pp, <span class="kw-2">&amp;</span>set_str2, <span class="kw-2">&amp;</span>opening_info_2, <span class="kw-2">&amp;</span>subset_str_2)<span class="question-mark">?
                 </span>.expect(<span class="string">&quot;Some Witness&quot;</span>);
 
-        <span class="comment">// aggregate all witnesses for a subset is correct-&gt; proof
-        // TODO: System should not allow you to aggregate witnesses of a higher cardinality than the max cardinality in ParamSetCommitment
+        <span class="comment">// aggregate all witnesses for a subset is correct -&gt; proof
         </span><span class="kw">let </span>proof = CrossSetCommitment::aggregate_cross(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[witness_1, witness_2], commit_vector);
 
         <span class="comment">// verification aggregated witnesses
@@ -1120,6 +1122,18 @@
             <span class="kw-2">&amp;</span>proof
         )<span class="question-mark">?</span>);
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_generator() {
+        <span class="kw">let </span>g1 = G1::generator();
+        <span class="kw">let </span>g2 = G2::generator();
+        <span class="macro">println!</span>(<span class="string">&quot;G1 generator: {:?}&quot;</span>, g1);
+        <span class="macro">println!</span>(<span class="string">&quot;G2 generator: {:?}&quot;</span>, g2);
+
+        <span class="comment">// rand FE
+        </span><span class="kw">let </span>fe = FieldElement::random();
+        <span class="macro">println!</span>(<span class="string">&quot;Random FE: {:?}&quot;</span>, fe);
     }
 }
 </code></pre></div></section></main></body></html>

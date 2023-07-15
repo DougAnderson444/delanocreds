@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"type":["CommitmentType"]};
+window.SIDEBAR_ITEMS = {"enum":["Generator","Group"],"struct":["GeneratorG1","GeneratorG2"],"type":["CommitmentType"]};

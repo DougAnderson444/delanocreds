@@ -1,12 +1,35 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Delanocreds API"><title>delanocreds - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-d1c027e9fb12379c.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="delanocreds" data-themes="" data-resource-suffix="" data-rustdoc-version="1.72.0-nightly (6bba06146 2023-06-16)" data-search-js="search-ebd6511799447b38.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-762bcae8c0777c4b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../delanocreds/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../delanocreds/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate delanocreds</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 0.1.1</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">delanocreds</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/delanocreds/lib.rs.html#1-370">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="delanocreds-api"><a href="#delanocreds-api">Delanocreds API</a></h2>
-<p><strong>Del</strong>egatable <strong>Ano</strong>nymous <strong>Cred</strong>ential<strong>s</strong>: Based on the Crypto paper
-<a href="https://eprint.iacr.org/2022/680">Practical Delegatable Anonymous Credentials From Equivalence Class Signatures</a></p>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Delegatable Anonymous Credentials (Delanocreds)"><title>delanocreds - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-d1c027e9fb12379c.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="delanocreds" data-themes="" data-resource-suffix="" data-rustdoc-version="1.72.0-nightly (6bba06146 2023-06-16)" data-search-js="search-ebd6511799447b38.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-762bcae8c0777c4b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../delanocreds/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../delanocreds/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate delanocreds</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 0.1.1</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">delanocreds</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/delanocreds/lib.rs.html#1-454">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="delegatable-anonymous-credentials-delanocreds"><a href="#delegatable-anonymous-credentials-delanocreds"><strong>Del</strong>egatable <strong>Ano</strong>nymous <strong>Cred</strong>ential<strong>s</strong> (Delanocreds)</a></h2>
 <p>This library enables you to create, issue, delegate/extend/restrict/transfer, and verify credentials in an anonymous way.</p>
-<h2 id="roles"><a href="#roles">Roles</a></h2>
-<p>The roles start with a Root Issuer, then delegated Credential Holder/Prover and Verifier.</p>
-<h3 id="root-issuer"><a href="#root-issuer">Root Issuer</a></h3>
-<p>You are the issuer and your verification key (public key) will be the only non-anonymous key in the credentials process.</p>
-<h5 id="root-issuer-summary-of-choicesoptions"><a href="#root-issuer-summary-of-choicesoptions">Root Issuer Summary of Choices/Options:</a></h5>
+<p>Create Root Credentials, then delegate the ability to add or remove credentials, without revealing the identity of any of the holders in the delegation chain, including the prover!</p>
+<p>Useful if you want the ability to delegate credentials, capabilities, or other data without revealing the identity of the delegation or holder(s).</p>
+<p>Holders can also selectively prove attributes and remove the ability for delegatees to prove selected attributes.</p>
+<p><a href="https://github.com/hyperledger/aries-rfcs/blob/main/concepts/0104-chained-credentials/README.md"><img src="https://github.com/hyperledger/aries-rfcs/raw/main/concepts/0104-chained-credentials/use-case.png" alt="Example Explainer" /></a></p>
+<h3 id="project-status"><a href="#project-status">Project Status</a></h3>
+<p>⚠️ New project, somewhat work in progress. API is not stable yet.</p>
+<p>Roadmap:</p>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Passing tests</li>
+<li><input disabled="" type="checkbox"/>
+Stable Public API</li>
+<li><input disabled="" type="checkbox"/>
+DelanoWallet (Store, Sign, Backup Credentials)</li>
+<li><input disabled="" type="checkbox"/>
+DelanoNet (Data Exchange Network)</li>
+</ul>
+<h3 id="delegation"><a href="#delegation">Delegation</a></h3>
+<p>What can be delegated is the ability to add a number of additional attribute Entries (zero to MaxEntries), but only if the credential is marked as <em>extendable</em>.</p>
+<p>Even if there is no ability for a credential holder to add additional attributes, the following always holds true:</p>
+<ul>
+<li>Credentials holders can always assign their credential to a new public key</li>
+<li>Attributes are always selectable for presentation by a holder</li>
+<li>Attributes are always removable by a holder</li>
+</ul>
+<p>It is important to note that the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.</p>
+<p>Therefore, while holders may restrict the ability of delegatees to <em>add</em> attributes, they will always be
+able to assign the credential to a new public key for the attributes they <em>do</em> have.</p>
+<p>You may wish to apply a Credential Strategy such that the Credential is properly handled by the holder. This is left to the user, as the use cases of Credentials are varied too widely to provide a one-size-fits-all solution.</p>
+<h4 id="root-issuer-summary-of-choicesoptions"><a href="#root-issuer-summary-of-choicesoptions">Root Issuer Summary of Choices/Options:</a></h4>
 <ul>
 <li><strong>Maxiumum Attribute Entries</strong>: Credntials have a maximum number of entries.
 Each entry holds up to MaxCardinality of Attributes.
@@ -15,138 +38,166 @@ The Root Issuer sets a maximum number of entries (<code>message_l</code>)</li>
 <li><strong>Extendable Limit</strong>: What the maximum number of additional entries may be (current entries length up to <code>k_prime</code>, <code>k_prime</code> is at most <code>message_l</code>.
 Or in other words: <code>current &lt; k_prime &lt; message_l</code>),</li>
 </ul>
-<p>Below is a markdown table with an example of attribute entries, and attributes in each entry, with yes/no for each feature</p>
-<div class="example-wrap"><pre class="language-md"><code>Attribute Entries:
-==&gt; Entry Level 0: [Attribute, Attribute, Attribute]
-==&gt; Entry Level 1: [Attribute]
-==&gt; Entry Level 2: [Attribute, Attribute]
-==&gt; Additonal Entry? Only if 3 &lt; k_prime &lt; message_l
-</code></pre></div>
-<ul>
-<li>Max Entries: <code>message_l</code></li>
-<li>Max total elements: <code>max_cardinality</code></li>
-</ul>
-<div class="example-wrap"><pre class="language-md"><code>Opening Information
+<h4 id="attributes"><a href="#attributes">Attributes</a></h4>
+<p>Attributes can be created from any bytes, such as “age &gt; 21” or even a <code>jpg</code>. These bytes are hashed to the BLS12-381 curve, which means they are also content addressable! Once an Attribute is created, it can be referenced by it’s <a href="https://cid.ipfs.tech/">Content Identifier (CID)</a> instead of the value itself. This means we can also refer to attributes by their CID, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.</p>
+<p>The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of 48 bytes which is longer than the typical 32 bytes. If you try to create an Attribute out of a CID with a different hash or length, it will fail and result in an error. For this reason, use the Attribute methods provided by this library when creating Attributes.</p>
 
-==&gt; Entry Level 0: Valid opening information
-==&gt; Entry Level 1: Valid opening information
-==&gt; Entry Level 2: Zeroized opening information
-</code></pre></div><h5 id="delegated-credential-holders-choice-of-options"><a href="#delegated-credential-holders-choice-of-options">Delegated Credential Holder(s) Choice of Options:</a></h5>
-<p>Delegation in the sence of DAC means the adding or generating proofs of attributes to a credential.</p>
-<p>Thus holders have the option to restrict:</p>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>delanocreds::attributes::Attribute;
+
+<span class="kw">let </span>some_test_attr = <span class="string">&quot;read&quot;</span>;
+
+<span class="kw">let </span>read_attr = Attribute::new(some_test_attr); <span class="comment">// using the new method
+
+// Try Attribute from cid
+</span><span class="kw">let </span>attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
+<span class="macro">assert_eq!</span>(read_attr, attr_from_cid);
+
+<span class="comment">// Attribute from_cid
+</span><span class="kw">let </span>attr_from_cid = Attribute::from_cid(<span class="kw-2">&amp;</span>read_attr).unwrap();
+<span class="macro">assert_eq!</span>(read_attr, attr_from_cid);</code></pre></div>
+<h4 id="entries"><a href="#entries">Entries</a></h4>
+<p>A Credential is comprised of one or more Entries. Each Entry contains one or more Attributes. Entries are used to group Attributes together, and are also used to delegate the ability to add or remove Attributes.</p>
+<div class="example-wrap"><pre class="language-md"><code>//! Attribute Entries:
+//! ==&gt; Entry Level 0: [Attribute, Attribute, Attribute]
+//! ==&gt; Entry Level 1: [Attribute]
+//! ==&gt; Entry Level 2: [Attribute, Attribute]
+//! ==&gt; Additonal Entry? Only if 3 &lt; Extendable &lt; MaxEntries
+</code></pre></div><h4 id="redact"><a href="#redact">Redact</a></h4>
+<p>Holders of a Credential can redact any <a href="entry/struct.Entry.html" title="struct delanocreds::entry::Entry">Entry</a> from the Credential, which will remove the ability to create proofs on any Attributes in that entry. This is useful if you want to remove the ability for a delegatee to prove a specific attribute, but still allow them to prove other attributes.</p>
+<p>This is done by zeroizing the Opening Information in the Credential.</p>
+<h3 id="bindings"><a href="#bindings">Bindings</a></h3>
+<p>The intention is to provide the following bindings:</p>
 <ul>
-<li><strong>Restrict Adding Attributes</strong>: Restrict adding attributes to the credential (by reducing the length of <code>Credential { UpdateKey } </code>).</li>
-<li><strong>Restrict Showing certain <code>Attribute</code> Entry levels</strong>: By zeroizing the opening information  corresponding
-to the attribute entry level you want to restrict.</li>
+<li>Rust API</li>
+<li>wasm bindgen (wasm32-unknown-unknown)</li>
+<li>wasm interface types (WIT)</li>
 </ul>
-<p>Every delegator can control how far delegations can go by further restricting the <code>update key</code>
-and a delegator can also restrict the possibility to show attributes from a certain level in
-the hierarchy (which corresponds to a commitment in the commitment vector) by not providing
-the opening of the commitment to the delegatee.</p>
-<p>Likewise, holders have the ability to extend the credential by adding attributes to the credential,
-as long as the total number of attributes doesn’t exceed <code>k_prime</code>.</p>
-<h3 id="showing-a-credential"><a href="#showing-a-credential">Showing a credential</a></h3>
-<p>Once a holder wants to show a credential, with any combination of attributes (as long as the opening information is available),
-the holder selects which attributes they want to prove, then they run <code>proof_cred</code> to generate a proof.</p>
-<p>Holders can only prove up to <code>max_cardinality</code> attributes at a time.</p>
-<h3 id="building-a-credential"><a href="#building-a-credential">Building a Credential</a></h3>
-<p>Building credentials is a multiple step process:</p>
-<ol>
-<li>
-<p>First you generate the Verification Keys by choosing the max cardinality (total individual credentials)
-and max number of credential sets. Those verification keys (VK) can only be used up to those lengths. If you need longer
-attributes, you need to generate new VKs.</p>
-</li>
-<li>
-<p>Second, you take the Issuer and add credential attributes, within the maxium allowed by the VK.</p>
-</li>
-<li>
-<p>Lastly you then issue the credential to a user.</p>
-</li>
-</ol>
-<p>A Credential Builder.</p>
-<p>Root Issuer Builder Options you can set:</p>
+<h3 id="target-api-todo"><a href="#target-api-todo">Target API (TODO)</a></h3>
+<p>Current API is available by looking at the <code>keypair.rs</code> tests.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>delanocreds::entry::{Entry, MaxEntries};
+<span class="kw">use </span>delanocreds::attributes::Attribute;
+<span class="kw">use </span>delanocreds::keypair::{Issuer, UserKey, verify_proof};
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="comment">// Build a RootIssuer with ./config.rs default sizes
+    </span><span class="kw">let </span><span class="kw-2">mut </span>issuer = Issuer::default();
+
+    <span class="comment">// Create Entry of 2 Attributes
+    </span><span class="kw">let </span>over_21 = Attribute::new(<span class="string">&quot;age &gt; 21&quot;</span>);
+    <span class="kw">let </span>seniors_discount = Attribute::new(<span class="string">&quot;age &gt; 65&quot;</span>);
+    <span class="kw">let </span>root_entry = Entry::new(<span class="kw-2">&amp;</span>[over_21.clone(), seniors_discount.clone()]);
+
+    <span class="comment">// Along comes Alice
+    </span><span class="kw">let </span>alice = UserKey::new();
+    <span class="comment">// Alice creates an anonymous pseudonym of her keys
+    // This Nym must use the public parameters of the Issuer
+    </span><span class="kw">let </span>nym = alice.nym(issuer.public.parameters.clone());
+
+    <span class="kw">let </span>cred = issuer
+        .credential() <span class="comment">// CredentialBuilder for this Issuer
+        </span>.with_entry(root_entry.clone()) <span class="comment">// adds a Root Entry
+        </span>.max_entries(<span class="kw-2">&amp;</span>MaxEntries::default()) <span class="comment">// set the Entry ceiling
+        </span>.issue_to(<span class="kw-2">&amp;</span>nym.public)<span class="question-mark">?</span>; <span class="comment">// issues to a Nym
+
+    // Send the (powerful) Root Credential, Attributes, and Entrys to Alice
+
+    // Alice can use the Credential to prove she is over 21
+    </span><span class="kw">let </span>(proof, selected_attributes) = nym.proof_builder(<span class="kw-2">&amp;</span>cred, <span class="kw-2">&amp;</span>[root_entry.clone()])
+        .select_attribute(over_21.clone())
+        .prove();
+    <span class="macro">assert!</span>(verify_proof(<span class="kw-2">&amp;</span>issuer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attributes).unwrap());
+
+    <span class="comment">// Alice can offer variations of the Credential to others
+    </span><span class="kw">let </span>bob = UserKey::new();
+    <span class="kw">let </span>bobby_nym = bob.nym(issuer.public.parameters.clone());
+
+    <span class="kw">let </span>(offer, provable_entries) = nym.offer_builder(<span class="kw-2">&amp;</span>cred, <span class="kw-2">&amp;</span>[root_entry])
+        .without_attribute(seniors_discount) <span class="comment">// resticts the ability to prove attribute Entry (note: Removes the entire Entry, not just one Attribute)
+        </span>.additional_entry(Entry::new(<span class="kw-2">&amp;</span>[Attribute::new(<span class="string">&quot;10% off&quot;</span>)])) <span class="comment">// adds a new Entry
+        </span>.max_entries(<span class="number">3</span>) <span class="comment">// restrict delegatees to only 3 entries total
+        </span>.offer_to(<span class="kw-2">&amp;</span>bobby_nym.public)<span class="question-mark">?</span>;
+
+    <span class="comment">// Send to Bob so he can accept the Credential
+    </span><span class="kw">let </span>bobby_cred = bobby_nym.accept(<span class="kw-2">&amp;</span>offer);
+
+    <span class="comment">// and prove all entries
+    </span><span class="kw">let </span>(proof, selected_attributes) = bobby_nym.proof_builder(<span class="kw-2">&amp;</span>bobby_cred, <span class="kw-2">&amp;</span>provable_entries)
+        .select_attribute(over_21)
+        .prove();
+
+    <span class="macro">assert!</span>(verify_proof(<span class="kw-2">&amp;</span>issuer.public.vk, <span class="kw-2">&amp;</span>proof, <span class="kw-2">&amp;</span>selected_attributes).unwrap());
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h3 id="features"><a href="#features">Features</a></h3><h3 id="advantages"><a href="#advantages">Advantages</a></h3>
+<p>This scheme has the following advantages over other anonymous credential schemes:</p>
 <ul>
-<li>Max number of attributes (defaults to 5)</li>
-<li>Max cardinality (defaults to 10)</li>
+<li><strong>Attributes</strong>: User can selectively disclose and prove some of the attributes in the credential.</li>
+<li><strong>Expressiveness</strong>: S (selective disclosure), R (arbitrary computable relations over attributes, meaning you can do more than just selective disclosure)</li>
+<li><strong>Rest</strong>: Means whether it is possible to apply a restriction on the delegator’s power during the delegation.</li>
+<li><strong>Selective Anonymity</strong>: Strong anonymity guarantees meaning that no one can trace or learn information about the user’s identity or anything beyond what they suppose to show during both the issuing/delegation and showing of credentials.</li>
+<li><strong>Credential Size</strong>: O(1), meaning the size of the credential is constant.</li>
+<li><strong>Show Size</strong>: O(L), meaning the size of the showing grows linearly in the number of delegations.</li>
+<li><strong>Undisclosed attributes</strong>: O(u), meaning the size of the undisclosed attributes grows linearly in the number of delegations.</li>
 </ul>
-<p>Credential Builder Options you can set:</p>
+<p>Table 1. Comparison of practical DAC schemes</p>
+<div><table><thead><tr><th>Scheme</th><th>Attributes</th><th>Expressiveness</th><th>Rest</th><th>Selective Anonymity</th><th>Credential Size</th><th>Show Size</th></tr></thead><tbody>
+<tr><td><a href="">BB18</a></td><td>✔️</td><td>S/R</td><td>≈</td><td>🌓†</td><td>O(1)</td><td>O(u)</td></tr>
+<tr><td><a href="">CDD</a></td><td>✔️</td><td>S/R</td><td>✖️</td><td>🌗♣</td><td>O(nL)</td><td>O(uL)</td></tr>
+<tr><td><a href="">CL</a></td><td>≈</td><td>✖️</td><td>✖️</td><td>🌙*</td><td>O(nL)</td><td>O(uL)</td></tr>
+<tr><td><a href="">This</a></td><td>✔️</td><td>S</td><td>✔️</td><td>🌚‡</td><td>O(1)</td><td>O(L)</td></tr>
+</tbody></table>
+</div>
+<p>🌓† Requires a trusted setup and have a trapdoor associated to their parameters.</p>
+<p>🌗♣ It does not support an anonymous delegation phase.</p>
+<p>🌙∗
+It also allows an adversarial CA but no delegators’s keys leaks.</p>
+<p>🌚‡ We consider a malicious issuer key CA and all delegators keys can be exposed.</p>
+<h2 id="tests"><a href="#tests">Tests</a></h2>
+<p><code>cargo test --workspace</code></p>
+<h2 id="build-binary-release"><a href="#build-binary-release">Build Binary Release</a></h2>
+<p><code>cargo build --bin delanocreds-bin --release</code></p>
+<p>Run the built binary:</p>
+<p><code>./target/release/delanocreds-bin.exe</code></p>
+<h3 id="speed"><a href="#speed">Speed</a></h3>
+<p>This library can generate, issue, delegate, prove and verify 30 selected credentials out of 100 issued attributes in less than 400ms on <a href="https://cpu.userbenchmark.com/Intel-Core-i5-3470/Rating/2771">Intel i5-3470 CPU @ 3.20GHz</a>.</p>
+<p>That’s fast enough for time-critical applications like public transportation, ticketing, etc.</p>
+<h2 id="quick-bench"><a href="#quick-bench">Quick Bench</a></h2>
+<p>It’s fast. Selecting 30 attributes out of 96 total, the following benchmarks were observed for each step:</p>
+<p>After running <code>cargo run --release</code>:</p>
+<div><table><thead><tr><th>Step</th><th>Time (ms)</th></tr></thead><tbody>
+<tr><td>Setup</td><td>100</td></tr>
+<tr><td>Issue</td><td>81</td></tr>
+<tr><td>Offer</td><td>5</td></tr>
+<tr><td>Accept</td><td>69</td></tr>
+<tr><td>Prove</td><td>19</td></tr>
+<tr><td>Verify</td><td>72</td></tr>
+<tr><td>=============</td><td>=========</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>346</strong></td></tr>
+</tbody></table>
+</div>
+<p>Bench Variables:</p>
 <ul>
-<li>Attributes (defaults to empty)</li>
-<li>Delegatable (defaults to no <code>opening information</code> provided <a href="https://doc.rust-lang.org/nightly/std/primitive.bool.html" title="primitive bool">false</a>)</li>
-<li>Can add attributes (defaults to no <code>update key</code> provided <a href="https://doc.rust-lang.org/nightly/std/primitive.bool.html" title="primitive bool">false</a>)</li>
-<li>How many attributes can be added (<code>k_prime</code> defaults to zero(0) [none])</li>
+<li>l - upper bound for the length of the commitment vector</li>
+<li>t - upper bound for the cardinality of the committed sets</li>
+<li>n &lt; t - number of attributes in each attribute set A_i in commitment</li>
+<li>C_i (same for each commitment level)</li>
+<li>k - length of attribute set vector</li>
+<li>k_prime - number of attributes sets which can be delegated</li>
 </ul>
-<p>Show a credential proof:</p>
+<p>We set the above parameters as t = 25, l = 15, k = 4, k’ = 7 and n = 10 to cover many different use-cases</p>
+<p>Assumption:</p>
 <ul>
-<li>Randomize your public key into a pseudonym</li>
-<li>Choose which attributes to show, even if they were issued by separate delegators</li>
-<li>Generate a proof from the credential and</li>
+<li>each time a credential is delegated, an attribute is added</li>
 </ul>
-<p>Credential Constraints:</p>
-<ul>
-<li>You can only add attributes if the current number of attributes is below <code>message_l</code>.</li>
-<li>You can only issue a credential if the current number of attributes is below <code>max_cardinality</code>.</li>
-</ul>
-<p>If you want to restrict delegatees from showing proofs for attributes from
-a certain level in the hierarchy (which corresponds to a commitment in the
-commitment vector) by not providing the opening of the commitment to the delegatee.</p>
-<p>In Practical terms, this means that when the Root Level commit hold C.R.U.D.,
-the way to restrict the delegatee from showing the proof is to add a second
-level commit that holds only R.U.D., and not provide the opening of the first level.
-This way, the delegatee can only show the proof for the second level thus can only
-prove the ability to Read, Update, and Delete, but not Create.</p>
-<p>States and Sub-states:</p>
-<ul>
-<li>State: Sub-states.</li>
-<li>Configuration: Unconfigured, configured</li>
-<li>Credential: Unissued, issued, delegated</li>
-<li>Delegatable: True, False. A credential is only delegatable if <code>update_key</code> is provided.</li>
-<li>Extendable: True, False. Only extendable if number of attribute commits is less than k_prime</li>
-<li>Showable: Up to the number of attributes in the credential. restricted by <code>opening_info </code></li>
-</ul>
-<p>BLS12-381 public keys are 48 bytes long. Private keys are 32 bytes long.
-Given all the the documentation above, the following code is a possible API and usage for Delanocreds in Rust:</p>
-<ol>
-<li>Root Issuer builds Root Credential with:</li>
-</ol>
-<ul>
-<li>max attributes,</li>
-<li>max cardinality,</li>
-<li>initial attribute entries,</li>
-<li>extendable attributes (),</li>
-<li>fully provable atrributes (all opening information provided)</li>
-<li>k_prime set the number of additonal attributes available from the <code>update_key</code></li>
-</ul>
-<ol start="2">
-<li>
-<p>Root Issuer issues Root Credential to Credential Holder Alice’s pseudonym (nym).
-Alice is the first holder of the Credential.</p>
-</li>
-<li>
-<p>Alice take credential bytes and loads them into the Credential structure. With the Root Credential, Alice can:</p>
-</li>
-</ol>
-<ul>
-<li>generate proof</li>
-<li>delegate to another nym (if allowed by the cred update_key)</li>
-<li>add attributes (if allowed by the cred update_key)</li>
-</ul>
-<p>3a. Alice generates a proof for the Root Credential with:</p>
-<ul>
-<li>a list of attributes to prove</li>
-</ul>
-<p>3b. Alice delegates to another nym with:</p>
-<ul>
-<li>a list of attributes to delegate</li>
-<li>a potentially shorter update key to restrict the delegatee from adding attribute entries</li>
-<li>potentially redacted opening information to restrict the delegatee from showing attributes</li>
-</ul>
-<ol start="4">
-<li>Credential Holder Bob takes the delegated credential bytes and loads them into the Credential structure.
-With the delegated credential, Bob can do the same as Alice within the bounds of the update key and opening information.</li>
-</ol>
-</div></details><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="attributes/index.html" title="mod delanocreds::attributes">attributes</a></div><div class="desc docblock-short">A module for creating:</div></li><li><div class="item-name"><a class="mod" href="keypair/index.html" title="mod delanocreds::keypair">keypair</a></div><div class="desc docblock-short">This is implementation of delegatable anonymous credential using SPSQE-UC signatures and set commitment.
-See  the following for the details:</div></li><li><div class="item-name"><a class="mod" href="set_commits/index.html" title="mod delanocreds::set_commits">set_commits</a></div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod delanocreds::types">types</a></div></li><li><div class="item-name"><a class="mod" href="utils/index.html" title="mod delanocreds::utils">utils</a></div></li><li><div class="item-name"><a class="mod" href="zkp/index.html" title="mod delanocreds::zkp">zkp</a></div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.EntryBuilder.html" title="struct delanocreds::EntryBuilder">EntryBuilder</a></div><div class="desc docblock-short">Builds the entries for the Root Credential. Ensures that the number of attributes
-in each entry are within the max cardinality. Ensures the number of entries are
-within the max entries.</div></li><li><div class="item-name"><a class="struct" href="struct.RootIssuer.html" title="struct delanocreds::RootIssuer">RootIssuer</a></div><div class="desc docblock-short">The Root Issuer, the one with the Verification Key that issues the first credential.</div></li><li><div class="item-name"><a class="struct" href="struct.RootIssuerBuilder.html" title="struct delanocreds::RootIssuerBuilder">RootIssuerBuilder</a></div><div class="desc docblock-short">The Root Issuer, the one with the Verification Key that issues the first credential.</div></li></ul></section></div></main></body></html>
+<h2 id="docs"><a href="#docs">Docs</a></h2>
+<p><code>cargo doc --workspace --no-deps --open</code></p>
+<p>To build the docs incrementally, use <code>cargo watch -x 'doc --workspace --no-deps --open'</code>.</p>
+<p>Build the docs in Windows for Github pages: <code>./build_docs.bat</code></p>
+<h3 id="references"><a href="#references">References</a></h3>
+<p>Rust implementation of <code>&lt;https://github.com/mir-omid/DAC-from-EQS&gt;</code> in <a href="https://eprint.iacr.org/2022/680.pdf">paper</a> (<a href="https://eprint.iacr.org/2022/680.pdf">PDF</a>).</p>
+</div></details><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="attributes/index.html" title="mod delanocreds::attributes">attributes</a></div><div class="desc docblock-short">A module for creating:</div></li><li><div class="item-name"><a class="mod" href="config/index.html" title="mod delanocreds::config">config</a></div><div class="desc docblock-short">Configuration of the Root Issuer and the Credential Issuer.</div></li><li><div class="item-name"><a class="mod" href="entry/index.html" title="mod delanocreds::entry">entry</a></div></li><li><div class="item-name"><a class="mod" href="keypair/index.html" title="mod delanocreds::keypair">keypair</a></div><div class="desc docblock-short">This is implementation of delegatable anonymous credential using SPSQE-UC signatures and set commitment.
+See  the following for the details:</div></li><li><div class="item-name"><a class="mod" href="set_commits/index.html" title="mod delanocreds::set_commits">set_commits</a></div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod delanocreds::types">types</a></div></li><li><div class="item-name"><a class="mod" href="zkp/index.html" title="mod delanocreds::zkp">zkp</a></div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CredentialBuilder.html" title="struct delanocreds::CredentialBuilder">CredentialBuilder</a></div><div class="desc docblock-short">Builds a Credential</div></li><li><div class="item-name"><a class="struct" href="struct.OfferBuilder.html" title="struct delanocreds::OfferBuilder">OfferBuilder</a></div><div class="desc docblock-short">Builds a Credential Offer</div></li><li><div class="item-name"><a class="struct" href="struct.ProofBuilder.html" title="struct delanocreds::ProofBuilder">ProofBuilder</a></div><div class="desc docblock-short">Proof Builder
+Takes selected <a href="attributes/struct.Attribute.html" title="struct delanocreds::attributes::Attribute">Attribute</a>s and a <a href="keypair/spseq_uc/struct.Credential.html" title="struct delanocreds::keypair::spseq_uc::Credential">Credential</a> and generates a <a href="keypair/struct.CredProof.html" title="struct delanocreds::keypair::CredProof">keypair::CredProof</a> for them.</div></li></ul></section></div></main></body></html>
