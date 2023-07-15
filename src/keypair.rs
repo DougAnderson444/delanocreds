@@ -5,7 +5,7 @@
 use super::CredentialBuilder;
 use crate::config;
 use crate::entry::convert_entry_to_bn;
-use crate::entry::Entry;
+use crate::entry::{Entry, MaxEntries};
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
 use crate::set_commits::ParamSetCommitment;
@@ -75,53 +75,6 @@ impl Default for MaxCardinality {
 impl MaxCardinality {
     pub fn new(item: usize) -> Self {
         MaxCardinality(item)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MaxEntries(pub usize);
-
-impl From<usize> for MaxEntries {
-    fn from(item: usize) -> Self {
-        MaxEntries(item)
-    }
-}
-
-// from u8
-impl From<u8> for MaxEntries {
-    fn from(item: u8) -> Self {
-        MaxEntries(item as usize)
-    }
-}
-
-impl From<MaxEntries> for usize {
-    fn from(item: MaxEntries) -> Self {
-        item.0
-    }
-}
-
-impl Deref for MaxEntries {
-    type Target = usize;
-    fn deref(&self) -> &usize {
-        &self.0
-    }
-}
-
-impl Default for MaxEntries {
-    fn default() -> Self {
-        MaxEntries(config::DEFAULT_MAX_ENTRIES)
-    }
-}
-
-impl MaxEntries {
-    pub fn new(item: usize) -> Self {
-        MaxEntries(item)
-    }
-}
-
-impl std::cmp::PartialEq<MaxEntries> for usize {
-    fn eq(&self, other: &MaxEntries) -> bool {
-        self == &other.0
     }
 }
 
@@ -238,7 +191,7 @@ impl Issuer {
     }
 
     /// Build a Credential using this [Issuer]
-    pub fn builder(&self) -> CredentialBuilder {
+    pub fn credential(&self) -> CredentialBuilder {
         CredentialBuilder::new(self)
     }
 
@@ -615,11 +568,7 @@ impl Nym {
         // Since we changed the Nym Rep above, we need to use the new Nym (instead of self)
         // to send the convert signal.
         // So create new Nym with the new rep (`nym_p`) and the new nym_p secret_wit
-        let nym = Nym::new(
-            nym_p_pk.clone(),
-            nym_p_secret_wit,
-            self.public.parameters.clone(),
-        );
+        let nym = Nym::new(nym_p_pk, nym_p_secret_wit, self.public.parameters.clone());
 
         let mut cred_prime = cred_prime;
         if let Some(addl_attrs) = addl_attrs {

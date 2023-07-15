@@ -47,6 +47,53 @@ pub fn convert_entry_to_bn(input: &Entry) -> Result<Vec<FieldElement>, SerzDeser
         .collect()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MaxEntries(pub usize);
+
+impl From<usize> for MaxEntries {
+    fn from(item: usize) -> Self {
+        MaxEntries(item)
+    }
+}
+
+// from u8
+impl From<u8> for MaxEntries {
+    fn from(item: u8) -> Self {
+        MaxEntries(item as usize)
+    }
+}
+
+impl From<MaxEntries> for usize {
+    fn from(item: MaxEntries) -> Self {
+        item.0
+    }
+}
+
+impl Deref for MaxEntries {
+    type Target = usize;
+    fn deref(&self) -> &usize {
+        &self.0
+    }
+}
+
+impl Default for MaxEntries {
+    fn default() -> Self {
+        MaxEntries(crate::config::DEFAULT_MAX_ENTRIES)
+    }
+}
+
+impl MaxEntries {
+    pub fn new(item: usize) -> Self {
+        MaxEntries(item)
+    }
+}
+
+impl std::cmp::PartialEq<MaxEntries> for usize {
+    fn eq(&self, other: &MaxEntries) -> bool {
+        self == &other.0
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

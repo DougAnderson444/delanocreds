@@ -17,8 +17,8 @@
 use anyhow::Result;
 use delanocreds::{
     attributes::{attribute, Attribute},
-    entry::{entry, Entry},
-    keypair::{spseq_uc::Credential, verify_proof, Issuer, MaxCardinality, MaxEntries, UserKey},
+    entry::{entry, Entry, MaxEntries},
+    keypair::{spseq_uc::Credential, verify_proof, Issuer, MaxCardinality, UserKey},
 };
 
 pub fn main() -> Result<()> {
