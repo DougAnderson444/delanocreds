@@ -17,7 +17,8 @@ Holders can also selectively prove attributes and remove the ability for delegat
 Roadmap:
 
 -   [x] Passing tests
--   [ ] Stable Public API
+-   [x] Basic Public API
+-   [ ] Stable API
 -   [ ] DelanoWallet (Store, Sign, Backup Credentials)
 -   [ ] DelanoNet (Data Exchange Network)
 
@@ -54,6 +55,8 @@ Attributes can be created from any bytes, such as "age > 21" or even a `jpg`. Th
 The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of 48 bytes which is longer than the typical 32 bytes. If you try to create an Attribute out of a CID with a different hash or length, it will fail and result in an error. For this reason, use the Attribute methods provided by this library when creating Attributes.
 
 ```rust
+use delanocreds::attributes::Attribute;
+
 let some_test_attr = "read";
 
 let read_attr = Attribute::new(some_test_attr); // using the new method
@@ -89,126 +92,68 @@ This is done by zeroizing the Opening Information in the Credential.
 
 The intention is to provide the following bindings:
 
--   Rust API
--   wasm bindgen (wasm32-unknown-unknown)
--   wasm interface types (WIT)
+-   [x] Rust API
+-   [ ] wasm bindgen (wasm32-unknown-unknown)
+-   [ ] wasm interface types (WIT)
 
 ## Target API (TODO)
 
-Current API is available by looking at the `keypair.rs` tests.
+Current full API is available by looking at the `src/lib.rs` tests. Below is a small sampling of how to use the API.
 
 ```rust
-use std::result::Result;
-use delanocreds::spseq_uc::*;
-use delanocreds::utils::Entry;
-use delanocreds::dac::Dac;
-use delanocreds::attributes::{Attribute, AttributeName, AttributeValue};
+use anyhow::Result;
+use delanocreds::entry::{Entry, MaxEntries};
+use delanocreds::attributes::Attribute;
+use delanocreds::keypair::{Issuer, UserKey, verify_proof};
 
-fn main() -> Result<(), amcl_wrapper::errors::SerzDeserzError> {
-    // Build a RootIssuer
-    let max_entries = 10;
-    let max_cardinality = 5;
-    let mut root_issuer = RootIssuerBuilder::new().max_entries(max_entries).max_cardinality(max_cardinality).build();
+fn main() -> Result<()> {
+    // Build a RootIssuer with ./config.rs default sizes
+    let mut issuer = Issuer::default();
 
-    // get an Attributes builder with the constraints of the RootIssuer
-    let mut entry_builder = root_issuer.entry_builder();
+    // Create Entry of 2 Attributes
+    let over_21 = Attribute::new("age > 21");
+    let seniors_discount = Attribute::new("age > 65");
+    let root_entry = Entry::new(&[over_21.clone(), seniors_discount.clone()]);
 
-    // use Root Issuer to generate a root credential
-    // it will only allow you to build with attributes up to the limits of the RootIssuer
-    // if you add more, it will overwrite the oldest attributes / give you an error
+    // Along comes Alice
+    let alice = UserKey::new();
+    // Alice creates an anonymous pseudonym of her keys
+    // This Nym must use the public parameters of the Issuer
+    let nym = alice.nym(issuer.public.parameters.clone());
 
-    // Individual attributes are referenced by Provers generating a proof
-    let read_attr   = Attribute::new("read"); // using the new method
-    let create_attr = Attribute::from("create"); // using the from method
-    let update_attr = attribute("update"); // using the attribute convenience method
-    let delete_attr = attribute("delete");
+    let cred = issuer
+        .credential() // CredentialBuilder for this Issuer
+        .with_entry(root_entry.clone()) // adds a Root Entry
+        .max_entries(&MaxEntries::default()) // set the Entry ceiling
+        .issue_to(&nym.public)?; // issues to a Nym
 
-    // Generate and insert First Entry using read attribute
-    // Root issuer can add `max_entries` into the builder
-    // Returns None is limit has been reached
-    let Some(read_entry) = entry_builder.entry(vec![read_attr]);
+    // Send the (powerful) Root Credential, Attributes, and Entrys to Alice
 
-    // Generate and insert Second Entry using create, update and delete elements
-    let Some(change_entry) = entry_builder.entry(vec![create_attr, update_attr, delete_attr]);
+    // Alice can use the Credential to prove she is over 21
+    let (proof, selected_attributes) = nym.proof_builder(&cred, &[root_entry.clone()])
+        .select_attribute(over_21.clone())
+        .prove();
+    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes).unwrap());
 
-    // update _only_ entry
-    let Some(update_entry) = entry_builder.entry(vec![update_attr]);
+    // Alice can offer variations of the Credential to others
+    let bob = UserKey::new();
+    let bobby_nym = bob.nym(issuer.public.parameters.clone());
 
-    let all_entries: AttributeEntries = entry_builder.drain(); // generate the attributes entries
+    let (offer, provable_entries) = nym.offer_builder(&cred, &[root_entry])
+        .without_attribute(seniors_discount) // resticts the ability to prove attribute Entry (note: Removes the entire Entry, not just one Attribute)
+        .additional_entry(Entry::new(&[Attribute::new("10% off")])) // adds a new Entry
+        .max_entries(3) // restrict delegatees to only 3 entries total
+        .offer_to(&bobby_nym.public)?;
 
-    let alice = Keypair::user::generate();
-    let ally_nym = Keypair::nym::from(alice);
+    // Send to Bob so he can accept the Credential
+    let bobby_cred = bobby_nym.accept(&offer);
 
-    let cred_ally = root_issuer
-        .entries(all_entries) // Add the entries to the root credential
-        .extendable(max_entries) // Allow the delegated party to add more entries up to max_entries
-        .delegable() // Allow the delegated party to delegate the credential further
-        .issue_to(ally_nym.proof);
+    // and prove all entries
+    let (proof, selected_attributes) = bobby_nym.proof_builder(&bobby_cred, &provable_entries)
+        .select_attribute(over_21)
+        .prove();
 
-    // serialize and send to alice
-    // let cred_ally_bytes = cred_ally.serialize_cred();
-    // let entries_bytes = cred_ally.serialize_entries();
-
-    // Alice loads the credential
-    // let cred_ally = Credential::deserialize(&cred_ally_bytes, &all_entries)?;
-
-    // Alice can use the credential herself to prove she can CRUD like a boss
-    let ally_proof = cred_ally
-        .attribute(read_attr)
-        .attribute(create_attr)
-        .attribute(update_attr)
-        .attribute(delete_attr)
-        .prove(ally_nym.secret)?;
-
-    // Serialize and send to Bobwith { features = ["serde", "serde_bytes", "serde_json"] }
-    // let ally_proof_bytes = ally_proof.into_bytes();
-
-    // Bob can deserialize and verify the proof
-    // let ally_proof = Proof::deserialize(&ally_proof_bytes)?;
-
-    // Alice asserting her power anonymously
-    assert!(dac.verify(
-        &root_issuer.public(),
-        &ally_proof,
-        vec![read_attr, create_attr, delete_attr]
-    )?);
-
-    // Alice can delegate some of her power to Bob, perhaps just to read
-    let bob = Keypair::user::generate();
-    let bobby_nym = Keypair::nym::from(alice);
-
-    // Select which of the attribute entries bobby is allow to hold and show.
-    // Anything not selected will be redacted from the cred issued to bobby
-    // Selection happens on the Entry level, not the attibute level. So if you select an entry, all attributes in that entry will be available to bobby
-    let bobby_offer = cred_ally
-        // Explicitly, Choose, Add, and Redact which entries bobby to be able to prove.
-        // Any new entries here (within ally's limits) will be added to the credential,
-        // and any entries not here will be redacted from the credential
-        .allow_entries(vec![read_entry, update_entry])
-        .extendable(max_entries) // Allow the delegated party to add more entries up to max_entries
-        .delegatable() // Allow the delegated party to further delegate the credential to others
-        .issue_to(&bobby_nym.proof); // builds the offer
-
-    // Serialize and send
-    // let bobby_offer_bytes = bobby_offer.serialize()?;
-
-    // Bob must deserialize and accept the delegation offer
-    // let bobby_offer = Offer::deserialize(&bobby_offer_bytes)?;
-    let bobby_cred = bobby_offer.accept(&bobby_nym.secret)?;
-
-    // Now Bob can use the credential to prove he can read (read element from the read entry)
-    let bobby_proof = bobby_cred
-        .attribute(read_attr)
-        .attribute(update_attr)
-        .prove()?;
-
-    // Others can verify Bob's power without knowing it's Bob, since all they see if Bobbys nym
-    // let bobby_proof_bytes = bobby_proof.serialize()?;
-    // let bobby_proof = Proof::deserialize(&bobby_proof_bytes)?;
-
-    let bobby_power = dac.verify_proof(&bobby_proof, &bobby_nym.proof, vec![read_attr, update_attr])?;
-
-    assert!(bobby_power); // Bob asserting his power
+    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes).unwrap());
 
     Ok(())
 }
@@ -306,4 +251,4 @@ Build the docs in Windows for Github pages: `./build_docs.bat`
 
 ## References
 
-Rust implementation of https://github.com/mir-omid/DAC-from-EQS in [paper](https://eprint.iacr.org/2022/680.pdf) ([PDF](https://eprint.iacr.org/2022/680.pdf)).
+Rust implementation of `<https://github.com/mir-omid/DAC-from-EQS>` in [paper](https://eprint.iacr.org/2022/680.pdf) ([PDF](https://eprint.iacr.org/2022/680.pdf)).
