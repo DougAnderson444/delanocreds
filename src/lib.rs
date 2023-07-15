@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use anyhow::Result;
 use attributes::Attribute;
 use entry::Entry;
@@ -12,9 +14,8 @@ pub mod types;
 pub mod zkp;
 
 // Test the README.md code snippets
-// #![doc = include_str!("../README.md")]
-// #[cfg(doctest)]
-// pub struct ReadmeDoctests;
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
 
 /// Builds a Credential
 pub struct CredentialBuilder<'a> {
@@ -94,7 +95,7 @@ impl<'a> OfferBuilder<'a> {
     /// Allows the proving of [Attribute]s in an [Entry] in the [Credential] Offer.
     /// The [keypair::Nym] who accepts this offer can prove the allowed [Entry]s to a Verifier.
     ///
-    /// Can add up to [keypair::MaxEntries] attributes as defined for this [Issuer].
+    /// Can add up to [entry::MaxEntries] attributes as defined for this [Issuer].
     pub fn without_attribute(&mut self, redacted: Attribute) -> &mut Self {
         self.unprovable_attributes.push(redacted);
         self
@@ -237,12 +238,12 @@ mod lib_api_tests {
     use super::*;
     use crate::{
         attributes::Attribute,
-        entry::Entry,
-        keypair::{MaxEntries, UserKey},
+        entry::{Entry, MaxEntries},
+        keypair::UserKey,
     };
 
     #[test]
-    fn test_credential_building() {
+    fn test_credential_building() -> Result<()> {
         // create an Issuer, a User, and issue a cred to a Nym
         let issuer = Issuer::default();
         let alice = UserKey::new();
@@ -250,42 +251,30 @@ mod lib_api_tests {
 
         let over_21 = Attribute::new("age > 21");
         let seniors_discount = Attribute::new("age > 65");
-        let age_entry = Entry::new(&[over_21, seniors_discount]);
+        let root_entry = Entry::new(&[over_21, seniors_discount]);
 
         // Method A: as chained methods
-        let cred = match issuer
-            .builder() // CredentialBuilder for this Issuer
-            .with_entry(age_entry.clone())
-            .max_entries(&MaxEntries::default())
-            .issue_to(&nym.public)
-        {
-            Ok(cred) => cred,
-            Err(e) => panic!("Error issuing cred: {:?}", e),
-        };
+        let cred = issuer
+            .credential() // CredentialBuilder for this Issuer
+            .with_entry(root_entry.clone()) // adds a Root Entry
+            .max_entries(&MaxEntries::default()) // set the Entry ceiling
+            .issue_to(&nym.public)?; // issues to a Nym
 
         assert_eq!(cred.commitment_vector.len(), 1);
 
         // Method B: as parameter
-        let cred = match CredentialBuilder::new(&issuer)
-            .with_entry(age_entry.clone())
+        let cred = CredentialBuilder::new(&issuer)
+            .with_entry(root_entry.clone())
             .max_entries(&MaxEntries::default())
-            .issue_to(&nym.public)
-        {
-            Ok(cred) => cred,
-            Err(e) => panic!("Error issuing cred: {:?}", e),
-        };
+            .issue_to(&nym.public)?;
 
         assert_eq!(cred.commitment_vector.len(), 1);
 
         // Variant A: extendable, single Entry
-        let cred = match CredentialBuilder::new(&issuer)
-            .with_entry(age_entry.clone())
+        let cred = CredentialBuilder::new(&issuer)
+            .with_entry(root_entry.clone())
             .max_entries(&MaxEntries::default())
-            .issue_to(&nym.public)
-        {
-            Ok(cred) => cred,
-            Err(e) => panic!("Error issuing cred: {:?}", e),
-        };
+            .issue_to(&nym.public)?;
 
         assert_eq!(cred.commitment_vector.len(), 1);
         assert_eq!(
@@ -295,20 +284,18 @@ mod lib_api_tests {
 
         // Variant B: not extendable, multiple Entry
         let another_entry = Entry::new(&[Attribute::new("another entry")]);
-        let cred = match issuer
-            .builder()
-            .with_entry(age_entry)
+        let cred = issuer
+            .credential()
+            .with_entry(root_entry)
             .with_entry(another_entry)
-            .issue_to(&nym.public)
-        {
-            Ok(cred) => cred,
-            Err(e) => panic!("Error issuing cred: {:?}", e),
-        };
+            .issue_to(&nym.public)?;
 
         assert_eq!(cred.commitment_vector.len(), 2);
 
         // cred should have update_key is_none
         assert!(cred.update_key.is_none());
+
+        Ok(())
     }
 
     #[test]
@@ -349,7 +336,7 @@ mod lib_api_tests {
 
         // Issue the (Powerful) Root Credential to Alice
         let cred = match issuer
-            .builder()
+            .credential()
             .with_entry(root_entry.clone())
             .max_entries(&MaxEntries::default()) // DEFAULT_MAX_ENTRIES: usize = 6
             .issue_to(&alice_nym.public)
