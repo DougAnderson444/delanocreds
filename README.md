@@ -24,35 +24,28 @@ Roadmap:
 
 ## Delegation
 
-What can be delegated is the ability to add a number of additional attribute Entries (zero to MaxEntries), but only if the credential is marked as _extendable_.
+What can be delegated is the ability to add a number of additional attribute Entries (zero to MaxEntries), but only if the credential is marked as _extendable_ and the available Entry slots have not all been used.
 
 Even if there is no ability for a credential holder to add additional attributes, the following always holds true:
 
 -   Credentials holders can always assign their credential to a new public key
--   Attributes are always selectable for presentation by a holder
--   Attributes are always removable by a holder
+-   Attributes are always able to be selectively shown or hidden by a holder
 
 It is important to note that the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.
 
 Therefore, while holders may restrict the ability of delegatees to _add_ attributes, they will always be
 able to assign the credential to a new public key for the attributes they _do_ have.
 
-You may wish to apply a Credential Strategy such that the Credential is properly handled by the holder. This is left to the user, as the use cases of Credentials are varied too widely to provide a one-size-fits-all solution.
-
 ### Root Issuer Summary of Choices/Options:
 
--   **Maxiumum Attribute Entries**: Credntials have a maximum number of entries.
-    Each entry holds up to MaxCardinality of Attributes.
-    The Root Issuer sets a maximum number of entries (`message_l`)
--   **Maximum Cardinality (Attributes per Entry)**: There is a set maximum number of items total (`cardinality`, `message_l[n].len()` <= `cardinality`)
--   **Extendable Limit**: What the maximum number of additional entries may be (current entries length up to `k_prime`, `k_prime` is at most `message_l`.
-    Or in other words: `current < k_prime < message_l`),
+-   **Maxiumum Attribute Entries**: Maximum number of `Entry`s per `Credential`.
+-   **Maximum Cardinality**: Maximum number of `Attribute` per `Entry`
 
 ### Attributes
 
-Attributes can be created from any bytes, such as "age > 21" or even a `jpg`. These bytes are hashed to the BLS12-381 curve, which means they are also content addressable! Once an Attribute is created, it can be referenced by it's [Content Identifier (CID)](https://cid.ipfs.tech/) instead of the value itself. This means we can also refer to attributes by their CID, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
+`Attribute`s can be created from any bytes, such as `age > 21` or even a `jpg`. These bytes are hashed to the BLS12-381 curve, which means they are also content addressable! Once an `Attribute` is created, it can be referenced by it's [`Content Identifier` (`CID`)](https://cid.ipfs.tech/) instead of the value itself. This means we can also refer to attributes by their `CID`, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
 
-The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of 48 bytes which is longer than the typical 32 bytes. If you try to create an Attribute out of a CID with a different hash or length, it will fail and result in an error. For this reason, use the Attribute methods provided by this library when creating Attributes.
+The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of `48 bytes` which is longer than the typical `32 bytes`. If you try to create an `Attribute` out of a `CID` with a different hash or length, it will fail and result in an error. For this reason, use the `Attribute` methods provided by this library when creating `Attribute`s.
 
 ```rust
 use delanocreds::attributes::Attribute;
@@ -62,17 +55,19 @@ let some_test_attr = "read";
 let read_attr = Attribute::new(some_test_attr); // using the new method
 
 // Try Attribute from cid
-let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
+let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap(); // Error if wrong type of CID
 assert_eq!(read_attr, attr_from_cid);
 
 // Attribute from_cid
-let attr_from_cid = Attribute::from_cid(&read_attr).unwrap();
+let attr_from_cid = Attribute::from_cid(&read_attr).unwrap(); // Returns `None` if wrong type of CID
 assert_eq!(read_attr, attr_from_cid);
 ```
 
 ### Entries
 
-A Credential is comprised of one or more Entries. Each Entry contains one or more Attributes. Entries are used to group Attributes together, and are also used to delegate the ability to add or remove Attributes.
+A `Credential` is comprised of one or more `Entry`s. Each `Entry` contains one or more `Attribute`s. Entries are used to group `Attribute`s together.
+
+````rust
 
 ```md
 //! Attribute Entries:
@@ -80,13 +75,13 @@ A Credential is comprised of one or more Entries. Each Entry contains one or mor
 //! ==> Entry Level 1: [Attribute]
 //! ==> Entry Level 2: [Attribute, Attribute]
 //! ==> Additonal Entry? Only if 3 < Extendable < MaxEntries
-```
+````
 
 ### Redact
 
-Holders of a Credential can redact any [Entry] from the Credential, which will remove the ability to create proofs on any Attributes in that entry. This is useful if you want to remove the ability for a delegatee to prove a specific attribute, but still allow them to prove other attributes.
+Holders of a `Credential` can redact any `Entry` from the `Credential`, which will remove the ability to create proofs on any `Attribute`s in that `Entry`. This is useful if you want to remove the ability for a delegatee to prove a specific attribute, but still allow them to prove other attributes. It is important to note that if the ability to `prove` an Attribute is removed before delegating a `Credential`, then the entire Entry is removed -- not just the single `Attribute`. If you want to still allow a delegtee to use the other Attributes, you must create a new Entry with the other Attributes and delegate the extended `Credential`.
 
-This is done by zeroizing the Opening Information in the Credential.
+This is done by zeroizing the `Opening Information` for the `Entry` commitment in the Credential so a proof cannot be created.
 
 ## Bindings
 
@@ -96,7 +91,7 @@ The intention is to provide the following bindings:
 -   [ ] wasm bindgen (wasm32-unknown-unknown)
 -   [ ] wasm interface types (WIT)
 
-## Target API (TODO)
+## Rust API
 
 Current full API is available by looking at the `src/lib.rs` tests. Below is a small sampling of how to use the API.
 
@@ -163,7 +158,7 @@ fn main() -> Result<()> {
 
 ## Advantages
 
-This scheme has the following advantages over other anonymous credential schemes:
+This DAC scheme has the following advantages over other anonymous credential schemes:
 
 -   **Attributes**: User can selectively disclose and prove some of the attributes in the credential.
 -   **Expressiveness**: S (selective disclosure), R (arbitrary computable relations over attributes, meaning you can do more than just selective disclosure)
@@ -251,4 +246,4 @@ Build the docs in Windows for Github pages: `./build_docs.bat`
 
 ## References
 
-Rust implementation of `<https://github.com/mir-omid/DAC-from-EQS>` in [paper](https://eprint.iacr.org/2022/680.pdf) ([PDF](https://eprint.iacr.org/2022/680.pdf)).
+Rust implementation of [https://github.com/mir-omid/DAC-from-EQS](https://github.com/mir-omid/DAC-from-EQS) in [paper](https://eprint.iacr.org/2022/680.pdf) ([PDF](https://eprint.iacr.org/2022/680.pdf)).
