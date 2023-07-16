@@ -67,15 +67,13 @@ assert_eq!(read_attr, attr_from_cid);
 
 A `Credential` is comprised of one or more `Entry`s. Each `Entry` contains one or more `Attribute`s. Entries are used to group `Attribute`s together.
 
-````rust
-
 ```md
-//! Attribute Entries:
-//! ==> Entry Level 0: [Attribute, Attribute, Attribute]
-//! ==> Entry Level 1: [Attribute]
-//! ==> Entry Level 2: [Attribute, Attribute]
-//! ==> Additonal Entry? Only if 3 < Extendable < MaxEntries
-````
+Attribute Entries:
+==> Entry Level 0: [Attribute, Attribute, Attribute]
+==> Entry Level 1: [Attribute]
+==> Entry Level 2: [Attribute, Attribute]
+==> Additonal Entry? Only if 3 < Extendable < MaxEntries
+```
 
 ### Redact
 
