@@ -1,9 +1,10 @@
 #![doc = include_str!("../README.md")]
 
 use anyhow::Result;
-use attributes::Attribute;
-use entry::Entry;
-use keypair::{spseq_uc::Credential, Issuer, IssuerError, NymPublic};
+pub use attributes::Attribute;
+pub use entry::Entry;
+pub use entry::MaxEntries;
+pub use keypair::{spseq_uc::Credential, verify_proof, Issuer, IssuerError, NymPublic, UserKey};
 
 pub mod attributes;
 pub mod config;
@@ -17,7 +18,23 @@ pub mod zkp;
 #[cfg(doctest)]
 pub struct ReadmeDoctests;
 
-/// Builds a Credential
+/// Builds a Root [Credential] and issues it to a [keypair::Nym]
+///
+/// # Example
+///
+/// ```
+/// use delanocreds::{Issuer, UserKey, Entry, Attribute, CredentialBuilder, MaxEntries};
+///
+/// let issuer = Issuer::default();
+/// let alice = UserKey::new();
+/// let nym = alice.nym(issuer.public.parameters.clone());
+/// let root_entry = Entry::new(&[Attribute::new("age > 21")]);
+/// let cred = issuer
+///     .credential() // CredentialBuilder for this Issuer
+///     .with_entry(root_entry.clone()) // adds a Root Entry
+///     .max_entries(&MaxEntries::default()) // set the Entry ceiling
+///     .issue_to(&nym.public); // issues to a Nym
+/// ```
 pub struct CredentialBuilder<'a> {
     entries: Vec<Entry>,
     extendable: usize,
@@ -56,16 +73,40 @@ impl<'a> CredentialBuilder<'a> {
 
 /// Builds a Credential Offer
 ///
-/// - `our_nym` is the Nym of the holder of the Credential
-/// - `credential` is the Credential to offer
-/// - `unprovable_attributes` is a Vec of Attributes that the holder will not prove
-/// - `current_entries` is a Vec of Entries currently associated with the [Credential]
-/// - `additional_entry` is an optional Entry to add to the [Credential] Offer
+/// - `our_nym` is the [keypair::Nym] of the holder of the [Credential]
+/// - `credential` is the [Credential] to offer
+/// - `unprovable_attributes` is a Vec of [Attribute]s that the holder will not prove
+/// - `current_entries` is a Vec of [Entry]s currently associated with the [Credential]
+/// - `additional_entry` is an optional [Entry] to add to the [Credential] Offer
 ///
-/// Given a Credential, holder can:
-/// 1. Offer with redacted proving of Entry(s) to another Nym
-/// 2. Offer with additional Attributes
+/// Given a [Credential], holder can:
+/// 1. Offer with redacted proving of [Entry]s to another keypair::[Nym]
+/// 2. Offer with additional [Attribute]s
 /// 3. Generate a Proof themselves
+///
+/// # Example
+///
+/// ```
+/// use delanocreds::{Issuer, Entry, Attribute, UserKey, CredentialBuilder, MaxEntries};
+/// # fn main() -> anyhow::Result<()> {
+/// let issuer = Issuer::default();
+/// let alice = UserKey::new();
+/// let nym = alice.nym(issuer.public.parameters.clone());
+/// let root_entry = Entry::new(&[Attribute::new("age > 21")]);
+/// let cred = CredentialBuilder::new(&issuer)
+///     .with_entry(root_entry.clone()) // adds a Root Entry
+///     .max_entries(&MaxEntries::default()) // set the Entry ceiling
+///     .issue_to(&nym.public)?; // issues to a Nym
+///
+/// // 1. Offer the unchanged Credential to Bob's Nym
+/// let bob = UserKey::new();
+/// let bobby_nym = bob.nym(issuer.public.parameters.clone());
+///
+/// let (offer, provable_entries) = nym
+///     .offer_builder(&cred, &[root_entry])
+///     .offer_to(&bobby_nym.public)?;
+/// # Ok(())
+/// # }
 pub struct OfferBuilder<'a> {
     our_nym: &'a keypair::Nym,
     credential: &'a Credential,
@@ -181,6 +222,39 @@ impl<'a> OfferBuilder<'a> {
 
 /// Proof Builder
 /// Takes selected [Attribute]s and a [Credential] and generates a [keypair::CredProof] for them.
+///
+/// # Example
+///
+/// ```
+/// use delanocreds::{Issuer, UserKey, Entry, Attribute, CredentialBuilder, MaxEntries, verify_proof};
+/// # fn main() -> anyhow::Result<()> {
+/// let issuer = Issuer::default();
+/// let alice = UserKey::new();
+/// let nym = alice.nym(issuer.public.parameters.clone());
+/// let over_21 = Attribute::new("age > 21");
+/// let root_entry = Entry::new(&[over_21.clone()]);
+/// let cred = CredentialBuilder::new(&issuer)
+///     .with_entry(root_entry.clone()) // adds a Root Entry
+///     .max_entries(&MaxEntries::default()) // set the Entry ceiling
+///     .issue_to(&nym.public)?; // issues to a Nym
+///
+/// // Nym can prove the credential using the ProofBuilder
+/// let (proof, selected_entries) = nym
+///     .proof_builder(&cred, &[root_entry])
+///     .select_attribute(over_21.clone())
+///     .prove();
+///
+/// // Nym can verify the proof
+/// assert!(verify_proof(&issuer.public.vk, &proof, &selected_entries).unwrap());
+///
+/// // Confirm that over_21 is not contained within the selected_entries
+/// let contains_over_21 = selected_entries
+///     .into_iter()
+///     .any(|entry| entry.contains(&over_21));
+/// assert!(contains_over_21);
+///
+/// # Ok(())
+/// # }
 pub struct ProofBuilder<'a> {
     nym: &'a keypair::Nym,
     cred: &'a Credential,
