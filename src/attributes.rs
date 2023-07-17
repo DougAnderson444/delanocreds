@@ -1,17 +1,6 @@
-//! A module for creating:
-//! - Individual Attibute, a Multihash generated from bytes (likely from a string)
-//! - Entry, a vector of Attibutes
-//!
-//! - AttributeEntries (a Vector of attribute entries) hierarchy starts with Root Issuer entry/entries
-//! - AttributeEntries can be extended up to `k_prime` if `update_key` is provided
-//! - AttributeEntries can be restricted by zeroizing opening information
-//! - AttributeEntries can hold up to a cumulative total of `max_cardinality` attributes
-//! - There can be up to `message_l` entries in each AttributeEntries vector
-//! - Each entry in AttributeEntries is a vector holding a number of Attributes
-//! - You can select subsets of AttributesVectors, by indicating which indexes you want to select, a 2D vector matix
-//! - When opening information is zeroized, then the corresponding entry in AttributeEntries cannot be selected,
-//! thus opening and atrributes have a relationship with each other. The opening vector is held in the credential,
-//! ths the credential and the attributes have a relationship with each other.
+//! A crate for creating:
+//! - Individual [Attribute], a 48 byte [Shake256 Multihash](https://github.com/DougAnderson444/shake-multihash) [CID](https://cid.ipfs.tech/) generated from bytes (likely from a string)
+//! - [crate::entry::Entry] is a vector of [Attribute]s up to [crate::keypair::MaxCardinality]
 //!
 //! # Attributes API
 //! ```rust

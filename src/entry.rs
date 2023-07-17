@@ -1,3 +1,16 @@
+//! #[Entry]
+//!
+//! - A Vector of [Attribute] entries, a hierarchy starts with Root Issuer entry/entries
+//! - can be extended up to `k_prime` if `update_key` is provided
+//! - proving [Entry] [Attribute]s can be restricted by zeroizing opening information
+//! - each [Entry] can hold up to a total of `MaxCardinality` attributes
+//! - There can be up to `message_l` entries in each [Entry] vector
+//! - Each entry in [Entry] is a vector holding a number of Attributes
+//! - You can select subsets of AttributesVectors, by indicating which indexes you want to select, a 2D vector matix
+//! - When opening information is zeroized, then the corresponding entry in [Entry] cannot be selected,
+//! thus opening and atrributes have a relationship with each other. The opening vector is held in the credential,
+//! ths the credential and the attributes have a relationship with each other.
+//!
 use crate::attributes::Attribute;
 use amcl_wrapper::errors::SerzDeserzError;
 use amcl_wrapper::field_elem::FieldElement;
