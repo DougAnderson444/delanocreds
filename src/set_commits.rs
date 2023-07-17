@@ -17,29 +17,26 @@ use secrecy::Secret;
 /// - `pp_commit_g2`: Root Issuer's Public parameter commitment for G2
 /// - `g_1`: G1 generator.
 /// - `g_2`: G2 generator.
-/// - `max_cardinality`: The Max Cardinality of this set. Cardinality of the set is in [1, t]
 #[derive(Clone, Debug)]
 pub struct ParamSetCommitment {
     pub pp_commit_g1: Vec<G1>,
     pub pp_commit_g2: Vec<G2>,
     pub g_1: GeneratorG1,
     pub g_2: GeneratorG2,
-    pub max_cardinality: usize,
 }
 
 impl ParamSetCommitment {
     /// New constructor. Initializes the ParamSetCommitment
     ///
     /// # Arguments
-    /// t: max cardinality of the set. Cardinality of the set is in [1, t]. t is a public parameter.
-    /// alpha_trapdoor: Pederson trapdoor, which is a secret key generated from the setup function as a random order of the Group
+    /// t: [MaxCardinality] of the set. Cardinality of the set is in [1, t]. t is a public parameter.
     ///
     /// # Returns
     /// ParamSetCommitment
     pub fn new(t: &usize) -> ParamSetCommitment {
         let g_2 = G2::generator();
         let g_1 = G1::generator();
-        let base: Secret<FieldElement> = Secret::new(FieldElement::random());
+        let base: Secret<FieldElement> = Secret::new(FieldElement::random()); // security parameter λ
 
         // pp_commit_g1 and pp_commit_g2 are vectors of G1 and G2 elements respectively.
         // They are used to compute the commitment and witness.
@@ -62,7 +59,6 @@ impl ParamSetCommitment {
             pp_commit_g1,
             g_2: GeneratorG2(g_2),
             g_1: GeneratorG1(g_1),
-            max_cardinality: *t,
         }
     }
 }
@@ -82,10 +78,6 @@ pub trait Commitment {
     /// Public parameters of the commitment scheme.
     fn public_parameters(self) -> ParamSetCommitment;
 
-    /// Generates a new commitment scheme.
-    fn setup(max_cardinality: MaxCardinality) -> ParamSetCommitment {
-        ParamSetCommitment::new(&max_cardinality)
-    }
     /// Commit to a set of messages
     ///
     /// # Arguments
@@ -253,7 +245,7 @@ impl Commitment for SetCommitment {
         // ie. it can be either SetCommitment or CrossSetCommitment.
         // it looks like: `pub enum Commitment { SetCommitment(SetCommitment), CrossSetCommitment(CrossSetCommitment) }`
         Self {
-            param_sc: SetCommitment::setup(t),
+            param_sc: ParamSetCommitment::new(&t),
         }
     }
 
@@ -278,12 +270,9 @@ impl Commitment for CrossSetCommitment {
     /// # Returns
     /// A Commitment scheme, for CrossSetCommitment
     fn new(t: MaxCardinality) -> Self {
-        let param_sc = CrossSetCommitment::setup(t);
-        // return union type of SetCommitment and CrossSetCommitment.
-        // A Rust union type is a type that can store only one of its members at a time.
-        // ie. it can be either SetCommitment or CrossSetCommitment.
-        // it looks like: `pub enum Commitment { SetCommitment(SetCommitment), CrossSetCommitment(CrossSetCommitment) }`
-        CrossSetCommitment { param_sc }
+        CrossSetCommitment {
+            param_sc: ParamSetCommitment::new(&t),
+        }
     }
 
     /// Exports the public parameters of the commitment scheme.
@@ -450,11 +439,11 @@ mod test {
 
         let set_str: Entry = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
 
-        let pp = SetCommitment::setup(MaxCardinality(max_cardinal));
-        let (commitment, witness) = SetCommitment::commit_set(&pp, &set_str)?;
+        let sc = SetCommitment::new(MaxCardinality(max_cardinal));
+        let (commitment, witness) = SetCommitment::commit_set(&sc.param_sc, &set_str)?;
         // assrt open_set with pp, commitment, O, set_str
         assert!(SetCommitment::open_set(
-            &pp,
+            &sc.param_sc,
             &commitment,
             &witness,
             &set_str
@@ -474,10 +463,10 @@ mod test {
         let set_str = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
 
         let subset_str_1 = Entry(vec![attribute(age), attribute(name)]);
-        let pp = SetCommitment::setup(MaxCardinality(max_cardinal));
-        let (commitment, opening_info) = SetCommitment::commit_set(&pp, &set_str)?;
+        let sc = SetCommitment::new(MaxCardinality(max_cardinal));
+        let (commitment, opening_info) = SetCommitment::commit_set(&sc.param_sc, &set_str)?;
         let witness_subset =
-            SetCommitment::open_subset(&pp, &set_str, &opening_info, &subset_str_1)?;
+            SetCommitment::open_subset(&sc.param_sc, &set_str, &opening_info, &subset_str_1)?;
 
         // assert that there is some witness_subset
         assert!(witness_subset.is_some());
@@ -485,7 +474,7 @@ mod test {
         let witness_subset = witness_subset.expect("Some witness");
 
         assert!(SetCommitment::verify_subset(
-            &pp,
+            &sc.param_sc,
             &commitment,
             &subset_str_1,
             &witness_subset
@@ -523,9 +512,11 @@ mod test {
         // new(max_cardinal) -> CrossSetCommitment
         // from(PublicParameters) -> CrossSetCommitment
 
-        let pp = CrossSetCommitment::setup(MaxCardinality(max_cardinal));
-        let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&pp, &set_str)?;
-        let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&pp, &set_str2)?;
+        let csc = CrossSetCommitment::new(MaxCardinality(max_cardinal));
+        let (commitment_1, opening_info_1) =
+            CrossSetCommitment::commit_set(&csc.param_sc, &set_str)?;
+        let (commitment_2, opening_info_2) =
+            CrossSetCommitment::commit_set(&csc.param_sc, &set_str2)?;
 
         let commit_vector = &vec![commitment_1, commitment_2];
 
@@ -534,20 +525,28 @@ mod test {
 
         let subset_str_2 = Entry(vec![attribute(gender), attribute(company)]);
 
-        let witness_1 =
-            CrossSetCommitment::open_subset(&pp, &set_str, &opening_info_1, &subset_str_1)?
-                .expect("Some Witness");
+        let witness_1 = CrossSetCommitment::open_subset(
+            &csc.param_sc,
+            &set_str,
+            &opening_info_1,
+            &subset_str_1,
+        )?
+        .expect("Some Witness");
 
-        let witness_2 =
-            CrossSetCommitment::open_subset(&pp, &set_str2, &opening_info_2, &subset_str_2)?
-                .expect("Some Witness");
+        let witness_2 = CrossSetCommitment::open_subset(
+            &csc.param_sc,
+            &set_str2,
+            &opening_info_2,
+            &subset_str_2,
+        )?
+        .expect("Some Witness");
 
         // aggregate all witnesses for a subset is correct -> proof
         let proof = CrossSetCommitment::aggregate_cross(&vec![witness_1, witness_2], commit_vector);
 
         // verification aggregated witnesses
         assert!(CrossSetCommitment::verify_cross(
-            &pp,
+            &csc.param_sc,
             commit_vector,
             &[subset_str_1, subset_str_2],
             &proof

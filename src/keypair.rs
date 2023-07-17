@@ -159,7 +159,7 @@ impl Default for Issuer {
 
 impl Issuer {
     pub fn new(t: MaxCardinality, l_message: MaxEntries) -> Issuer {
-        let public_parameters = CrossSetCommitment::new(t).public_parameters();
+        let public_parameters = ParamSetCommitment::new(&t);
 
         // compute secret keys for each item in l_message
         // sk has to be at least 2 longer than l_message, to compute `list_z` in `sign()` function which adds +2
@@ -185,12 +185,12 @@ impl Issuer {
             sk,
             public: IssuerPublic {
                 parameters: public_parameters,
-                vk: vk.clone(),
+                vk,
             },
         }
     }
 
-    /// Build a Credential using this [Issuer]
+    /// Build a [Credential] using this [Issuer]
     pub fn credential(&self) -> CredentialBuilder {
         CredentialBuilder::new(self)
     }
@@ -198,11 +198,11 @@ impl Issuer {
     /// Creates a root credential to a user's pseudonym ([NymPublic]).
     /// # Arguments
     /// - `vk`: Vector of [VK] verification keys of the set
-    /// - attr_vector: `&Vec<Entry>`, attributes of the user
-    /// - sk: `&Vec<FieldElement>`, secret keys of the set
-    /// - nym: &Nym, pseudonym of the user
-    /// - k_prime: `Option<usize>`, the number of attributes to be delegated. If None, no attributes are updatable.
-    /// - proof_nym_u: NymProof, proof of the pseudonym
+    /// - attr_vector: &Vec<[Entry]>, attributes of the user
+    /// - sk: &Vec<[FieldElement]>, secret keys of the set
+    /// - nym: &[Nym], pseudonym of the user
+    /// - k_prime: Option<[usize]>, the number of attributes to be delegated. If None, no attributes are updatable.
+    /// - proof_nym_u: [NymProof], proof of the pseudonym
     pub fn issue_cred(
         &self,
         attr_vector: &[Entry],
@@ -240,10 +240,10 @@ impl Issuer {
     ) -> Result<Credential, IssuerError> {
         // Validate that the Cardinality is within the bounds of the public parameters
         // if not, return a Too Large Cardinality Error
-        // ensure each element in messages_vector is less than self.public.parameters.max_cardinality
+        // ensure each element in messages_vector is less than self.public.parameters.pp_commit_g1.len()
         if messages_vector
             .iter()
-            .any(|mess| mess.len() > self.public.parameters.max_cardinality)
+            .any(|mess| mess.len() > self.public.parameters.pp_commit_g1.len())
         {
             return Err(IssuerError::TooLargeCardinality);
         }
@@ -305,7 +305,7 @@ impl Issuer {
                 // only valid keys are between commitment length (k) an length (l), k_prime.length = k < k' < l
                 for k in (messages_vector.len() + 1)..=k_prime {
                     let mut uk = Vec::new();
-                    for i in 0..self.public.parameters.max_cardinality {
+                    for i in 0..self.public.parameters.pp_commit_g1.len() {
                         let uk_i = self.public.parameters.pp_commit_g1[i]
                             .scalar_mul_const_time(&y_rand.inverse())
                             .scalar_mul_const_time(&self.sk.expose_secret()[k + 1]); // this is `k + 1` because sk[0] and sk[1] are used for t
@@ -552,11 +552,15 @@ impl Nym {
         ));
 
         // Before we offer the Credential, change the Representative so we stay anonymous
+        // This differs slightly from the reference Python implementation which
+        // runs `change_rep` algorithm upon `accept()` protocol (they call it `delegatee()` function)
+        // We make this change because we want to change the rep before we offer the credential to someone else
+        // as opposed to changing it before we accept it for ourselves.
 
-        // pick randomness psi.
-        // But mu has to be `FieldElement::one()` here because it can only be randomized once,
+        // mu has to be `FieldElement::one()` here because it can only be randomized once,
         // which is during the prove() function
         let mu = FieldElement::one();
+        // pick randomness psi.
         let psi = FieldElement::random();
 
         let (nym_p_pk, cred_prime, chi) =
@@ -872,7 +876,6 @@ mod tests {
 
     #[test]
     fn test_sign() -> Result<(), SerzDeserzError> {
-        // create new Issuer with max_cardinality = 5 and max_entries = 10
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
@@ -902,7 +905,6 @@ mod tests {
 
     #[test]
     fn test_sign_too_large_cardinality_error() {
-        // create new Issuer with max_cardinality = 5 and max_entries = 10
         let issuer = Issuer::new(MaxCardinality::new(1), MaxEntries::new(10));
 
         // create a user key
@@ -927,7 +929,6 @@ mod tests {
 
     #[test]
     fn test_sign_too_large_entries_error() {
-        // create new Issuer with max_cardinality = 5 and max_entries = 10
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(2));
 
         // create a user key
@@ -953,7 +954,6 @@ mod tests {
     // test signing an empty message vector
     #[test]
     fn test_sign_empty_message_vector() {
-        // create new Issuer with max_cardinality = 5 and max_entries = 10
         let issuer = Issuer::default();
 
         // create a user key
