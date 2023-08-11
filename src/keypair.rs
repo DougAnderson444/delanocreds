@@ -158,9 +158,10 @@ impl Default for Issuer {
 }
 
 impl Issuer {
-    pub fn new(t: MaxCardinality, l_message: MaxEntries) -> Issuer {
-        let public_parameters = ParamSetCommitment::new(&t);
-
+    /// Generates a new [Issuer] given a [MaxCardinality] and a [MaxEntries]
+    ///
+    /// Use this function to generate a new Issuer when you have no secret key
+    pub fn new(t: MaxCardinality, l_message: MaxEntries) -> Self {
         // compute secret keys for each item in l_message
         // sk has to be at least 2 longer than l_message, to compute `list_z` in `sign()` function which adds +2
         let sk = Secret::new(
@@ -169,22 +170,38 @@ impl Issuer {
                 .collect::<Vec<_>>(),
         );
 
+        Self::new_with_secret(sk, t)
+    }
+
+    /// Generates an [Issuer] given a Vector of [FieldElement]s and a [MaxCardinality]
+    ///
+    /// Use this function to generate a new Issuer when you have secret keys
+    /// but no public parameters yet
+    pub fn new_with_secret(sk: Secret<Vec<FieldElement>>, t: MaxCardinality) -> Self {
+        let public_parameters = ParamSetCommitment::new(&t);
+
+        Self::new_with_params(sk, public_parameters)
+    }
+
+    /// Generates a new [Issuer] given a [Secret] and a [ParamSetCommitment]
+    ///
+    /// Use this function to generate a new Issuer when you have both secret keys
+    /// and previously generated public parameters
+    pub fn new_with_params(sk: Secret<Vec<FieldElement>>, params: ParamSetCommitment) -> Self {
         let mut vk: Vec<VK> = sk
             .expose_secret()
             .iter()
-            .map(|sk_i| VK::G2(public_parameters.g_2.scalar_mul_const_time(sk_i)))
+            .map(|sk_i| VK::G2(params.g_2.scalar_mul_const_time(sk_i)))
             .collect::<Vec<_>>();
 
         // compute X_0 keys that is used for delegation
-        let x_0 = public_parameters
-            .g_1
-            .scalar_mul_const_time(&sk.expose_secret()[0]);
+        let x_0 = params.g_1.scalar_mul_const_time(&sk.expose_secret()[0]);
         vk.insert(0, VK::G1(x_0)); // vk is now of length l_message + 1 (or sk + 1)
 
-        Issuer {
+        Self {
             sk,
             public: IssuerPublic {
-                parameters: public_parameters,
+                parameters: params,
                 vk,
             },
         }
