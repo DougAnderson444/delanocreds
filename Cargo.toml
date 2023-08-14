@@ -1,7 +1,33 @@
 [workspace]
-members = ["crates/delano-secrets", "crates/delanocreds"]
+members = [".", "crates/delano-secrets", "crates/delanocreds"]
 resolver = "2"
 
 [workspace.dependencies]
 delano-secrets = { path = "crates/delano-secrets" }
 delanocreds = { path = "crates/delanocreds" }
+
+[package]
+edition = "2021"
+name = "delanocreds-bin"
+version = "0.1.0"
+# path = "src/bin/main.rs"
+
+[dependencies]
+anyhow = "1.0.44"
+delano-secrets = { workspace = true }
+delanocreds = { workspace = true }
+
+[dev-dependencies]
+delano-secrets = { workspace = true }
+
+[profile.release]
+codegen-units = 1        # allow for maximum size reduction optimizations
+debug = false
+debug-assertions = false
+incremental = false
+lto = true               # Enable Link Time Optimization
+opt-level = 3            # Optimize for size
+overflow-checks = false
+panic = 'abort'          # Abort on panic
+rpath = false
+strip = true             # Automatically strip symbols from the binary.
