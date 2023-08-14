@@ -4,7 +4,9 @@ use anyhow::Result;
 pub use attributes::Attribute;
 pub use entry::Entry;
 pub use entry::MaxEntries;
-pub use keypair::{spseq_uc::Credential, verify_proof, Issuer, IssuerError, NymPublic, UserKey};
+pub use keypair::{
+    spseq_uc::Credential, verify_proof, Issuer, IssuerError, NymPublic, UserKey, VK,
+};
 
 pub mod attributes;
 pub mod config;

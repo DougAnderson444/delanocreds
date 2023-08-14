@@ -10,37 +10,33 @@
 <ul>
 <li><input disabled="" type="checkbox" checked=""/>
 Passing tests</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Basic Public API</li>
 <li><input disabled="" type="checkbox"/>
-Stable Public API</li>
+Stable API</li>
 <li><input disabled="" type="checkbox"/>
 DelanoWallet (Store, Sign, Backup Credentials)</li>
 <li><input disabled="" type="checkbox"/>
 DelanoNet (Data Exchange Network)</li>
 </ul>
 <h3 id="delegation"><a href="#delegation">Delegation</a></h3>
-<p>What can be delegated is the ability to add a number of additional attribute Entries (zero to MaxEntries), but only if the credential is marked as <em>extendable</em>.</p>
+<p>What can be delegated is the ability to add a number of additional attribute Entries (zero to MaxEntries), but only if the credential is marked as <em>extendable</em> and the available Entry slots have not all been used.</p>
 <p>Even if there is no ability for a credential holder to add additional attributes, the following always holds true:</p>
 <ul>
 <li>Credentials holders can always assign their credential to a new public key</li>
-<li>Attributes are always selectable for presentation by a holder</li>
-<li>Attributes are always removable by a holder</li>
+<li>Attributes are always able to be selectively shown or hidden by a holder</li>
 </ul>
 <p>It is important to note that the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.</p>
 <p>Therefore, while holders may restrict the ability of delegatees to <em>add</em> attributes, they will always be
 able to assign the credential to a new public key for the attributes they <em>do</em> have.</p>
-<p>You may wish to apply a Credential Strategy such that the Credential is properly handled by the holder. This is left to the user, as the use cases of Credentials are varied too widely to provide a one-size-fits-all solution.</p>
 <h4 id="root-issuer-summary-of-choicesoptions"><a href="#root-issuer-summary-of-choicesoptions">Root Issuer Summary of Choices/Options:</a></h4>
 <ul>
-<li><strong>Maxiumum Attribute Entries</strong>: Credntials have a maximum number of entries.
-Each entry holds up to MaxCardinality of Attributes.
-The Root Issuer sets a maximum number of entries (<code>message_l</code>)</li>
-<li><strong>Maximum Cardinality (Attributes per Entry)</strong>: There is a set maximum number of items total (<code>cardinality</code>, <code>message_l[n].len()</code> &lt;= <code>cardinality</code>)</li>
-<li><strong>Extendable Limit</strong>: What the maximum number of additional entries may be (current entries length up to <code>k_prime</code>, <code>k_prime</code> is at most <code>message_l</code>.
-Or in other words: <code>current &lt; k_prime &lt; message_l</code>),</li>
+<li><strong>Maxiumum Attribute Entries</strong>: Maximum number of <code>Entry</code>s per <code>Credential</code>.</li>
+<li><strong>Maximum Cardinality</strong>: Maximum number of <code>Attribute</code> per <code>Entry</code></li>
 </ul>
 <h4 id="attributes"><a href="#attributes">Attributes</a></h4>
-<p>Attributes can be created from any bytes, such as “age &gt; 21” or even a <code>jpg</code>. These bytes are hashed to the BLS12-381 curve, which means they are also content addressable! Once an Attribute is created, it can be referenced by it’s <a href="https://cid.ipfs.tech/">Content Identifier (CID)</a> instead of the value itself. This means we can also refer to attributes by their CID, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.</p>
-<p>The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of 48 bytes which is longer than the typical 32 bytes. If you try to create an Attribute out of a CID with a different hash or length, it will fail and result in an error. For this reason, use the Attribute methods provided by this library when creating Attributes.</p>
+<p><code>Attribute</code>s can be created from any bytes, such as <code>age &gt; 21</code> or even a <code>jpg</code>. These bytes are hashed to the BLS12-381 curve, which means they are also content addressable! Once an <code>Attribute</code> is created, it can be referenced by it’s <a href="https://cid.ipfs.tech/"><code>Content Identifier</code> (<code>CID</code>)</a> instead of the value itself. This means we can also refer to attributes by their <code>CID</code>, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.</p>
+<p>The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of <code>48 bytes</code> which is longer than the typical <code>32 bytes</code>. If you try to create an <code>Attribute</code> out of a <code>CID</code> with a different hash or length, it will fail and result in an error. For this reason, use the <code>Attribute</code> methods provided by this library when creating <code>Attribute</code>s.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>delanocreds::attributes::Attribute;
 
@@ -49,31 +45,34 @@ Or in other words: <code>current &lt; k_prime &lt; message_l</code>),</li>
 <span class="kw">let </span>read_attr = Attribute::new(some_test_attr); <span class="comment">// using the new method
 
 // Try Attribute from cid
-</span><span class="kw">let </span>attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
-<span class="macro">assert_eq!</span>(read_attr, attr_from_cid);
+</span><span class="kw">let </span>attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap(); <span class="comment">// Error if wrong type of CID
+</span><span class="macro">assert_eq!</span>(read_attr, attr_from_cid);
 
 <span class="comment">// Attribute from_cid
-</span><span class="kw">let </span>attr_from_cid = Attribute::from_cid(<span class="kw-2">&amp;</span>read_attr).unwrap();
-<span class="macro">assert_eq!</span>(read_attr, attr_from_cid);</code></pre></div>
+</span><span class="kw">let </span>attr_from_cid = Attribute::from_cid(<span class="kw-2">&amp;</span>read_attr).unwrap(); <span class="comment">// Returns `None` if wrong type of CID
+</span><span class="macro">assert_eq!</span>(read_attr, attr_from_cid);</code></pre></div>
 <h4 id="entries"><a href="#entries">Entries</a></h4>
-<p>A Credential is comprised of one or more Entries. Each Entry contains one or more Attributes. Entries are used to group Attributes together, and are also used to delegate the ability to add or remove Attributes.</p>
-<div class="example-wrap"><pre class="language-md"><code>//! Attribute Entries:
-//! ==&gt; Entry Level 0: [Attribute, Attribute, Attribute]
-//! ==&gt; Entry Level 1: [Attribute]
-//! ==&gt; Entry Level 2: [Attribute, Attribute]
-//! ==&gt; Additonal Entry? Only if 3 &lt; Extendable &lt; MaxEntries
+<p>A <code>Credential</code> is comprised of one or more <code>Entry</code>s. Each <code>Entry</code> contains one or more <code>Attribute</code>s. Entries are used to group <code>Attribute</code>s together.</p>
+<div class="example-wrap"><pre class="language-md"><code>Attribute Entries:
+==&gt; Entry Level 0: [Attribute, Attribute, Attribute]
+==&gt; Entry Level 1: [Attribute]
+==&gt; Entry Level 2: [Attribute, Attribute]
+==&gt; Additonal Entry? Only if 3 &lt; Extendable &lt; MaxEntries
 </code></pre></div><h4 id="redact"><a href="#redact">Redact</a></h4>
-<p>Holders of a Credential can redact any <a href="entry/struct.Entry.html" title="struct delanocreds::entry::Entry">Entry</a> from the Credential, which will remove the ability to create proofs on any Attributes in that entry. This is useful if you want to remove the ability for a delegatee to prove a specific attribute, but still allow them to prove other attributes.</p>
-<p>This is done by zeroizing the Opening Information in the Credential.</p>
+<p>Holders of a <code>Credential</code> can redact any <code>Entry</code> from the <code>Credential</code>, which will remove the ability to create proofs on any <code>Attribute</code>s in that <code>Entry</code>. This is useful if you want to remove the ability for a delegatee to prove a specific attribute, but still allow them to prove other attributes. It is important to note that if the ability to <code>prove</code> an Attribute is removed before delegating a <code>Credential</code>, then the entire Entry is removed – not just the single <code>Attribute</code>. If you want to still allow a delegtee to use the other Attributes, you must create a new Entry with the other Attributes and delegate the extended <code>Credential</code>.</p>
+<p>This is done by zeroizing the <code>Opening Information</code> for the <code>Entry</code> commitment in the Credential so a proof cannot be created.</p>
 <h3 id="bindings"><a href="#bindings">Bindings</a></h3>
 <p>The intention is to provide the following bindings:</p>
 <ul>
-<li>Rust API</li>
-<li>wasm bindgen (wasm32-unknown-unknown)</li>
-<li>wasm interface types (WIT)</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Rust API</li>
+<li><input disabled="" type="checkbox"/>
+wasm bindgen (wasm32-unknown-unknown)</li>
+<li><input disabled="" type="checkbox"/>
+wasm interface types (WIT)</li>
 </ul>
-<h3 id="target-api-todo"><a href="#target-api-todo">Target API (TODO)</a></h3>
-<p>Current API is available by looking at the <code>keypair.rs</code> tests.</p>
+<h3 id="rust-api"><a href="#rust-api">Rust API</a></h3>
+<p>Current full API is available by looking at the <code>src/lib.rs</code> tests. Below is a small sampling of how to use the API.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>delanocreds::entry::{Entry, MaxEntries};
@@ -132,7 +131,7 @@ Or in other words: <code>current &lt; k_prime &lt; message_l</code>),</li>
     <span class="prelude-val">Ok</span>(())
 }</code></pre></div>
 <h3 id="features"><a href="#features">Features</a></h3><h3 id="advantages"><a href="#advantages">Advantages</a></h3>
-<p>This scheme has the following advantages over other anonymous credential schemes:</p>
+<p>This DAC scheme has the following advantages over other anonymous credential schemes:</p>
 <ul>
 <li><strong>Attributes</strong>: User can selectively disclose and prove some of the attributes in the credential.</li>
 <li><strong>Expressiveness</strong>: S (selective disclosure), R (arbitrary computable relations over attributes, meaning you can do more than just selective disclosure)</li>
@@ -197,7 +196,7 @@ It also allows an adversarial CA but no delegators’s keys leaks.</p>
 <p>To build the docs incrementally, use <code>cargo watch -x 'doc --workspace --no-deps --open'</code>.</p>
 <p>Build the docs in Windows for Github pages: <code>./build_docs.bat</code></p>
 <h3 id="references"><a href="#references">References</a></h3>
-<p>Rust implementation of <code>&lt;https://github.com/mir-omid/DAC-from-EQS&gt;</code> in <a href="https://eprint.iacr.org/2022/680.pdf">paper</a> (<a href="https://eprint.iacr.org/2022/680.pdf">PDF</a>).</p>
+<p>Rust implementation of <a href="https://github.com/mir-omid/DAC-from-EQS">https://github.com/mir-omid/DAC-from-EQS</a> in <a href="https://eprint.iacr.org/2022/680.pdf">paper</a> (<a href="https://eprint.iacr.org/2022/680.pdf">PDF</a>).</p>
 </div></details><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="attributes/index.html" title="mod delanocreds::attributes">attributes</a></div><div class="desc docblock-short">A module for creating:</div></li><li><div class="item-name"><a class="mod" href="config/index.html" title="mod delanocreds::config">config</a></div><div class="desc docblock-short">Configuration of the Root Issuer and the Credential Issuer.</div></li><li><div class="item-name"><a class="mod" href="entry/index.html" title="mod delanocreds::entry">entry</a></div></li><li><div class="item-name"><a class="mod" href="keypair/index.html" title="mod delanocreds::keypair">keypair</a></div><div class="desc docblock-short">This is implementation of delegatable anonymous credential using SPSQE-UC signatures and set commitment.
 See  the following for the details:</div></li><li><div class="item-name"><a class="mod" href="set_commits/index.html" title="mod delanocreds::set_commits">set_commits</a></div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod delanocreds::types">types</a></div></li><li><div class="item-name"><a class="mod" href="zkp/index.html" title="mod delanocreds::zkp">zkp</a></div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CredentialBuilder.html" title="struct delanocreds::CredentialBuilder">CredentialBuilder</a></div><div class="desc docblock-short">Builds a Credential</div></li><li><div class="item-name"><a class="struct" href="struct.OfferBuilder.html" title="struct delanocreds::OfferBuilder">OfferBuilder</a></div><div class="desc docblock-short">Builds a Credential Offer</div></li><li><div class="item-name"><a class="struct" href="struct.ProofBuilder.html" title="struct delanocreds::ProofBuilder">ProofBuilder</a></div><div class="desc docblock-short">Proof Builder
 Takes selected <a href="attributes/struct.Attribute.html" title="struct delanocreds::attributes::Attribute">Attribute</a>s and a <a href="keypair/spseq_uc/struct.Credential.html" title="struct delanocreds::keypair::spseq_uc::Credential">Credential</a> and generates a <a href="keypair/struct.CredProof.html" title="struct delanocreds::keypair::CredProof">keypair::CredProof</a> for them.</div></li></ul></section></div></main></body></html>
