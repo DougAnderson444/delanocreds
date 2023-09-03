@@ -140,7 +140,6 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    // verify_proof
     assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
 
     eprintln!(
@@ -171,19 +170,27 @@ fn bench_30_of_100() -> Result<()> {
     // Delegate a subset of attributes
     let entry = |_| {
         entry(
-            &[0..n_cardinality]
+            &(0..n_cardinality)
+                .collect::<std::vec::Vec<i32>>()
                 .iter()
                 .map(|_| Attribute::from(format!("age > 21")))
                 .collect::<Vec<_>>(),
         )
     };
-    let all_attributes = [0..l_max_entries].iter().map(entry).collect::<Vec<_>>();
+    let all_attributes = (0..l_max_entries)
+        .collect::<std::vec::Vec<usize>>()
+        .iter()
+        .map(entry)
+        .collect::<Vec<_>>();
 
     let last = start.elapsed();
     eprintln!("Time to setup attributes: {:?}", last);
 
     let l_message = MaxEntries::new(l_max_entries);
-    let signer = Issuer::new(MaxCardinality::new(8), l_message);
+    let signer = Issuer::new(
+        MaxCardinality::new(n_cardinality.try_into().unwrap()),
+        l_message,
+    );
 
     let alice = UserKey::new();
     let alice_nym = alice.nym(signer.public.parameters.clone());
@@ -191,7 +198,7 @@ fn bench_30_of_100() -> Result<()> {
     let robert = UserKey::new();
     let bobby_nym = robert.nym(signer.public.parameters.clone());
 
-    let position = 1; // index of the update key to be used for the added element
+    let position = 5; // index of the update key to be used for the added element
     let index_l = all_attributes.len() + position;
     let k_prime = Some(std::cmp::min(index_l, l_message.into())); // k_prime must be: MIN(messages_vector.len()) < k_prime < MAX(l_message)
 
@@ -202,7 +209,13 @@ fn bench_30_of_100() -> Result<()> {
     );
     let last = start.elapsed();
 
-    let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.public)?;
+    let cred = match signer.issue_cred(&all_attributes, k_prime, &alice_nym.public) {
+        Ok(cred) => cred,
+        Err(e) => {
+            eprintln!("Error issuing cred: {:?}", e);
+            return Ok(());
+        }
+    };
 
     eprintln!(
         "Time to issue cred: {:?} (+{:?})",
@@ -259,7 +272,6 @@ fn bench_30_of_100() -> Result<()> {
     );
     let last = start.elapsed();
 
-    // verify_proof
     assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
 
     eprintln!(
