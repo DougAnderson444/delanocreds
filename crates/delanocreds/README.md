@@ -184,6 +184,10 @@ It also allows an adversarial CA but no delegators’s keys leaks.
 
 🌚‡ We consider a malicious issuer key CA and all delegators keys can be exposed.
 
+## Hashing
+
+[RFC9380](https://datatracker.ietf.org/doc/rfc9380/) recommends expanded message digest (XMD) for BLS12-381 curves when hashing to curve (as opposed to extendable-output function (XOF) for Sha3 SHAKE). At a later time this library might support both XOF and XMD. Libraries that support XMD are [blst](https://github.com/supranational/blst/blob/78fee18b25e16975e27b2d0314f6a323a23e6e83/bindings/rust/src/lib.rs#L264) and [pairing_plus](https://docs.rs/pairing-plus/latest/pairing_plus/hash_to_field/struct.ExpandMsgXmd.html).
+
 # Tests
 
 `cargo test --workspace`

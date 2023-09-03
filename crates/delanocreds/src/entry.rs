@@ -12,14 +12,16 @@
 //! ths the credential and the attributes have a relationship with each other.
 //!
 use crate::attributes::Attribute;
-use amcl_wrapper::errors::SerzDeserzError;
-use amcl_wrapper::field_elem::FieldElement;
+use crate::ec::curve::FieldElement;
+use crate::error::CurveError;
 use std::ops::Deref;
 
+/// Entry is a vector of Attributes
 #[derive(Clone, Debug, PartialEq)]
 pub struct Entry(pub Vec<Attribute>);
 
 impl Entry {
+    /// Returns a new Entry with the given attributes
     pub fn new(attributes: &[Attribute]) -> Self {
         Entry(attributes.to_vec())
     }
@@ -53,7 +55,7 @@ impl std::iter::FromIterator<Attribute> for Entry {
 }
 
 /// Iterates through each Attribute in the Entry and converts it to a FieldElement
-pub fn convert_entry_to_bn(input: &Entry) -> Result<Vec<FieldElement>, SerzDeserzError> {
+pub fn convert_entry_to_bn(input: &Entry) -> Result<Vec<FieldElement>, CurveError> {
     input
         .iter()
         .map(|attr| FieldElement::from_bytes(attr.digest()))

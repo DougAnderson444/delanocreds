@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::Deref};
 
-use amcl_wrapper::{group_elem_g1::G1, group_elem_g2::G2};
+use crate::ec::curve::{G1, G2};
 
 pub type CommitmentType = G1;
 
@@ -50,7 +50,6 @@ impl Display for GeneratorG2 {
     }
 }
 
-// implement types::GeneratorG1: std::convert::From<amcl_wrapper::group_elem_g1::G1>
 impl From<G1> for GeneratorG1 {
     fn from(g: G1) -> Self {
         Self(g)

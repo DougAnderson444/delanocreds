@@ -27,12 +27,9 @@
 //!
 //! // select from the attributes
 //! let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);
-use std::{fmt::Display, ops::Deref};
-
-// use wa_serde_derive::{Deserialize, Serialize};
-
-use amcl_wrapper::field_elem::FieldElement;
+use crate::ec::curve::{CurveError, FieldElement};
 use cid::multibase;
+use std::{fmt::Display, ops::Deref};
 
 const RAW: u64 = 0x55;
 const SHAKE256_LEN: usize = 48;
@@ -93,7 +90,7 @@ impl Attribute {
 // implement trait `Display` for type `attributes::Attribute`
 impl Display for Attribute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.to_string())
+        write!(f, "{}", self.0)
     }
 }
 
@@ -170,7 +167,7 @@ impl From<Attribute> for multihash::Multihash {
 }
 
 impl TryFrom<Attribute> for FieldElement {
-    type Error = amcl_wrapper::errors::SerzDeserzError;
+    type Error = CurveError;
 
     fn try_from(attribute: Attribute) -> Result<Self, Self::Error> {
         FieldElement::from_bytes(attribute.0.hash().digest())

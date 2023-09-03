@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+use crate::ec::curve::FieldElement;
 use anyhow::Result;
 pub use attributes::Attribute;
 pub use entry::Entry;
@@ -10,7 +11,9 @@ pub use keypair::{
 
 pub mod attributes;
 pub mod config;
+mod ec;
 pub mod entry;
+pub mod error;
 pub mod keypair;
 pub mod set_commits;
 pub mod types;
@@ -170,15 +173,14 @@ impl<'a> OfferBuilder<'a> {
 
         // First, zerioize any attributes that are not authorized to be provable
         if !self.unprovable_attributes.is_empty() {
-            // 1. iterate through the self.unprovable_attributes, set self.credential.opening_info to amcl_wrapper::field_elem::FieldElement::zero() for any current_entries containing matching unprovable_attributes
+            // 1. iterate through the self.unprovable_attributes, set to FieldElement::zero() for any current_entries containing matching unprovable_attributes
             // 2. create new self.credential with the new opening_vector_restricted value
             // 3. use new self.credential in `.offer()`
             let mut opening_vector_restricted = self.credential.opening_vector.clone();
             for unprovable_attribute in &self.unprovable_attributes {
                 for (index, entry) in self.current_entries.iter().enumerate() {
                     if entry.contains(unprovable_attribute) {
-                        opening_vector_restricted[index] =
-                            amcl_wrapper::field_elem::FieldElement::zero();
+                        opening_vector_restricted[index] = FieldElement::zero();
 
                         // also update provable_entries
                         provable_entries[index] = Entry::new(&[]);

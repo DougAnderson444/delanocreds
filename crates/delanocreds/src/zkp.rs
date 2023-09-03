@@ -1,13 +1,9 @@
-use std::fmt::{Display, Formatter};
-
-use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g2::G2;
+use crate::ec::curve::{CurveOrder, FieldElement, GroupElement, G1, G2};
 use amcl_wrapper::types::BigNum;
-use amcl_wrapper::{constants::CurveOrder, group_elem_g1::G1};
 use anyhow::Result;
 use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
+use std::fmt::{Display, Formatter};
 
 use crate::keypair::spseq_uc::RandomizedPubKey;
 use crate::keypair::NymProof;
@@ -50,7 +46,8 @@ impl ChallengeState {
 }
 
 pub type Challenge = FieldElement;
-pub type Response = Vec<FieldElement>; // Vec<BigNum>;
+pub type Response = Vec<FieldElement>;
+
 /// Schnorr proof (non-interactive using Fiat Shamir heuristic) of the statement
 /// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generalized version
 pub struct ZkpSchnorrFiatShamir {}
@@ -119,12 +116,11 @@ impl ZkpSchnorrFiatShamir {
             hash,
         };
 
-        // generate challenge. How do you take the modulo of the Group order using amcl_wrapper? I don't see a method for it. I'm using the modulo of the field order. Is that correct? I'm not sure how to do it with the group order. I'm using the modulo of the field order. Is that correct?
-        // let mut c = BigNum::frombytes(&Self::challenge(&state).to_bytes());
+        // Generate challenge.
         let mut c = Self::challenge(&state).to_bignum();
         c.rmod(&CurveOrder);
 
-        // r = [(w_list[i] - c * secret_wit[i]) % o for i in range(len(secret_wit))], use rmod(&CurveOrder) instead of  `% o`
+        // r = [(w_list[i] - c * secret_wit[i]) % o for i in range(len(secret_wit))]
         let r = (0..secret_wit.len())
             .map(|i| {
                 let a = w_list[i].clone();

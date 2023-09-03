@@ -16,13 +16,9 @@ use crate::{
     zkp::{ChallengeState, DamgardTransform},
 };
 
-use amcl_wrapper::errors::SerzDeserzError;
-use amcl_wrapper::extension_field_gt::GT;
-use amcl_wrapper::univar_poly::UnivarPolynomial;
-use amcl_wrapper::{
-    field_elem::FieldElement, group_elem::GroupElement, group_elem_g1::G1, group_elem_g2::G2,
-};
+use crate::ec::curve::{pairing, CurveError, FieldElement, GroupElement, G1, G2, GT};
 use anyhow::Result;
+use delano_crypto::types::FieldElem;
 use secrecy::{ExposeSecret, Secret};
 use spseq_uc::OpeningInformation;
 use spseq_uc::UpdateError;
@@ -32,6 +28,8 @@ use std::ops::Mul;
 
 pub mod spseq_uc;
 
+/// Maximum Cardinality of an [Entry] of Attributes of an [Issuer]
+/// Default is [config::DEFAULT_MAX_CARDINALITY] (currently set to 8)
 #[derive(Debug, Clone, PartialEq)]
 pub struct MaxCardinality(pub usize);
 
@@ -81,7 +79,7 @@ impl MaxCardinality {
 // enum Error of SerzDeserzError and TooLargeCardinality
 #[derive(Debug, Clone)]
 pub enum IssuerError {
-    SerzDeserzError(SerzDeserzError),
+    SerializeError(CurveError),
     TooLargeCardinality,
     TooLongEntries,
     InvalidNymProof,
@@ -94,7 +92,7 @@ impl std::error::Error for IssuerError {}
 impl std::fmt::Display for IssuerError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            IssuerError::SerzDeserzError(e) => write!(f, "SerzDeserzError: {}", e),
+            IssuerError::SerializeError(e) => write!(f, "SerializeError: {}", e),
             IssuerError::TooLargeCardinality => write!(f, "TooLargeCardinality. You passed too many attributes per Entry. Hint: reduce the number of attributes to be less than the max cardinality of this Issuer."),
             IssuerError::TooLongEntries => write!(f, "TooLongEntries. You passed too many Entries. Hint: reduce the number of Entries to be less than the max entries of this Issuer."),
             IssuerError::InvalidNymProof => write!(f, "InvalidNymProof. The proof of the pseudonym is invalid."),
@@ -102,16 +100,16 @@ impl std::fmt::Display for IssuerError {
     }
 }
 
-impl From<SerzDeserzError> for IssuerError {
-    fn from(item: SerzDeserzError) -> Self {
-        IssuerError::SerzDeserzError(item)
+impl From<CurveError> for IssuerError {
+    fn from(item: CurveError) -> Self {
+        IssuerError::SerializeError(item)
     }
 }
 
-impl From<IssuerError> for SerzDeserzError {
+impl From<IssuerError> for CurveError {
     fn from(item: IssuerError) -> Self {
         match item {
-            IssuerError::SerzDeserzError(e) => e,
+            IssuerError::SerializeError(e) => e,
             _ => panic!("Invalid IssuerError"),
         }
     }
@@ -120,7 +118,7 @@ impl From<IssuerError> for SerzDeserzError {
 impl From<IssuerError> for UpdateError {
     fn from(item: IssuerError) -> Self {
         match item {
-            IssuerError::SerzDeserzError(e) => UpdateError::SerzDeserzError(e),
+            IssuerError::SerializeError(e) => UpdateError::SerializeError(e),
             _ => UpdateError::Error,
         }
     }
@@ -132,7 +130,7 @@ impl From<IssuerError> for UpdateError {
 /// - `vk`: `Vec<VK>`, [VK] verification keys of the user
 pub struct Issuer {
     pub public: IssuerPublic,
-    sk: Secret<Vec<FieldElement>>,
+    sk: Secret<Vec<FieldElem>>,
 }
 
 pub struct IssuerPublic {
@@ -166,7 +164,7 @@ impl Issuer {
         // sk has to be at least 2 longer than l_message, to compute `list_z` in `sign()` function which adds +2
         let sk = Secret::new(
             (0..l_message.0 + 2)
-                .map(|_| FieldElement::random())
+                .map(|_| FieldElem::random())
                 .collect::<Vec<_>>(),
         );
 
@@ -177,7 +175,7 @@ impl Issuer {
     ///
     /// Use this function to generate a new Issuer when you have secret keys
     /// but no public parameters yet
-    pub fn new_with_secret(sk: Secret<Vec<FieldElement>>, t: MaxCardinality) -> Self {
+    pub fn new_with_secret(sk: Secret<Vec<FieldElem>>, t: MaxCardinality) -> Self {
         let public_parameters = ParamSetCommitment::new(&t);
 
         Self::new_with_params(sk, public_parameters)
@@ -187,7 +185,7 @@ impl Issuer {
     ///
     /// Use this function to generate a new Issuer when you have both secret keys
     /// and previously generated public parameters
-    pub fn new_with_params(sk: Secret<Vec<FieldElement>>, params: ParamSetCommitment) -> Self {
+    pub fn new_with_params(sk: Secret<Vec<FieldElem>>, params: ParamSetCommitment) -> Self {
         let mut vk: Vec<VK> = sk
             .expose_secret()
             .iter()
@@ -358,7 +356,7 @@ impl Issuer {
 fn encode(
     public_parameters: &ParamSetCommitment,
     mess_set: &Entry,
-) -> Result<(G1, OpeningInformation), SerzDeserzError> {
+) -> Result<(G1, OpeningInformation), CurveError> {
     CrossSetCommitment::commit_set(public_parameters, mess_set)
 }
 
@@ -378,7 +376,7 @@ pub fn verify(vk: &[VK], pk_u: &G1, commitment_vector: &[G1], sigma: &Signature)
         .zip(vk.iter().skip(3))
         .map(|(c, vkj3)| {
             if let VK::G2(vkj3) = vkj3 {
-                GT::ate_pairing(c, vkj3)
+                pairing(c, vkj3)
             } else {
                 panic!("Invalid verification key");
             }
@@ -387,10 +385,9 @@ pub fn verify(vk: &[VK], pk_u: &G1, commitment_vector: &[G1], sigma: &Signature)
 
     if let VK::G2(vk2) = &vk[2] {
         if let VK::G2(vk1) = &vk[1] {
-            let a = GT::ate_pairing(y_g1, g_2) == GT::ate_pairing(g_1, y_hat);
-            let b =
-                GT::ate_pairing(t, g_2) == GT::ate_pairing(y_g1, vk2) * GT::ate_pairing(pk_u, vk1);
-            let c = GT::ate_pairing(z, y_hat) == pairing_op.iter().fold(GT::one(), GT::mul);
+            let a = pairing(y_g1, g_2) == pairing(g_1, y_hat);
+            let b = pairing(t, g_2) == pairing(y_g1, vk2) * pairing(pk_u, vk1);
+            let c = pairing(z, y_hat) == pairing_op.iter().fold(GT::one(), GT::mul);
             a && b && c
         } else {
             panic!("Invalid verification key");
@@ -892,7 +889,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sign() -> Result<(), SerzDeserzError> {
+    fn test_sign() -> Result<(), CurveError> {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
@@ -984,7 +981,7 @@ mod tests {
 
     // Generate a signature, run changrep function and verify it
     #[test]
-    fn test_changerep() -> Result<(), SerzDeserzError> {
+    fn test_changerep() -> Result<(), CurveError> {
         // Issuer with 5 and 10
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
@@ -1028,7 +1025,7 @@ mod tests {
     /// This test is similar to test_changerep, but it randomizes the update_key
     /// and verifies the signature using the randomized update_key
     #[test]
-    fn test_changerep_update_key() -> Result<(), SerzDeserzError> {
+    fn test_changerep_update_key() -> Result<(), CurveError> {
         // Issuer with 5 and 10
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
@@ -1087,13 +1084,13 @@ mod tests {
         let messages_vectors = setup_tests();
 
         // create a signature
-        let k_prime = Some(3);
+        let k_prime = 3;
         let messages_vector = &vec![
             Entry(messages_vectors.message1_str),
             Entry(messages_vectors.message2_str),
         ];
         let signature_original =
-            issuer.sign(&nym.public.proof.public_key, messages_vector, k_prime)?;
+            issuer.sign(&nym.public.proof.public_key, messages_vector, Some(k_prime))?;
 
         // assrt that signature has update_key of length k_prime
         // how to convert a usize to integer:
@@ -1104,7 +1101,7 @@ mod tests {
                 .as_ref()
                 .expect("There to be an update key")
                 .len(),
-            k_prime.expect("a number")
+            k_prime
         );
 
         // signature_original.update_key should be zero from index 0 to messages_vector.len()
@@ -1119,7 +1116,7 @@ mod tests {
             );
         }
 
-        for k in messages_vector.len()..k_prime.expect("a number") {
+        for k in messages_vector.len()..k_prime {
             assert_ne!(
                 signature_original
                     .update_key
@@ -1284,7 +1281,7 @@ mod tests {
 
     /// run convert protocol (send_convert_sig, receive_convert_sig) to switch a pk_u to new pk_u and verify it
     #[test]
-    fn test_convert() -> Result<(), SerzDeserzError> {
+    fn test_convert() -> Result<(), CurveError> {
         // 1. sign_keygen
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
@@ -1326,7 +1323,7 @@ mod tests {
     }
 
     #[test]
-    fn test_issue_root_cred() -> Result<(), SerzDeserzError> {
+    fn test_issue_root_cred() -> Result<(), CurveError> {
         // 1. sign_keygen
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 

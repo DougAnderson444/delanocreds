@@ -1,9 +1,6 @@
 use super::*;
+use crate::ec::curve::{polynomial_from_coeff, CurveError, FieldElement, G1};
 use crate::keypair::Signature;
-use amcl_wrapper::errors::SerzDeserzError;
-use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::G1;
 use std::ops::Deref;
 
 /// Update Key alias
@@ -12,7 +9,7 @@ pub type OpeningInformation = FieldElement;
 
 #[derive(Debug)]
 pub enum UpdateError {
-    SerzDeserzError(SerzDeserzError),
+    SerializeError(CurveError),
     Error,
 }
 
@@ -22,15 +19,15 @@ impl std::error::Error for UpdateError {}
 impl std::fmt::Display for UpdateError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            UpdateError::SerzDeserzError(e) => write!(f, "SerzDeserzError: {}", e),
+            UpdateError::SerializeError(e) => write!(f, "SerializeError: {}", e),
             UpdateError::Error => write!(f, "Error"),
         }
     }
 }
 
-impl From<SerzDeserzError> for UpdateError {
-    fn from(err: SerzDeserzError) -> Self {
-        UpdateError::SerzDeserzError(err)
+impl From<CurveError> for UpdateError {
+    fn from(err: CurveError) -> Self {
+        UpdateError::SerializeError(err)
     }
 }
 
@@ -169,7 +166,7 @@ pub fn change_rel(
             let rndmz_opening_l = mu * &opening_l;
 
             let set_l = convert_entry_to_bn(addl_attrs)?;
-            let monypolcoefficient = UnivarPolynomial::new_with_roots(&set_l[..]);
+            let monypolcoefficient = polynomial_from_coeff(&set_l[..]);
 
             let list = usign.get(index_l).unwrap();
             let sum_points_uk_i = list

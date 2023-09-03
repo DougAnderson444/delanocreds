@@ -1,14 +1,11 @@
+use crate::ec::curve::{
+    pairing, polynomial_from_coeff, FieldElement, FieldElementVector, GroupElement, G1, G2, GT,
+};
 use crate::entry::convert_entry_to_bn;
 use crate::entry::Entry;
+use crate::error::CurveError;
 use crate::keypair::MaxCardinality;
 use crate::types::{GeneratorG1, GeneratorG2};
-use amcl_wrapper::errors::SerzDeserzError;
-use amcl_wrapper::extension_field_gt::GT;
-use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::G1;
-use amcl_wrapper::group_elem_g2::G2;
-use amcl_wrapper::univar_poly::UnivarPolynomial;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
 
@@ -85,7 +82,7 @@ pub trait Commitment {
     /// `mess_set_str`: a vector of [Entry]s
     ///
     /// # Returns
-    /// Tuple of (commitment, witness) or a SerzDeserzError if
+    /// Tuple of (commitment, witness) or a CurveError if
     ///
     /// # Method
     /// 1. Convert the message set to a vector of FieldElements
@@ -95,9 +92,9 @@ pub trait Commitment {
     fn commit_set(
         param_sc: &ParamSetCommitment,
         mess_set_str: &Entry,
-    ) -> Result<(G1, FieldElement), SerzDeserzError> {
+    ) -> Result<(G1, FieldElement), CurveError> {
         let mess_set = convert_entry_to_bn(mess_set_str)?;
-        let monypol_coeff = UnivarPolynomial::new_with_roots(&mess_set);
+        let monypol_coeff = polynomial_from_coeff(&mess_set);
         let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
         let open_info = FieldElement::random();
@@ -124,9 +121,9 @@ pub trait Commitment {
         commitment: &G1,
         open_info: &FieldElement,
         mess_set_str: &Entry,
-    ) -> Result<bool, SerzDeserzError> {
+    ) -> Result<bool, CurveError> {
         let mess_set = convert_entry_to_bn(mess_set_str)?;
-        let monypol_coeff = UnivarPolynomial::new_with_roots(&mess_set);
+        let monypol_coeff = polynomial_from_coeff(&mess_set);
         let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
         // multiply pre_commit by rho. Rho is a random element in Zp. Zp is the set of integers modulo p.
@@ -153,7 +150,7 @@ pub trait Commitment {
         all_messages: &Entry,
         open_info: &FieldElement,
         subset: &Entry,
-    ) -> Result<Option<G1>, SerzDeserzError> {
+    ) -> Result<Option<G1>, CurveError> {
         if open_info.is_zero() {
             return Ok(None);
         }
@@ -181,7 +178,7 @@ pub trait Commitment {
             .collect::<Vec<FieldElement>>();
 
         // compute a witness for the subset
-        let coeff_witn = UnivarPolynomial::new_with_roots(&create_witn_elements);
+        let coeff_witn = polynomial_from_coeff(&create_witn_elements);
         let witn_sum = generate_pre_commit(coeff_witn, param_sc);
 
         let witness = witn_sum * open_info;
@@ -205,9 +202,9 @@ pub trait Commitment {
         commitment: &G1,
         subset_str: &Entry,
         witness: &G1,
-    ) -> Result<bool, SerzDeserzError> {
+    ) -> Result<bool, CurveError> {
         let mess_subset_t = convert_entry_to_bn(subset_str)?;
-        let coeff_t = UnivarPolynomial::new_with_roots(&mess_subset_t);
+        let coeff_t = polynomial_from_coeff(&mess_subset_t);
 
         let subset_group_elements = param_sc
             .pp_commit_g2
@@ -221,8 +218,7 @@ pub trait Commitment {
             .iter()
             .fold(G2::identity(), |acc, x| acc + x);
 
-        Ok(GT::ate_pairing(witness, &subset_elements_sum)
-            == GT::ate_pairing(commitment, &param_sc.g_2))
+        Ok(pairing(witness, &subset_elements_sum) == pairing(commitment, &param_sc.g_2))
     }
 }
 
@@ -320,7 +316,7 @@ impl CrossSetCommitment {
         commit_vector: &[G1],
         selected_entry_subset_vector: &[Entry],
         proof: &G1,
-    ) -> Result<bool, SerzDeserzError> {
+    ) -> Result<bool, CurveError> {
         // Steps:
         // 1. convert message str into the BN
         let subsets_vector = selected_entry_subset_vector
@@ -328,7 +324,7 @@ impl CrossSetCommitment {
             .enumerate()
             .filter(|(_, entry)| !entry.is_empty())
             .map(|(_, entry)| convert_entry_to_bn(entry))
-            .collect::<Result<Vec<Vec<FieldElement>>, SerzDeserzError>>()?;
+            .collect::<Result<Vec<Vec<FieldElement>>, CurveError>>()?;
 
         // create a union of sets
         let set_s = subsets_vector
@@ -340,7 +336,7 @@ impl CrossSetCommitment {
             .into_iter()
             .collect::<Vec<FieldElement>>();
 
-        let coeff_set_s = UnivarPolynomial::new_with_roots(&set_s);
+        let coeff_set_s = polynomial_from_coeff(&set_s);
 
         // 2. compute right side of verification, pp_commit_g2
         let set_s_group_element = param_sc
@@ -355,7 +351,7 @@ impl CrossSetCommitment {
             .fold(G2::identity(), |acc, x| acc + x);
 
         // right_side is the pairing of proof and set_s_elements_sum
-        let right_side = GT::ate_pairing(proof, &set_s_elements_sum);
+        let right_side = pairing(proof, &set_s_elements_sum);
 
         let set_s_not_t = subsets_vector
             .into_iter()
@@ -367,7 +363,7 @@ impl CrossSetCommitment {
             .iter()
             .zip(set_s_not_t.iter())
             .map(|(commit, set_s_not_t)| {
-                let coeff_s_not_t = UnivarPolynomial::new_with_roots(set_s_not_t);
+                let coeff_s_not_t = polynomial_from_coeff(set_s_not_t);
 
                 let listpoints_s_not_t = param_sc
                     .pp_commit_g2
@@ -382,7 +378,7 @@ impl CrossSetCommitment {
 
                 let hash_i: FieldElement = g1_hash_to_field_el(commit);
 
-                GT::ate_pairing(commit, &(hash_i * temp_sum))
+                pairing(commit, &(hash_i * temp_sum))
             })
             .collect::<Vec<GT>>();
 
@@ -397,10 +393,7 @@ fn g1_hash_to_field_el(commit: &G1) -> FieldElement {
     FieldElement::from_msg_hash(&commit.to_bytes(false))
 }
 
-pub fn generate_pre_commit(
-    monypol_coeff: amcl_wrapper::univar_poly::UnivarPolynomial,
-    param_sc: &ParamSetCommitment,
-) -> G1 {
+pub fn generate_pre_commit(monypol_coeff: FieldElementVector, param_sc: &ParamSetCommitment) -> G1 {
     // multiply each pp_commit_g1 by each monypol_coeff and put result in a vector
     let coef_points = param_sc
         .pp_commit_g1
@@ -429,7 +422,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_commit_and_open() -> Result<(), SerzDeserzError> {
+    fn test_commit_and_open() -> Result<(), CurveError> {
         let max_cardinal = 5;
 
         // Set 1
@@ -452,7 +445,7 @@ mod test {
     }
 
     #[test]
-    fn test_open_verify_subset() -> Result<(), SerzDeserzError> {
+    fn test_open_verify_subset() -> Result<(), CurveError> {
         let max_cardinal = 5;
 
         // Set 1
@@ -483,7 +476,7 @@ mod test {
     }
 
     #[test]
-    fn test_aggregate_verify_cross() -> Result<(), SerzDeserzError> {
+    fn test_aggregate_verify_cross() -> Result<(), CurveError> {
         // check aggregation of witnesses using cross set commitment scheme
 
         // Set 1
@@ -564,5 +557,19 @@ mod test {
         // rand FE
         let fe = FieldElement::random();
         println!("Random FE: {:?}", fe);
+
+        // 0000000000000000000000000000000059E14D2F2D6C0921BA968FF4243145E2760FBB35D3B857329BEE29013E41DEAE
+        // 12345678901234567890123456789012
+        //                                 1234567890123456789012345678901234567890123456789012345678901234
+        // Number of non-zero bytes: 32
+
+        // 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+        //   12345678901234567890123456789012
+        //                                   1234567890123456789012345678901234567890123456789012345678901234
+        //
+        // The line above has 64 characters, or 32 bytes.
+
+        // 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
+        // The line above has 100 characters
     }
 }
