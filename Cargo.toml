@@ -1,9 +1,9 @@
 [workspace]
-members = [".", "crates/delano-secrets", "crates/delanocreds"]
+members = [".", "crates/delano-crypto", "crates/delanocreds"]
 resolver = "2"
 
 [workspace.dependencies]
-delano-secrets = { path = "crates/delano-secrets" }
+delano-crypto = { path = "crates/delano-crypto" }
 delanocreds = { path = "crates/delanocreds" }
 
 [package]
@@ -14,11 +14,11 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.44"
-delano-secrets = { workspace = true }
+delano-crypto = { workspace = true }
 delanocreds = { workspace = true }
 
 [dev-dependencies]
-delano-secrets = { workspace = true }
+delano-crypto = { workspace = true }
 
 [profile.release]
 codegen-units = 1        # allow for maximum size reduction optimizations
