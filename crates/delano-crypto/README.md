@@ -11,7 +11,7 @@ This gives you ultimate flexibility.
 ## Usage
 
 ```rust
-// use delano_secrets::{Secret, SecretManager, SecretManagerConfig, SecretManagerError, SecretManagerResult, SecretType};
+// use delano_crypto::{Secret, SecretManager, SecretManagerConfig, SecretManagerError, SecretManagerResult, SecretType};
 // use delanocreds::{Wallet, WalletConfig, WalletError, WalletResult, WalletType};
 
 // Create a Secret Manager from a seed

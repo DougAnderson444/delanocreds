@@ -1,0 +1,14 @@
+[package]
+edition = "2021"
+name = "delano-crypto"
+version = "0.1.0"
+
+[dependencies]
+amcl_wrapper = { version = "0.4.0", features = ["bls381"] }
+bls_ckd = "0.2.0"
+curv-kzen = { version = "0.10", default-features = false, features = ["num-bigint"] }
+secrecy = { version = "0.8.0" }
+
+hex = "0.3.1"
+hkdf = "0.12.3"
+sha2 = "0.10.6"
