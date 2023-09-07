@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/delano-crypto", "crates/delanocreds"]
+members = [".", "crates/*"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -8,9 +8,9 @@ delanocreds = { path = "crates/delanocreds" }
 
 [package]
 edition = "2021"
+license = "MIT"
 name = "delanocreds-bin"
 version = "0.1.0"
-# path = "src/bin/main.rs"
 
 [dependencies]
 anyhow = "1.0.44"
