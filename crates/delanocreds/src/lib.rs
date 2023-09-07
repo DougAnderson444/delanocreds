@@ -1,23 +1,24 @@
 #![doc = include_str!("../README.md")]
 
+mod attributes;
+mod config;
+mod ec;
+mod entry;
+mod error;
+mod keypair;
+mod set_commits;
+mod types;
+mod zkp;
+
 use crate::ec::curve::FieldElement;
 use anyhow::Result;
 pub use attributes::Attribute;
 pub use entry::Entry;
 pub use entry::MaxEntries;
 pub use keypair::{
-    spseq_uc::Credential, verify_proof, Issuer, IssuerError, NymPublic, UserKey, VK,
+    spseq_uc::Credential, verify_proof, Issuer, IssuerError, IssuerPublic, MaxCardinality,
+    NymPublic, UserKey, VK,
 };
-
-pub mod attributes;
-pub mod config;
-mod ec;
-pub mod entry;
-pub mod error;
-pub mod keypair;
-pub mod set_commits;
-pub mod types;
-pub mod zkp;
 
 // Test the README.md code snippets
 #[cfg(doctest)]

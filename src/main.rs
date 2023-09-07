@@ -16,9 +16,7 @@
 
 use anyhow::Result;
 use delanocreds::{
-    attributes::{attribute, Attribute},
-    entry::{entry, Entry, MaxEntries},
-    keypair::{spseq_uc::Credential, verify_proof, Issuer, MaxCardinality, UserKey},
+    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, UserKey,
 };
 
 pub fn main() -> Result<()> {
@@ -35,14 +33,14 @@ pub fn basic_bench() -> Result<()> {
     let start = std::time::Instant::now();
 
     // Delegate a subset of attributes
-    let age = attribute("age = 30");
-    let name = attribute("name = Alice");
-    let drivers = attribute("driver license = 12");
-    let gender = attribute("gender = male");
-    let company = attribute("company = ACME");
-    let drivers_type_b = attribute("driver license type = B");
-    let insurance = attribute("Insurance = 2");
-    let car_type = attribute("Car type = BMW");
+    let age = Attribute::new("age = 30");
+    let name = Attribute::new("name = Alice");
+    let drivers = Attribute::new("driver license = 12");
+    let gender = Attribute::new("gender = male");
+    let company = Attribute::new("company = ACME");
+    let drivers_type_b = Attribute::new("driver license type = B");
+    let insurance = Attribute::new("Insurance = 2");
+    let car_type = Attribute::new("Car type = BMW");
 
     let message1_str = vec![age.clone(), name.clone(), drivers];
     let message2_str = vec![gender, company, drivers_type_b];
@@ -50,9 +48,9 @@ pub fn basic_bench() -> Result<()> {
 
     // Test proving a credential to verifiers
     let all_attributes = vec![
-        entry(&message1_str),
-        entry(&message2_str),
-        entry(&message3_str),
+        Entry::new(&message1_str),
+        Entry::new(&message2_str),
+        Entry::new(&message3_str),
     ];
 
     let last = start.elapsed();
@@ -125,9 +123,9 @@ pub fn basic_bench() -> Result<()> {
     let sub_list3_str = vec![insurance];
 
     let selected_attrs = vec![
-        entry(&sub_list1_str),
-        entry(&sub_list2_str),
-        entry(&sub_list3_str),
+        Entry::new(&sub_list1_str),
+        Entry::new(&sub_list2_str),
+        Entry::new(&sub_list3_str),
     ];
 
     // prepare a proof
@@ -169,7 +167,7 @@ fn bench_30_of_100() -> Result<()> {
 
     // Delegate a subset of attributes
     let entry = |_| {
-        entry(
+        Entry::new(
             &(0..n_cardinality)
                 .collect::<std::vec::Vec<i32>>()
                 .iter()
