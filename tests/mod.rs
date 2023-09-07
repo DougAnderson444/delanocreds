@@ -1,7 +1,7 @@
 use delano_crypto::basic::BasicSecretsManager;
 use delano_crypto::Seed;
-use delanocreds::keypair::MaxCardinality;
 use delanocreds::Issuer;
+use delanocreds::MaxCardinality;
 
 #[test]
 pub fn create_with_secrets_manager() {
