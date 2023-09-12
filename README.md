@@ -2,6 +2,13 @@
 
 The Delegateable Anonymous Credentials (DAC) system.
 
+<!-- Center div -->
+<div align="center">
+
+![Logo](1.png)
+
+</div>
+
 ![Delano](./dac-flow.svg)
 
 This is a workspace broken down into:
