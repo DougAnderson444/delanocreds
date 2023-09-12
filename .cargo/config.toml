@@ -1,0 +1,2 @@
+[env]
+BASE_PATH = "/delanocreds/" # Github pages base path for leptos-site (doesn't seem to work for child config files?)
