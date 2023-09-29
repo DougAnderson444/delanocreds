@@ -86,7 +86,7 @@ pub fn basic_bench() -> Result<()> {
     let last = start.elapsed();
 
     let opening_vector_restricted = cred.opening_vector;
-    // opening_vector_restricted[0] = FieldElement::zero(); // means the selected attributes cannot include the first commit in the vector
+    // opening_vector_restricted[0] = Scalar::zero(); // means the selected attributes cannot include the first commit in the vector
 
     let cred_restricted = Credential {
         sigma: cred.sigma,
@@ -223,7 +223,7 @@ fn bench_30_of_100() -> Result<()> {
     let last = start.elapsed();
 
     let opening_vector_restricted = cred.opening_vector;
-    // opening_vector_restricted[0] = FieldElement::zero(); // means the selected attributes cannot include the first commit in the vector
+    // opening_vector_restricted[0] = Scalar::zero(); // means the selected attributes cannot include the first commit in the vector
 
     let cred_restricted = Credential {
         sigma: cred.sigma,
