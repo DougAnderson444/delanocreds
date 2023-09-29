@@ -1,8 +1,8 @@
 use crate::app::list::List;
 use leptos::*;
-use leptos_router::use_navigate;
+// use leptos_router::use_navigate;
 
-use seed_keeper_core::{ExposeSecret, Input};
+use seed_keeper_core::{derive_key, ExposeSecret, Input};
 
 /// The Label and Encrypted key params in the hash value
 ///
@@ -119,7 +119,6 @@ pub fn PinPad(cx: Scope) -> impl IntoView {
                     class="bg-blue-500 w-full text-white px-4 py-2 my-1 rounded shadow"
                     disabled={move || pin_too_short() || label_too_short()}
                     on:click=move |_| setter.update(|value| {
-                        log::debug!("Setting label and pin {:?} {:?}", label.get(), pin.get());
                         *value = LabelAndPin {
                         label: label.get().to_owned(),
                         pin: pin.get().to_owned(),
@@ -153,19 +152,9 @@ pub(crate) fn CreateKey(cx: Scope, label_and_pin: LabelAndPin) -> impl IntoView 
         log::error!("getrandom failed: {:?}", e);
     }
 
-    // generate an encryption key from the PIN (password) and label (salt) using `seed-keeper-core`
-    log::debug!(
-        "Generating key using pin {:?} with length {} and label {:?} of length {}",
-        label_and_pin.pin,
-        label_and_pin.pin.len(),
-        label_and_pin.label,
-        label_and_pin.label.len()
-    );
-    let input = Input::new(&label_and_pin.pin, &label_and_pin.label);
-
     log::debug!("Generating key...");
 
-    let key = match input.generate_seed() {
+    let key = match derive_key(&label_and_pin.pin, &label_and_pin.label) {
         Ok(key) => key,
         Err(e) => {
             log::error!("Failed to generate key: {:?}", e);
@@ -175,7 +164,7 @@ pub(crate) fn CreateKey(cx: Scope, label_and_pin: LabelAndPin) -> impl IntoView 
         }
     };
 
-    log::debug!("Generated key: {:?}", key);
+    // log::debug!("Generated key: {:?}", key);
     let encrypted = seed_keeper_core::wrap::encrypt(
         (&key.expose_secret()[..])
             .try_into()
@@ -192,15 +181,13 @@ pub(crate) fn CreateKey(cx: Scope, label_and_pin: LabelAndPin) -> impl IntoView 
         general_purpose::URL_SAFE_NO_PAD.encode(encrypted)
     );
 
-    log::debug!("Hash: {:?}", hash);
-
     let navigate = leptos_router::use_navigate(cx);
     request_animation_frame(move || {
-        _ = navigate(&format!("{}/{hash}", env!("BASE_PATH")), Default::default());
+        _ = navigate(&format!("{}{hash}", env!("BASE_PATH")), Default::default());
     });
 
     view! {cx,
-        "Let's create a key for you."
+        "Your key has been created!"
     }
 }
 

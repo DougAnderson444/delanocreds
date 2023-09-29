@@ -3,7 +3,7 @@
 Build and watch for CSS changes:
 
 ```bash
-tailwindcss -i ./input.css -o ./style/output.css --watch
+npx tailwindcss -i ./input.css -o ./style/output.css --watch
 ```
 
 Install trunk to client side render this bundle.
