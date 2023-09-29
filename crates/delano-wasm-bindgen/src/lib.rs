@@ -6,7 +6,7 @@
 //! functions will return errors.
 mod utils;
 
-use delano_crypto::{basic::BasicSecretsManager, Seed};
+use blastkids::{Manager, Zeroizing, G2};
 use delanocreds::{Issuer, IssuerPublic, MaxCardinality};
 use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
@@ -15,9 +15,9 @@ use wasm_bindgen::prelude::*;
 // so we use static variables to store the state between functions
 // See https://crates.io/crates/lazy_static
 lazy_static::lazy_static! {
-    /// Variable to hold the [`delano_crypto::basic::BasicSecretsManager`]
-    static ref SEED_MANAGER: Mutex<Option<BasicSecretsManager>> = Mutex::new(None);
-    /// [`ISSUER`] holds the currently active [`Issuer`] for the currently active [`BasicSecretsManager`] Account
+    /// Variable to hold the [`delano_crypto::basic::Manager`]
+    static ref SEED_MANAGER: Mutex<Option<Manager<G2>>> = Mutex::new(None);
+    /// [`ISSUER`] holds the currently active [`Issuer`] for the currently active [`Manager`] Account
     ///
     /// Technically you could have many Issuers for one Account, all with different account sizes,
     /// but for simplicity we only allow one Issuer per Account.
@@ -37,9 +37,8 @@ pub struct IssuerPublicWrapper(IssuerPublic);
 #[wasm_bindgen]
 pub fn load_seed(bytes: &[u8]) -> Result<bool, JsValue> {
     let sized: [u8; 32] = bytes.try_into().expect("seed should be 32 bytes long"); // has to be 32 bytes
-    let seed = Seed::new(sized);
-    let manager =
-        BasicSecretsManager::from_seed(seed).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+    let seed = Zeroizing::new(sized);
+    let manager = Manager::<G2>::from_seed(seed);
     SEED_MANAGER.lock().unwrap().replace(manager);
     Ok(true)
 }
@@ -49,7 +48,7 @@ pub fn load_seed(bytes: &[u8]) -> Result<bool, JsValue> {
 ///
 /// Returns the public verfification key of the Issuer.
 #[wasm_bindgen]
-pub fn set_account(account_index: u32, account_size: u32) -> Result<IssuerPublicWrapper, JsValue> {
+pub fn set_account(account_index: u32, account_size: u8) -> Result<IssuerPublicWrapper, JsValue> {
     let manager = SEED_MANAGER
         .lock()
         .expect("should be able to obtain read lock on SEED_MANAGER");
@@ -57,7 +56,8 @@ pub fn set_account(account_index: u32, account_size: u32) -> Result<IssuerPublic
         "Seed Manager not loaded. Call load_seed() first.",
     ))?;
     let account = manager.account(account_index);
-    let sk = account.derive(account_size);
-    let issuer = Issuer::new_with_secret(sk, MaxCardinality::new(account_size as usize));
+    let sized_child = account.expand_to(account_size);
+    let issuer =
+        Issuer::new_with_secret(sized_child.sk, MaxCardinality::new(account_size as usize));
     Ok(IssuerPublicWrapper(issuer.public))
 }

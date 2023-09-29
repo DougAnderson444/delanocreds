@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 default = []
 
 [dependencies]
-delano-crypto = { workspace = true }
+blastkids = { workspace = true }
 delanocreds = { workspace = true }
 getrandom = { version = "0.2", features = ["js"] }
 lazy_static = "1.4.0"
