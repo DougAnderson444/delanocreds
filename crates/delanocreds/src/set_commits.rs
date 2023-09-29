@@ -1,25 +1,25 @@
-use crate::ec::curve::{
-    pairing, polynomial_from_coeff, FieldElement, FieldElementVector, GroupElement, G1, G2, GT,
-};
-use crate::entry::convert_entry_to_bn;
+use crate::ec::curve::{pairing, polynomial_from_roots, Gt};
+use crate::ec::univarpoly::UnivarPolynomial;
+use crate::ec::{G1Projective, G2Projective, Scalar};
+use crate::entry::entry_to_scalar;
 use crate::entry::Entry;
-use crate::error::CurveError;
 use crate::keypair::MaxCardinality;
-use crate::types::{GeneratorG1, GeneratorG2};
+use bls12_381_plus::elliptic_curve::bigint::{self, Encoding};
+use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
+use bls12_381_plus::ff::Field;
+use bls12_381_plus::group::{Curve, Group};
+use rand::rngs::ThreadRng;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
+use sha2::{Digest, Sha256};
 
 /// Public Parameters of the Set Commitment
 /// - `pp_commit_g1`: Root Issuer's public parameters commitment for G1
-/// - `pp_commit_g2`: Root Issuer's Public parameter commitment for G2
-/// - `g_1`: G1 generator.
-/// - `g_2`: G2 generator.
+/// - `pp_commit_g2`: Root Issuer's public parameter commitment for G2
 #[derive(Clone, Debug)]
 pub struct ParamSetCommitment {
-    pub pp_commit_g1: Vec<G1>,
-    pub pp_commit_g2: Vec<G2>,
-    pub g_1: GeneratorG1,
-    pub g_2: GeneratorG2,
+    pub pp_commit_g1: Vec<G1Projective>,
+    pub pp_commit_g2: Vec<G2Projective>,
 }
 
 impl ParamSetCommitment {
@@ -31,9 +31,7 @@ impl ParamSetCommitment {
     /// # Returns
     /// ParamSetCommitment
     pub fn new(t: &usize) -> ParamSetCommitment {
-        let g_2 = G2::generator();
-        let g_1 = G1::generator();
-        let base: Secret<FieldElement> = Secret::new(FieldElement::random()); // security parameter λ
+        let base: Secret<Scalar> = Secret::new(Scalar::random(ThreadRng::default())); // security parameter λ
 
         // pp_commit_g1 and pp_commit_g2 are vectors of G1 and G2 elements respectively.
         // They are used to compute the commitment and witness.
@@ -42,20 +40,26 @@ impl ParamSetCommitment {
         // Hence use [..=] instead of [..] to ensure the last element is included.
         let pp_commit_g1 = (0..=*t)
             .map(|i| {
-                g_1.scalar_mul_const_time(&base.expose_secret().pow(&FieldElement::from(i as u64)))
+                G1Projective::mul_by_generator(
+                    &base
+                        .expose_secret()
+                        .pow(&bigint::U256::from_u64(i as u64).into()),
+                )
             })
-            .collect::<Vec<G1>>();
+            .collect::<Vec<G1Projective>>();
         let pp_commit_g2 = (0..=*t)
             .map(|i| {
-                g_2.scalar_mul_const_time(&base.expose_secret().pow(&FieldElement::from(i as u64)))
+                G2Projective::mul_by_generator(
+                    &base
+                        .expose_secret()
+                        .pow(&bigint::U256::from_u64(i as u64).into()),
+                )
             })
-            .collect::<Vec<G2>>();
+            .collect::<Vec<G2Projective>>();
 
         ParamSetCommitment {
             pp_commit_g2,
             pp_commit_g1,
-            g_2: GeneratorG2(g_2),
-            g_1: GeneratorG1(g_1),
         }
     }
 }
@@ -82,26 +86,28 @@ pub trait Commitment {
     /// `mess_set_str`: a vector of [Entry]s
     ///
     /// # Returns
-    /// Tuple of (commitment, witness) or a CurveError if
+    /// Tuple of (commitment, witness) if
     ///
     /// # Method
-    /// 1. Convert the message set to a vector of FieldElements
+    /// 1. Convert the message set to a vector of Scalars
     /// 2. Compute the commitment as a product of P^ai, P_hat^ai, where ai is the ith element of the message set
     /// 3. Compute the witness as a product of P^ai, P_hat^ai, where ai is the ith element of the message set
     /// 4. Return the commitment and witness
-    fn commit_set(
-        param_sc: &ParamSetCommitment,
-        mess_set_str: &Entry,
-    ) -> Result<(G1, FieldElement), CurveError> {
-        let mess_set = convert_entry_to_bn(mess_set_str)?;
-        let monypol_coeff = polynomial_from_coeff(&mess_set);
+    fn commit_set(param_sc: &ParamSetCommitment, mess_set_str: &Entry) -> (G1Projective, Scalar) {
+        let mess_set: Vec<Scalar> = entry_to_scalar(mess_set_str);
+        eprintln!("mess_set length: {:?}", mess_set.len());
+        let monypol_coeff = polynomial_from_roots(&mess_set);
+        eprintln!(
+            "monypol_coeff length: {:?}",
+            monypol_coeff.coefficients().len()
+        );
         let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
-        let open_info = FieldElement::random();
+        let open_info = Scalar::random(ThreadRng::default());
 
         // multiply pre_commit by rho (open_info = rho). Rho is a random element in Zp. Zp is the set of integers modulo p.
-        let commitment = pre_commit.scalar_mul_const_time(&open_info);
-        Ok((commitment, open_info))
+        let commitment = pre_commit * open_info;
+        (commitment, open_info)
     }
 
     /// Open a commitment to a set of messages. This is the verification step. Verifies the opening information of a set.
@@ -118,18 +124,18 @@ pub trait Commitment {
     /// bool: true if the opening information is valid, false otherwise
     fn open_set(
         param_sc: &ParamSetCommitment,
-        commitment: &G1,
-        open_info: &FieldElement,
+        commitment: &G1Projective,
+        open_info: &Scalar,
         mess_set_str: &Entry,
-    ) -> Result<bool, CurveError> {
-        let mess_set = convert_entry_to_bn(mess_set_str)?;
-        let monypol_coeff = polynomial_from_coeff(&mess_set);
+    ) -> bool {
+        let mess_set: Vec<Scalar> = entry_to_scalar(mess_set_str);
+        let monypol_coeff = polynomial_from_roots(&mess_set);
         let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
         // multiply pre_commit by rho. Rho is a random element in Zp. Zp is the set of integers modulo p.
         let commitment_check = pre_commit * open_info;
 
-        Ok(*commitment == commitment_check)
+        *commitment == commitment_check
     }
 
     /// Opens a subet of Attributes for an Entry
@@ -148,41 +154,41 @@ pub trait Commitment {
     fn open_subset(
         param_sc: &ParamSetCommitment,
         all_messages: &Entry,
-        open_info: &FieldElement,
+        open_info: &Scalar,
         subset: &Entry,
-    ) -> Result<Option<G1>, CurveError> {
-        if open_info.is_zero() {
-            return Ok(None);
+    ) -> Option<G1Projective> {
+        if open_info.is_zero().into() {
+            return None;
         }
 
-        let mess_set = convert_entry_to_bn(all_messages)?;
-        let mess_subset_t = convert_entry_to_bn(subset)?;
+        let mess_set: Vec<Scalar> = entry_to_scalar(all_messages);
+        let mess_subset_t = entry_to_scalar(subset);
 
         // check if mess_subset is a subset of mess_set
         // compare the lengths of the two vectors
         if mess_subset_t.len() > mess_set.len() {
-            return Ok(None);
+            return None;
         }
 
         // now, for each item in mess_subset_t, if item is in mess_set, checker = true, else checker = false
         // check to ensure all messages in mess_subset_t are in mess_set
         if !mess_subset_t.iter().all(|item| mess_set.contains(item)) {
-            return Ok(None);
+            return None;
         }
 
         // creates a list of elements that are in mess_set but not in mess_subset_t,
         // use into_iter() to consume the owned value (mess_set) and return an iterator
-        let create_witn_elements: Vec<FieldElement> = mess_set
+        let create_witn_elements: Vec<Scalar> = mess_set
             .into_iter()
             .filter(|itm| !mess_subset_t.contains(itm))
-            .collect::<Vec<FieldElement>>();
+            .collect::<Vec<Scalar>>();
 
         // compute a witness for the subset
-        let coeff_witn = polynomial_from_coeff(&create_witn_elements);
+        let coeff_witn = polynomial_from_roots(&create_witn_elements);
         let witn_sum = generate_pre_commit(coeff_witn, param_sc);
 
         let witness = witn_sum * open_info;
-        Ok(Some(witness))
+        Some(witness)
     }
 
     /// VerifySubset verifies the witness for the subset. Verifies if witness proves that subset_str is a subset of the original message set.
@@ -199,26 +205,26 @@ pub trait Commitment {
     /// bool: true if the witness is valid, false otherwise
     fn verify_subset(
         param_sc: &ParamSetCommitment,
-        commitment: &G1,
+        commitment: &G1Projective,
         subset_str: &Entry,
-        witness: &G1,
-    ) -> Result<bool, CurveError> {
-        let mess_subset_t = convert_entry_to_bn(subset_str)?;
-        let coeff_t = polynomial_from_coeff(&mess_subset_t);
+        witness: &G1Projective,
+    ) -> bool {
+        let mess_subset_t: Vec<Scalar> = entry_to_scalar(subset_str);
+        let coeff_t = polynomial_from_roots(&mess_subset_t);
 
         let subset_group_elements = param_sc
             .pp_commit_g2
             .iter()
             .zip(coeff_t.coefficients().iter())
             .map(|(g2, coeff)| g2 * coeff)
-            .collect::<Vec<G2>>();
+            .collect::<Vec<G2Projective>>();
 
         // sum all points
         let subset_elements_sum = subset_group_elements
             .iter()
-            .fold(G2::identity(), |acc, x| acc + x);
+            .fold(G2Projective::IDENTITY, |acc, x| acc + x);
 
-        Ok(pairing(witness, &subset_elements_sum) == pairing(commitment, &param_sc.g_2))
+        pairing(witness, &subset_elements_sum) == pairing(commitment, &G2Projective::GENERATOR)
     }
 }
 
@@ -289,13 +295,16 @@ impl CrossSetCommitment {
     ///
     /// # Returns
     /// a proof which is a aggregate of witnesses and shows all subsets are valid for respective sets
-    pub fn aggregate_cross(witness_vector: &[G1], commit_vector: &[G1]) -> G1 {
+    pub fn aggregate_cross(
+        witness_vector: &[G1Projective],
+        commit_vector: &[G1Projective],
+    ) -> G1Projective {
         // sum all elements in all witness_vectors
         witness_vector.iter().zip(commit_vector.iter()).fold(
-            G1::identity(),
+            G1Projective::identity(),
             |acc, (witness, commit)| {
-                let hash_i: FieldElement = g1_hash_to_field_el(commit);
-                acc + witness.scalar_mul_const_time(&hash_i)
+                let hash_i = hash_to_scalar(commit);
+                acc + witness * hash_i
             },
         )
     }
@@ -313,18 +322,18 @@ impl CrossSetCommitment {
     /// true if the proof is valid, false otherwise
     pub fn verify_cross(
         param_sc: &ParamSetCommitment,
-        commit_vector: &[G1],
+        commit_vector: &[G1Projective],
         selected_entry_subset_vector: &[Entry],
-        proof: &G1,
-    ) -> Result<bool, CurveError> {
+        proof: &G1Projective,
+    ) -> bool {
         // Steps:
         // 1. convert message str into the BN
-        let subsets_vector = selected_entry_subset_vector
+        let subsets_vector: Vec<Vec<Scalar>> = selected_entry_subset_vector
             .iter()
             .enumerate()
             .filter(|(_, entry)| !entry.is_empty())
-            .map(|(_, entry)| convert_entry_to_bn(entry))
-            .collect::<Result<Vec<Vec<FieldElement>>, CurveError>>()?;
+            .map(|(_, entry)| entry_to_scalar(entry))
+            .collect();
 
         // create a union of sets
         let set_s = subsets_vector
@@ -334,9 +343,9 @@ impl CrossSetCommitment {
                 acc
             })
             .into_iter()
-            .collect::<Vec<FieldElement>>();
+            .collect::<Vec<Scalar>>();
 
-        let coeff_set_s = polynomial_from_coeff(&set_s);
+        let coeff_set_s = polynomial_from_roots(&set_s);
 
         // 2. compute right side of verification, pp_commit_g2
         let set_s_group_element = param_sc
@@ -344,11 +353,11 @@ impl CrossSetCommitment {
             .iter()
             .zip(coeff_set_s.coefficients().iter())
             .map(|(g2, coeff)| g2 * coeff)
-            .collect::<Vec<G2>>();
+            .collect::<Vec<G2Projective>>();
 
         let set_s_elements_sum = set_s_group_element
             .iter()
-            .fold(G2::identity(), |acc, x| acc + x);
+            .fold(G2Projective::IDENTITY, |acc, x| acc + x);
 
         // right_side is the pairing of proof and set_s_elements_sum
         let right_side = pairing(proof, &set_s_elements_sum);
@@ -356,63 +365,74 @@ impl CrossSetCommitment {
         let set_s_not_t = subsets_vector
             .into_iter()
             .map(|x| not_intersection(&set_s, x))
-            .collect::<Vec<Vec<FieldElement>>>();
+            .collect::<Vec<Vec<Scalar>>>();
 
         // 3. compute left side of verification
         let vector_gt = commit_vector
             .iter()
             .zip(set_s_not_t.iter())
             .map(|(commit, set_s_not_t)| {
-                let coeff_s_not_t = polynomial_from_coeff(set_s_not_t);
+                let coeff_s_not_t = polynomial_from_roots(set_s_not_t);
 
                 let listpoints_s_not_t = param_sc
                     .pp_commit_g2
                     .iter()
                     .zip(coeff_s_not_t.coefficients().iter())
                     .map(|(g2, coeff)| g2 * coeff)
-                    .collect::<Vec<G2>>();
+                    .collect::<Vec<G2Projective>>();
 
                 let temp_sum = listpoints_s_not_t
                     .iter()
-                    .fold(G2::identity(), |acc, x| acc + x);
+                    .fold(G2Projective::IDENTITY, |acc, x| acc + x);
 
-                let hash_i: FieldElement = g1_hash_to_field_el(commit);
+                let hash_i = hash_to_scalar(commit);
 
                 pairing(commit, &(hash_i * temp_sum))
             })
-            .collect::<Vec<GT>>();
+            .collect::<Vec<Gt>>();
 
-        let left_side = vector_gt.iter().fold(GT::one(), |acc, x| acc * x.clone());
+        let left_side = vector_gt.iter().fold(Gt::IDENTITY, |acc, x| acc * *x);
 
         // 4. compare left and right side of verification to see if they are equal
-        Ok(left_side == right_side)
+        left_side == right_side
     }
 }
 
-fn g1_hash_to_field_el(commit: &G1) -> FieldElement {
-    FieldElement::from_msg_hash(&commit.to_bytes(false))
+fn hash_to_scalar(commit: &G1Projective) -> Scalar {
+    // Note the choice of compressed vs uncompressed bytes is arbitrary.
+    let chash: [u8; 32] = Sha256::digest(commit.to_affine().to_uncompressed().as_ref())
+        .try_into()
+        .expect("32 bytes");
+    let hash_i = bigint::U256::from_be_bytes(chash);
+    Scalar::from_raw(hash_i.into())
 }
 
-pub fn generate_pre_commit(monypol_coeff: FieldElementVector, param_sc: &ParamSetCommitment) -> G1 {
+pub fn generate_pre_commit(
+    monypol_coeff: UnivarPolynomial,
+    param_sc: &ParamSetCommitment,
+) -> G1Projective {
     // multiply each pp_commit_g1 by each monypol_coeff and put result in a vector
     let coef_points = param_sc
         .pp_commit_g1
         .iter()
         .zip(monypol_coeff.coefficients().iter())
         .map(|(g1, coeff)| g1 * coeff)
-        .collect::<Vec<G1>>();
+        .collect::<Vec<G1Projective>>();
 
-    // sum all the elements in coef_points as FieldElements into a pre_commit
-    coef_points.iter().fold(G1::identity(), |acc, x| acc + x)
+    eprintln!("coef_points length: {:?}", coef_points.len());
+    //sum all the elements in coef_points as Scalars into a pre_commit
+    coef_points
+        .iter()
+        .fold(G1Projective::IDENTITY, |acc, x| acc + x)
 }
 
 /// Returns where the two Arguments do not intersect
-pub fn not_intersection(list_s: &[FieldElement], list_t: Vec<FieldElement>) -> Vec<FieldElement> {
+pub fn not_intersection(list_s: &[Scalar], list_t: Vec<Scalar>) -> Vec<Scalar> {
     list_s
         .iter()
         .filter(|value| !list_t.contains(value))
         .cloned()
-        .collect::<Vec<FieldElement>>()
+        .collect::<Vec<Scalar>>()
 }
 
 #[cfg(test)]
@@ -422,7 +442,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_commit_and_open() -> Result<(), CurveError> {
+    fn test_commit_and_open() {
         let max_cardinal = 5;
 
         // Set 1
@@ -433,19 +453,18 @@ mod test {
         let set_str: Entry = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
 
         let sc = SetCommitment::new(MaxCardinality(max_cardinal));
-        let (commitment, witness) = SetCommitment::commit_set(&sc.param_sc, &set_str)?;
+        let (commitment, witness) = SetCommitment::commit_set(&sc.param_sc, &set_str);
         // assrt open_set with pp, commitment, O, set_str
         assert!(SetCommitment::open_set(
             &sc.param_sc,
             &commitment,
             &witness,
             &set_str
-        )?);
-        Ok(())
+        ));
     }
 
     #[test]
-    fn test_open_verify_subset() -> Result<(), CurveError> {
+    fn test_open_verify_subset() {
         let max_cardinal = 5;
 
         // Set 1
@@ -457,9 +476,9 @@ mod test {
 
         let subset_str_1 = Entry(vec![attribute(age), attribute(name)]);
         let sc = SetCommitment::new(MaxCardinality(max_cardinal));
-        let (commitment, opening_info) = SetCommitment::commit_set(&sc.param_sc, &set_str)?;
+        let (commitment, opening_info) = SetCommitment::commit_set(&sc.param_sc, &set_str);
         let witness_subset =
-            SetCommitment::open_subset(&sc.param_sc, &set_str, &opening_info, &subset_str_1)?;
+            SetCommitment::open_subset(&sc.param_sc, &set_str, &opening_info, &subset_str_1);
 
         // assert that there is some witness_subset
         assert!(witness_subset.is_some());
@@ -471,12 +490,11 @@ mod test {
             &commitment,
             &subset_str_1,
             &witness_subset
-        )?);
-        Ok(())
+        ));
     }
 
     #[test]
-    fn test_aggregate_verify_cross() -> Result<(), CurveError> {
+    fn test_aggregate_verify_cross() {
         // check aggregation of witnesses using cross set commitment scheme
 
         // Set 1
@@ -503,13 +521,13 @@ mod test {
         // CrossSetCommitment should be;
         // Ways to create a CrossSetCommitment:
         // new(max_cardinal) -> CrossSetCommitment
-        // from(PublicParameters) -> CrossSetCommitment
+        // from(PublicParameters) -> CrossSetCommitmen
 
         let csc = CrossSetCommitment::new(MaxCardinality(max_cardinal));
         let (commitment_1, opening_info_1) =
-            CrossSetCommitment::commit_set(&csc.param_sc, &set_str)?;
+            CrossSetCommitment::commit_set(&csc.param_sc, &set_str);
         let (commitment_2, opening_info_2) =
-            CrossSetCommitment::commit_set(&csc.param_sc, &set_str2)?;
+            CrossSetCommitment::commit_set(&csc.param_sc, &set_str2);
 
         let commit_vector = &vec![commitment_1, commitment_2];
 
@@ -523,7 +541,7 @@ mod test {
             &set_str,
             &opening_info_1,
             &subset_str_1,
-        )?
+        )
         .expect("Some Witness");
 
         let witness_2 = CrossSetCommitment::open_subset(
@@ -531,7 +549,7 @@ mod test {
             &set_str2,
             &opening_info_2,
             &subset_str_2,
-        )?
+        )
         .expect("Some Witness");
 
         // aggregate all witnesses for a subset is correct -> proof
@@ -543,33 +561,32 @@ mod test {
             commit_vector,
             &[subset_str_1, subset_str_2],
             &proof
-        )?);
-        Ok(())
+        ));
     }
 
-    #[test]
-    fn test_generator() {
-        let g1 = G1::generator();
-        let g2 = G2::generator();
-        println!("G1 generator: {:?}", g1);
-        println!("G2 generator: {:?}", g2);
-
-        // rand FE
-        let fe = FieldElement::random();
-        println!("Random FE: {:?}", fe);
-
-        // 0000000000000000000000000000000059E14D2F2D6C0921BA968FF4243145E2760FBB35D3B857329BEE29013E41DEAE
-        // 12345678901234567890123456789012
-        //                                 1234567890123456789012345678901234567890123456789012345678901234
-        // Number of non-zero bytes: 32
-
-        // 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
-        //   12345678901234567890123456789012
-        //                                   1234567890123456789012345678901234567890123456789012345678901234
-        //
-        // The line above has 64 characters, or 32 bytes.
-
-        // 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
-        // The line above has 100 characters
-    }
+    // #[test]
+    // fn test_generator() {
+    //     let g1 = G1Projective::GENERATOR;
+    //     let g2 = G2Projective::GENERATOR;
+    //     println!("G1 generator: {:?}", g1);
+    //     println!("G2 generator: {:?}", g2);
+    //
+    //     // rand FE
+    //     let fe = Scalar::random(ThreadRng::default());
+    //     println!("Random FE: {:?}", fe);
+    //
+    //     // 0000000000000000000000000000000059E14D2F2D6C0921BA968FF4243145E2760FBB35D3B857329BEE29013E41DEAE
+    //     // 12345678901234567890123456789012
+    //     //                                 1234567890123456789012345678901234567890123456789012345678901234
+    //     // Number of non-zero bytes: 32
+    //
+    //     // 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+    //     //   12345678901234567890123456789012
+    //     //                                   1234567890123456789012345678901234567890123456789012345678901234
+    //     //
+    //     // The line above has 64 characters, or 32 bytes.
+    //
+    //     // 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
+    //     // The line above has 100 characters
+    // }
 }

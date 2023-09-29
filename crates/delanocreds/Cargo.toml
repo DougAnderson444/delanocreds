@@ -2,23 +2,25 @@
 edition = "2021"
 license = "MIT"
 name = "delanocreds"
-version = "0.1.1"
+version = "0.2.0"
 
 [lib]
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-amcl_wrapper = { version = "0.4.0", features = ["bls381"] }
+bls12_381_plus = "0.8.5"
 anyhow = "1.0.70"
 cid = "0.10.1"
-delano-crypto = { path = "../delano-crypto" }
 multihash = "0.18.1"
 secrecy = "0.8.0"
 sha2 = { version = "0.10" }
-shake-multihash = { git = "https://github.com/DougAnderson444/shake-multihash.git", branch = "master" }
-# serde = "1.0"
+rand = "0.8.5"
+rayon = "1.8.0"
+log = "0.4"
+env_logger = "0.10.0"
+delano-keys = { workspace = true }
+
+# optional dependencies
+serde = { version = "1.0", optional = true, features = ["derive"] }
 # wa-serde-derive = "0.1"                                     # serde-derive in webassembly                                     # serde-derive for wasm
 
-# applies to build scripts and proc-macros (serde) to optimize compile times
-# [profile.dev.build-override]
-# opt-level = 3

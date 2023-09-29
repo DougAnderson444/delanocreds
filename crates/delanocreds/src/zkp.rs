@@ -1,172 +1,144 @@
-use crate::ec::curve::{CurveOrder, FieldElement, GroupElement, G1, G2};
-use amcl_wrapper::types::BigNum;
+use std::fmt::Display;
+
 use anyhow::Result;
+use bls12_381_plus::elliptic_curve::bigint;
+use bls12_381_plus::elliptic_curve::bigint::Encoding;
+use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
+use bls12_381_plus::ff::Field;
+use bls12_381_plus::group::prime::PrimeCurveAffine;
+use bls12_381_plus::group::Curve;
+use bls12_381_plus::group::GroupEncoding;
+use bls12_381_plus::G1Affine;
+use bls12_381_plus::G2Affine;
+use bls12_381_plus::{G1Projective, G2Projective, Scalar};
+use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
-use std::fmt::{Display, Formatter};
 
-use crate::keypair::spseq_uc::RandomizedPubKey;
 use crate::keypair::NymProof;
-use crate::types::{Generator, GeneratorG1, GeneratorG2, Group};
 
-impl Display for Generator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Generator::G1(g) => write!(f, "{g}"),
-            Generator::G2(g) => write!(f, "{g}"),
-        }
-    }
-}
-
-impl Display for Group {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Group::G1(g) => write!(f, "{g}"),
-            Group::G2(g) => write!(f, "{g}"),
-        }
-    }
-}
-
-pub struct ChallengeState {
+/// The Challenge State is a struct that contains the name of the challenge,
+/// the generator, the statement, and the hash of the announcement
+///
+/// # Arguments
+///
+/// * `name` - The name of the challenge
+/// * `g` - The generator
+/// * `statement` - The statement
+/// * `hash` - The hash of the announcement
+#[derive(Clone, Debug)]
+pub struct ChallengeState<T: PrimeCurveAffine> {
     pub name: String,
-    pub g: Generator,
-    pub statement: Vec<Group>,
+    pub g: T,
+    pub statement: Vec<T>,
     pub hash: [u8; 32],
 }
 
-impl ChallengeState {
-    pub fn new(generator: Generator, statement: Vec<Group>, announcement: &[u8]) -> Self {
+impl<T: PrimeCurveAffine + GroupEncoding> ChallengeState<T> {
+    /// Creates a new [ChallengeState]
+    pub fn new(statement: Vec<T>, announcement: impl AsRef<[u8]>) -> Self {
         Self {
             name: crate::config::CHALLENGE_STATE_NAME.to_string(),
-            g: generator,
+            g: <T as PrimeCurveAffine>::generator(),
             statement,
             hash: Sha256::digest(announcement).into(),
         }
     }
 }
 
-pub type Challenge = FieldElement;
-pub type Response = Vec<FieldElement>;
+pub type Challenge = Scalar;
+// pub type Response = Vec<Scalar>;
 
 /// Schnorr proof (non-interactive using Fiat Shamir heuristic) of the statement
 /// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generalized version
-pub struct ZkpSchnorrFiatShamir {}
-
-impl Default for ZkpSchnorrFiatShamir {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ZkpSchnorrFiatShamir {
-    pub fn new() -> Self {
-        ZkpSchnorrFiatShamir {}
-    }
-    pub fn setup() -> G2 {
-        G2::generator()
-    }
+pub mod zkp_schnorr_fiat_shamir {
+    use super::*;
 
     /// The code below is from the original implementation of the Schnorr proof (non-interactive using FS heuristic) of the statement ZK(x ; h = g^x)
-    pub fn challenge(state: &ChallengeState) -> FieldElement {
+    pub fn challenge<T: PrimeCurveAffine + GroupEncoding<Repr = impl AsRef<[u8]>>>(
+        state: &ChallengeState<T>,
+    ) -> Scalar {
         // transform the state into a byte array
         let mut state_bytes = Vec::new();
         state_bytes.extend_from_slice(state.name.as_bytes());
-        state_bytes.extend_from_slice(state.g.to_string().as_bytes());
+        state_bytes.extend_from_slice(state.g.to_bytes().as_ref());
 
         for stmt in &state.statement {
-            state_bytes.extend_from_slice(stmt.to_string().as_bytes());
+            state_bytes.extend_from_slice(stmt.to_bytes().as_ref());
         }
 
         state_bytes.extend_from_slice(&state.hash);
 
-        FieldElement::from_msg_hash(&state_bytes)
+        let digest = Sha256::digest(&state_bytes);
+
+        let big_digest = bigint::U256::from_be_bytes(digest.into());
+
+        Scalar::from_raw(big_digest.into())
     }
 
     /// Schnorr proof (non-interactive using FS heuristic)
     pub fn non_interact_prove(
-        g_2: &G2,
-        stms: &Vec<G2>,
-        secret_wit: &Vec<Secret<FieldElement>>,
-    ) -> Result<(Response, Challenge)> {
+        stms: &Vec<G2Affine>,
+        secret_wit: &Vec<Secret<Scalar>>,
+    ) -> Result<(Vec<Scalar>, Challenge)> {
         // match on the statement
 
-        // FieldElement::random() for each statement item
         let w_list = (0..stms.len())
-            .map(|_| FieldElement::random())
-            .collect::<Vec<FieldElement>>();
+            .map(|_| Scalar::random(ThreadRng::default()))
+            .collect::<Vec<Scalar>>();
 
         // wit_list = [w_list[i] * g for i in range(len(w_list))]
-        let witness_list = w_list.iter().map(|li| li * g_2).collect::<Vec<G2>>();
+        let witness_list = w_list
+            .iter()
+            .map(G2Projective::mul_by_generator)
+            .collect::<Vec<G2Projective>>();
 
         // sum all w_list items into announcement
-        let announcement = witness_list.iter().fold(G2::identity(), |acc, x| acc + x);
-
-        // SHAKE3 hash the &announcement.to_bytes(false)
-        let hash: [u8; 32] = Sha256::digest(announcement.to_bytes(false)).into();
-        // cast stms to Group::G2
-        let stms = stms
+        let announcement = witness_list
             .iter()
-            .map(|x| Group::G2(x.clone()))
-            .collect::<Vec<Group>>();
+            .fold(G2Projective::IDENTITY, |acc, x| acc + x);
 
-        let state = ChallengeState {
-            name: "schnorr".to_string(),
-            g: Generator::G2(GeneratorG2(g_2.clone())),
-            statement: stms,
-            hash,
-        };
+        let state = ChallengeState::new(stms.to_vec(), &announcement.to_bytes());
 
         // Generate challenge.
-        let mut c = Self::challenge(&state).to_bignum();
-        c.rmod(&CurveOrder);
+        // let c = Scalar::reduce(bigint::U384::from(Self::challenge(&state)));
+        let c = self::challenge(&state);
 
         // r = [(w_list[i] - c * secret_wit[i]) % o for i in range(len(secret_wit))]
         let r = (0..secret_wit.len())
             .map(|i| {
-                let a = w_list[i].clone();
-                let b = FieldElement::try_from(c).unwrap() * secret_wit[i].expose_secret();
-                let mut r = BigNum::frombytes(&(a - b).to_bytes());
-                r.rmod(&CurveOrder);
-                r
+                let a = w_list[i];
+                let b = c * secret_wit[i].expose_secret();
+                // let mut r = BigNum::frombytes(&(a - b).to_bytes());
+                a - b
+                // Scalar::reduce(r)
             })
-            .collect::<Vec<BigNum>>();
-
-        let c: Challenge = FieldElement::from_hex(c.tostring()).unwrap();
-        let r: Response = r
-            .iter()
-            .map(|x| FieldElement::from_hex(x.tostring()).unwrap())
-            .collect::<Vec<FieldElement>>();
+            .collect::<Vec<Scalar>>();
 
         Ok((r, c))
     }
 
     /// Verify the statement ZK(x ; h = g^x)
-    pub fn non_interact_verify(g_2: &G2, stms: &[G2], proof_list: &(Response, Challenge)) -> bool {
+    pub fn non_interact_verify(stms: &[G2Affine], proof_list: &(Vec<Scalar>, Challenge)) -> bool {
         let (r, c) = proof_list;
 
         // W_list = [r[i] * g + c * stm[i] for i in range(len(r))]
         let w_list = (0..r.len())
-            .map(|i| r[i].clone() * g_2 + c * stms[i].clone())
-            .collect::<Vec<G2>>();
+            .map(|i| G2Projective::mul_by_generator(&r[i]) + c * stms[i])
+            .collect::<Vec<G2Projective>>();
         // sum all w_list items into announcement
-        let announcement = w_list.iter().fold(G2::identity(), |acc, x| acc + x);
+        let announcement = w_list.iter().fold(G2Projective::IDENTITY, |acc, x| acc + x);
 
-        // cast stms to Generator::G2
-        let stms = stms
-            .iter()
-            .map(|x| Group::G2(x.clone()))
-            .collect::<Vec<Group>>();
-
-        let state = ChallengeState {
-            name: "schnorr".to_string(),
-            g: Generator::G2(GeneratorG2(g_2.clone())),
-            statement: stms,
-            hash: Sha256::digest(announcement.to_bytes(false)).into(),
-        };
-        let mut hash = Self::challenge(&state).to_bignum();
-        hash.rmod(&CurveOrder);
-
-        FieldElement::from_hex(hash.tostring()).unwrap() == *c
+        // let state = ChallengeState {
+        //     name: "schnorr".to_string(),
+        //     g: G2Projective::GENERATOR,
+        //     statement: stms.to_vec(),
+        //     hash: Sha256::digest(announcement.to_bytes()).into(),
+        // };
+        let state = ChallengeState::new(stms.to_vec(), &announcement.to_bytes());
+        let hash = self::challenge(&state);
+        // let hash = Scalar::reduce(bigint::U256::from(hash));
+        hash == *c
     }
 }
 
@@ -174,99 +146,100 @@ impl ZkpSchnorrFiatShamir {
 pub trait Schnorr {
     fn new() -> Self;
 
-    // In rust, the implemented default traits are:
-    fn setup() -> G1 {
-        G1::generator()
+    /// Create a Schnorr challenge
+    fn challenge<T: PrimeCurveAffine + GroupEncoding<Repr = impl AsRef<[u8]>> + Display>(
+        state: &ChallengeState<T>,
+    ) -> Challenge {
+        let mut state_bytes = Vec::new();
+        state_bytes.extend_from_slice(state.name.as_bytes());
+        state_bytes.extend_from_slice(state.g.to_bytes().as_ref());
+
+        for stmt in &state.statement {
+            state_bytes.extend_from_slice(stmt.to_bytes().as_ref());
+        }
+
+        state_bytes.extend_from_slice(&state.hash);
+
+        let digest = Sha256::digest(&state_bytes);
+
+        let big_digest = bigint::U256::from_be_bytes(digest.into());
+
+        Scalar::from_raw(big_digest.into())
     }
 
-    fn challenge(state: &ChallengeState) -> Challenge {
-        let mut elem_str = vec![state.statement.len().to_string()];
-        elem_str.extend(state.statement.iter().map(|x| x.to_string()));
-
-        // The length of each element in the list is added to the element
-        let elem_len = elem_str.iter().map(|x| format!("{}||{}", x.len(), x));
-        let state = elem_len.collect::<Vec<String>>().join("|");
-
-        let hash = Sha256::digest(state.as_bytes());
-
-        FieldElement::from_hex(format!("{hash:X}")).unwrap()
-    }
-
+    /// Create a Schnorr response to our own challenge
     fn response(
-        challenge: &Challenge,
-        announce_randomness: &FieldElement,
-        stm: &RandomizedPubKey,
-        secret_wit: &Secret<FieldElement>,
-    ) -> FieldElement {
-        assert!(G1::generator() * secret_wit.expose_secret() == *stm.as_ref());
-        let mut res = BigNum::frombytes(
-            &(announce_randomness + challenge * secret_wit.expose_secret()).to_bytes(),
-        );
-        res.rmod(&CurveOrder);
-        res.into()
+        challenge: &Scalar,
+        announce_randomness: &Scalar,
+        stm: &G1Affine,
+        secret_wit: &Secret<Scalar>,
+    ) -> Scalar {
+        assert!(G1Projective::mul_by_generator(secret_wit.expose_secret()).to_affine() == *stm);
+        *announce_randomness + challenge * secret_wit.expose_secret()
     }
 }
 
-pub struct ZKPSchnorr {
-    g_1: G1,
-}
+pub struct ZKPSchnorr {}
 
 // use defaults
 impl Schnorr for ZKPSchnorr {
     fn new() -> Self {
-        Self {
-            g_1: G1::generator(),
-        }
+        Self {}
     }
 }
 
 impl ZKPSchnorr {
     /// Verify the statement ZK(x ; h = g^x)
     pub fn verify(
-        &self,
         challenge: &Challenge,
-        announce_element: &G1,
-        stm: &G1,
-        response: &FieldElement,
+        announce_element: &G1Projective,
+        stm: &G1Projective,
+        response: &Scalar,
     ) -> bool {
-        let left_side = response * G1::generator();
+        let left_side = G1Projective::mul_by_generator(response);
         let right_side = announce_element + challenge * stm;
         left_side == right_side
     }
 
-    pub fn announce(&self) -> (G1, FieldElement) {
-        let w_random = FieldElement::random();
-        let w_element = w_random.clone() * &self.g_1;
+    /// Create a Schnorr announcement
+    pub fn announce() -> (G1Projective, Scalar) {
+        let w_random = Scalar::random(ThreadRng::default());
+        let w_element = G1Projective::mul_by_generator(&w_random);
         (w_element, w_random)
     }
 }
-#[derive(Clone)]
 
+/// Damgard Transform containing a [Pedersen] commitment
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DamgardTransform {
     pub pedersen: Pedersen,
 }
 
 impl DamgardTransform {
+    /// Create a Damgard Transform challenge announcement
     pub fn announce(&self) -> (PedersenCommit, PedersenOpen) {
-        let w_random = FieldElement::random();
-        let w_element = &self.pedersen.g.scalar_mul_const_time(&w_random);
+        let w_random = Scalar::random(ThreadRng::default());
+        let w_element = G1Projective::mul_by_generator(&w_random).to_affine();
         let (pedersen_commit, mut pedersen_open) = self.pedersen.commit(w_random);
-        pedersen_open.element(w_element.clone());
+        pedersen_open.element(w_element);
         (pedersen_commit, pedersen_open)
     }
+
+    /// Verify the given [NymProof] against the [DamgardTransform]
     pub fn verify(nym_proof: &NymProof, nym_damgard: &DamgardTransform) -> bool {
-        let left_side = nym_proof.response.clone() * &G1::generator();
+        let left_side = G1Projective::mul_by_generator(&nym_proof.response);
         let right_side = nym_proof.pedersen_open.announce_element.as_ref().unwrap()
-            + nym_proof.challenge.clone() * nym_proof.public_key.as_ref();
-        left_side == right_side
-            && nym_damgard
-                .pedersen
-                .decommit(&nym_proof.pedersen_open, &nym_proof.pedersen_commit)
+            + nym_proof.challenge * nym_proof.public_key;
+        let decommit = nym_damgard
+            .pedersen
+            .decommit(&nym_proof.pedersen_open, &nym_proof.pedersen_commit);
+
+        (left_side == right_side) && decommit
     }
 }
 
-// implement a trait for Damgard_Transform that has the same functions as ZKP_Schnorr and then you would implement the functions for Damgard_Transform
-
+/// Implementation of Schnorr trait for DamgardTransform that has the same functions as ZKP_Schnorr
 impl Schnorr for DamgardTransform {
     fn new() -> Self {
         let pedersen = Pedersen::new();
@@ -274,23 +247,26 @@ impl Schnorr for DamgardTransform {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+/// Pedersen commitment containing [G1Projective] public key of the random secret trapdoor `d`
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pedersen {
-    pub g: GeneratorG1,
-    pub h: G1,
-    // trapdoor: FieldElement,
+    pub h: G1Projective,
+    // trapdoor: Scalar,
 }
-pub type PedersenCommit = G1;
+pub type PedersenCommit = G1Projective;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PedersenOpen {
-    pub open_randomness: FieldElement,
-    pub announce_randomness: FieldElement,
-    pub announce_element: Option<G1>,
+    pub open_randomness: Scalar,
+    pub announce_randomness: Scalar,
+    pub announce_element: Option<G1Affine>,
 }
 
 impl PedersenOpen {
-    pub fn element(&mut self, elem: G1) {
+    /// Sets the announce element for the PedersenOpen
+    pub fn element(&mut self, elem: G1Affine) {
         self.announce_element = Some(elem);
     }
 }
@@ -302,14 +278,20 @@ impl Default for Pedersen {
 impl Pedersen {
     pub fn new() -> Self {
         // h is the statement. d is the trapdoor. g is the generator. h = d*g
-        let g: GeneratorG1 = G1::generator().into();
-        let d = Secret::new(FieldElement::random()); // trapdoor
-        let h = &g.scalar_mul_const_time(d.expose_secret());
-        Pedersen { g, h: h.clone() }
+        let d = Secret::new(Scalar::random(ThreadRng::default())); // trapdoor
+        let h = G1Projective::mul_by_generator(d.expose_secret());
+        Pedersen { h }
     }
-    pub fn commit(&self, msg: FieldElement) -> (PedersenCommit, PedersenOpen) {
-        let r = FieldElement::random();
-        let pedersen_commit = &r * &self.h + &self.g.scalar_mul_const_time(&msg);
+
+    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+        let d = Scalar::from_be_bytes(bytes).expect("32 bytes");
+        let h = G1Projective::mul_by_generator(&d);
+        Pedersen { h }
+    }
+
+    pub fn commit(&self, msg: Scalar) -> (PedersenCommit, PedersenOpen) {
+        let r = Scalar::random(ThreadRng::default());
+        let pedersen_commit = r * self.h + G1Projective::mul_by_generator(&msg);
         let pedersen_open = PedersenOpen {
             open_randomness: r,
             announce_randomness: msg,
@@ -321,10 +303,8 @@ impl Pedersen {
 
     /// Decrypts/Decommits the message
     pub fn decommit(&self, pedersen_open: &PedersenOpen, pedersen_commit: &PedersenCommit) -> bool {
-        let c2 = &self.h.scalar_mul_const_time(&pedersen_open.open_randomness)
-            + &self
-                .g
-                .scalar_mul_const_time(&pedersen_open.announce_randomness);
+        let c2 = self.h * pedersen_open.open_randomness
+            + G1Projective::mul_by_generator(&pedersen_open.announce_randomness);
         &c2 == pedersen_commit
     }
 }
@@ -332,69 +312,63 @@ impl Pedersen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bls12_381_plus::group::Curve;
 
     #[test]
     fn test_non_interact_prove() {
-        // 0. ZkpSchnorrFiatShamir::new()
         // 1. Setup
         // 2. Prove
         // 3. Verify
-        let g_2 = ZkpSchnorrFiatShamir::setup();
-        let secret_x = Secret::new(FieldElement::random());
-        let public_h = g_2.scalar_mul_const_time(secret_x.expose_secret());
+        eprintln!("Testing non-interactive");
+        let secret_x = Secret::new(Scalar::random(ThreadRng::default()));
+        let public_h = G2Projective::mul_by_generator(secret_x.expose_secret());
 
         // create a vec of secrets for iter 0 to 5
         let secrets = (0..5)
-            .map(|_| Secret::new(FieldElement::random()))
-            .collect::<Vec<Secret<FieldElement>>>();
+            .map(|_| Secret::new(Scalar::random(ThreadRng::default())))
+            .collect::<Vec<Secret<Scalar>>>();
 
         // create stm for len of secrets, sec[i * g_2]
         let stm = secrets
             .iter()
-            .map(|s| g_2.scalar_mul_const_time(s.expose_secret()))
-            .collect::<Vec<G2>>();
+            .map(|s| G2Projective::mul_by_generator(s.expose_secret()).to_affine())
+            .collect();
 
-        let proof_list /* (r, c) */ = ZkpSchnorrFiatShamir::non_interact_prove(&g_2, &stm, &secrets).unwrap();
+        let proof_list /* (r, c) */ = zkp_schnorr_fiat_shamir::non_interact_prove(&stm, &secrets).unwrap();
         // let proof = (r, c);
-        let result = ZkpSchnorrFiatShamir::non_interact_verify(&g_2, &stm, &proof_list);
+        let result = zkp_schnorr_fiat_shamir::non_interact_verify(&stm, &proof_list);
         assert!(result);
 
         // create a proof for statement
-        let proof_single = ZkpSchnorrFiatShamir::non_interact_prove(
-            &g_2,
-            &vec![public_h.clone()],
-            &vec![secret_x],
-        )
-        .unwrap();
+        let proof_single =
+            zkp_schnorr_fiat_shamir::non_interact_prove(&vec![public_h.into()], &vec![secret_x])
+                .unwrap();
         let result_single =
-            ZkpSchnorrFiatShamir::non_interact_verify(&g_2, &vec![public_h], &proof_single);
+            zkp_schnorr_fiat_shamir::non_interact_verify(&[public_h.into()], &proof_single);
         assert!(result_single);
     }
 
     #[test]
     fn test_interact_prove() {
         // Create a random statement for testing
-        let secret_x = Secret::new(FieldElement::random());
-        let zkpsch = ZKPSchnorr::new();
-        let stm = RandomizedPubKey(zkpsch.g_1.scalar_mul_const_time(secret_x.expose_secret()));
+        let secret_x = Secret::new(Scalar::random(ThreadRng::default()));
+        let stm = G1Projective::mul_by_generator(secret_x.expose_secret()).to_affine();
 
-        let announce = zkpsch.announce();
+        let announce = ZKPSchnorr::announce();
 
-        // verifier creates a challenge
-        let state = ChallengeState {
-            name: "schnorr".to_string(),
-            g: Generator::G1(zkpsch.g_1.clone().into()),
-            statement: vec![Group::G1(stm.as_ref().clone())],
-            hash: Sha256::digest(announce.0.to_bytes(false)).into(),
-        };
+        let state = ChallengeState::new(vec![stm], &announce.0.to_bytes());
 
         let challenge = ZKPSchnorr::challenge(&state);
 
         // prover creates a respoonse (or proof)
         let response = ZKPSchnorr::response(&challenge, &announce.1, &stm, &secret_x);
 
-        //     assert(Schnorr.verify(challenge, W_element, stm, response))
-        assert!(zkpsch.verify(&challenge, &announce.0, &stm, &response));
+        assert!(ZKPSchnorr::verify(
+            &challenge,
+            &announce.0,
+            &stm.into(),
+            &response
+        ));
     }
 
     #[test]
@@ -403,25 +377,16 @@ mod tests {
 
         // create a statement. A statement is a secret and a commitment to that secret.
         // A commitment is a generator raised to the power of the secret.
-        let secret = Secret::new(FieldElement::random()); // x
-        let statement = RandomizedPubKey(
-            damgard
-                .pedersen
-                .g
-                .scalar_mul_const_time(secret.expose_secret()),
-        ); // h
+        let secret = Secret::new(Scalar::random(ThreadRng::default())); // x
+                                                                        // h
+        let statement = G1Projective::mul_by_generator(secret.expose_secret()).to_affine();
 
         let (pedersen_commit, pedersen_open) = damgard.announce();
 
-        let state = ChallengeState::new(
-            Generator::G1(damgard.pedersen.g.clone()),
-            vec![Group::G1(statement.as_ref().clone())],
-            &pedersen_commit.to_bytes(false),
-        );
+        let state = ChallengeState::new(vec![statement], &pedersen_commit.to_bytes());
 
-        let challenge = DamgardTransform::challenge(&state);
+        let challenge = DamgardTransform::challenge(&state); // uses triat default
 
-        // (challenge: &Challenge, announce_randomness: &FieldElement, stm: &G2, secret_wit: &FieldElement)
         let response = DamgardTransform::response(
             &challenge,
             &pedersen_open.announce_randomness,
@@ -433,7 +398,7 @@ mod tests {
             challenge,
             pedersen_open,
             pedersen_commit,
-            public_key: statement,
+            public_key: statement.into(),
             response,
         };
 

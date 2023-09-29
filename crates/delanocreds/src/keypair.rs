@@ -4,27 +4,31 @@
 //!    [https://eprint.iacr.org/2022/680](https://eprint.iacr.org/2022/680)
 use super::CredentialBuilder;
 use crate::config;
-use crate::entry::convert_entry_to_bn;
+use crate::ec::curve::pairing;
+use crate::ec::{G2Projective, Scalar};
+use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
 use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
 use crate::set_commits::ParamSetCommitment;
-use crate::types::{Generator, Group};
 use crate::{
     zkp::PedersenOpen,
     zkp::Schnorr,
     zkp::{ChallengeState, DamgardTransform},
 };
 
-use crate::ec::curve::{pairing, CurveError, FieldElement, GroupElement, G1, G2, GT};
 use anyhow::Result;
-use delano_crypto::types::FieldElem;
+use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
+use bls12_381_plus::ff::Field;
+use bls12_381_plus::group::{Curve, Group, GroupEncoding};
+use bls12_381_plus::{G1Projective, Gt};
+pub use delano_keys::vk::VK;
+use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
-use spseq_uc::OpeningInformation;
+use spseq_uc::Credential;
 use spseq_uc::UpdateError;
-use spseq_uc::{Credential, RandomizedPubKey};
-use std::ops::Deref;
 use std::ops::Mul;
+use std::ops::{Deref, Neg};
 
 pub mod spseq_uc;
 
@@ -79,10 +83,10 @@ impl MaxCardinality {
 // enum Error of SerzDeserzError and TooLargeCardinality
 #[derive(Debug, Clone)]
 pub enum IssuerError {
-    SerializeError(CurveError),
     TooLargeCardinality,
     TooLongEntries,
     InvalidNymProof,
+    UpdateError(String),
 }
 
 // implement `std::error::Error` for IssuerError
@@ -92,35 +96,16 @@ impl std::error::Error for IssuerError {}
 impl std::fmt::Display for IssuerError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            IssuerError::SerializeError(e) => write!(f, "SerializeError: {}", e),
             IssuerError::TooLargeCardinality => write!(f, "TooLargeCardinality. You passed too many attributes per Entry. Hint: reduce the number of attributes to be less than the max cardinality of this Issuer."),
             IssuerError::TooLongEntries => write!(f, "TooLongEntries. You passed too many Entries. Hint: reduce the number of Entries to be less than the max entries of this Issuer."),
             IssuerError::InvalidNymProof => write!(f, "InvalidNymProof. The proof of the pseudonym is invalid."),
-        }
+            IssuerError::UpdateError(e) => write!(f, "UpdateError: {}", e),        }
     }
 }
 
-impl From<CurveError> for IssuerError {
-    fn from(item: CurveError) -> Self {
-        IssuerError::SerializeError(item)
-    }
-}
-
-impl From<IssuerError> for CurveError {
-    fn from(item: IssuerError) -> Self {
-        match item {
-            IssuerError::SerializeError(e) => e,
-            _ => panic!("Invalid IssuerError"),
-        }
-    }
-}
-
-impl From<IssuerError> for UpdateError {
-    fn from(item: IssuerError) -> Self {
-        match item {
-            IssuerError::SerializeError(e) => UpdateError::SerializeError(e),
-            _ => UpdateError::Error,
-        }
+impl From<UpdateError> for IssuerError {
+    fn from(item: UpdateError) -> Self {
+        IssuerError::UpdateError(item.to_string())
     }
 }
 
@@ -130,21 +115,12 @@ impl From<IssuerError> for UpdateError {
 /// - `vk`: `Vec<VK>`, [VK] verification keys of the user
 pub struct Issuer {
     pub public: IssuerPublic,
-    sk: Secret<Vec<FieldElem>>,
+    sk: Secret<Vec<Scalar>>,
 }
 
 pub struct IssuerPublic {
     pub parameters: ParamSetCommitment,
     pub vk: Vec<VK>,
-}
-
-/// Verification Key
-/// This key has elements from both G1 and G2,
-/// so to make a Vector of [VK], we need to use enum
-#[derive(Debug, Clone, PartialEq)]
-pub enum VK {
-    G1(G1),
-    G2(G2),
 }
 
 /// Default Issuer using MaxCardinality and
@@ -164,18 +140,18 @@ impl Issuer {
         // sk has to be at least 2 longer than l_message, to compute `list_z` in `sign()` function which adds +2
         let sk = Secret::new(
             (0..l_message.0 + 2)
-                .map(|_| FieldElem::random())
+                .map(|_| Scalar::random(ThreadRng::default()))
                 .collect::<Vec<_>>(),
         );
 
         Self::new_with_secret(sk, t)
     }
 
-    /// Generates an [Issuer] given a Vector of [FieldElement]s and a [MaxCardinality]
+    /// Generates an [Issuer] given a Vector of [Scalar]s and a [MaxCardinality]
     ///
     /// Use this function to generate a new Issuer when you have secret keys
     /// but no public parameters yet
-    pub fn new_with_secret(sk: Secret<Vec<FieldElem>>, t: MaxCardinality) -> Self {
+    pub fn new_with_secret(sk: Secret<Vec<Scalar>>, t: MaxCardinality) -> Self {
         let public_parameters = ParamSetCommitment::new(&t);
 
         Self::new_with_params(sk, public_parameters)
@@ -185,15 +161,15 @@ impl Issuer {
     ///
     /// Use this function to generate a new Issuer when you have both secret keys
     /// and previously generated public parameters
-    pub fn new_with_params(sk: Secret<Vec<FieldElem>>, params: ParamSetCommitment) -> Self {
+    pub fn new_with_params(sk: Secret<Vec<Scalar>>, params: ParamSetCommitment) -> Self {
         let mut vk: Vec<VK> = sk
             .expose_secret()
             .iter()
-            .map(|sk_i| VK::G2(params.g_2.scalar_mul_const_time(sk_i)))
+            .map(|sk_i| VK::G2(G2Projective::mul_by_generator(sk_i)))
             .collect::<Vec<_>>();
 
         // compute X_0 keys that is used for delegation
-        let x_0 = params.g_1.scalar_mul_const_time(&sk.expose_secret()[0]);
+        let x_0 = G1Projective::mul_by_generator(&sk.expose_secret()[0]);
         vk.insert(0, VK::G1(x_0)); // vk is now of length l_message + 1 (or sk + 1)
 
         Self {
@@ -214,7 +190,7 @@ impl Issuer {
     /// # Arguments
     /// - `vk`: Vector of [VK] verification keys of the set
     /// - attr_vector: &Vec<[Entry]>, attributes of the user
-    /// - sk: &Vec<[FieldElement]>, secret keys of the set
+    /// - sk: &Vec<[Scalar]>, secret keys of the set
     /// - nym: &[Nym], pseudonym of the user
     /// - k_prime: Option<[usize]>, the number of attributes to be delegated. If None, no attributes are updatable.
     /// - proof_nym_u: [NymProof], proof of the pseudonym
@@ -249,7 +225,7 @@ impl Issuer {
     /// signature, opening information, update key
     fn sign(
         &self,
-        pk_u: &G1,
+        pk_u: &G1Projective,
         messages_vector: &[Entry],
         k_prime: Option<usize>,
     ) -> Result<Credential, IssuerError> {
@@ -269,39 +245,40 @@ impl Issuer {
             return Err(IssuerError::TooLongEntries);
         }
 
-        // encode all messagse sets of the messages vector as set commitments
-        let (commitment_vector, opening_vector): (Vec<G1>, Vec<FieldElement>) = messages_vector
+        // Generate commitments for all messagse sets of the messages vector as set commitments
+        let (commitment_vector, opening_vector): (Vec<G1Projective>, Vec<Scalar>) = messages_vector
             .iter()
-            .map(|mess| encode(&self.public.parameters, mess))
-            .collect::<Result<Vec<_>, _>>()?
+            .map(|mess| CrossSetCommitment::commit_set(&self.public.parameters, mess))
+            .collect::<Vec<_>>()
             .into_iter()
             .unzip();
 
         // pick randomness for y_g1
-        let y_rand = FieldElement::random();
+        let y_rand = Scalar::random(ThreadRng::default());
 
         // compute sign -> sigma = (Z, Y, hat Ym t)
         let list_z = commitment_vector
             .iter()
             .enumerate()
-            .map(|(i, c)| c.scalar_mul_const_time(&self.sk.expose_secret()[i + 2]))
+            .map(|(i, c)| c * self.sk.expose_secret()[i + 2])
             .collect::<Vec<_>>();
 
         // temp_point = sum of all ec points in list_Z
-        let temp_point = list_z.iter().fold(G1::identity(), |acc, x| acc + x);
+        let temp_point = list_z
+            .iter()
+            .fold(G1Projective::identity(), |acc, x| acc + x);
 
         // Z is y_rand mod_inverse(order) times temp_point
-        let z = y_rand.inverse() * temp_point;
+        let z = y_rand.invert().unwrap() * temp_point;
 
         // Y = y_rand * g_1
-        let y_g1 = self.public.parameters.g_1.scalar_mul_const_time(&y_rand);
+        let y_g1 = G1Projective::mul_by_generator(&y_rand);
 
         // Y_hat = y_rand * g_2
-        let y_hat = self.public.parameters.g_2.scalar_mul_const_time(&y_rand);
+        let y_hat = G2Projective::mul_by_generator(&y_rand);
 
         // t = sk[1] * Y + sk[0] * pk_u
-        let t = y_g1.scalar_mul_const_time(&self.sk.expose_secret()[1])
-            + pk_u.scalar_mul_const_time(&self.sk.expose_secret()[0]);
+        let t = y_g1 * self.sk.expose_secret()[1] + pk_u * self.sk.expose_secret()[0];
 
         let sigma = Signature { z, y_g1, y_hat, t };
 
@@ -322,8 +299,8 @@ impl Issuer {
                     let mut uk = Vec::new();
                     for i in 0..self.public.parameters.pp_commit_g1.len() {
                         let uk_i = self.public.parameters.pp_commit_g1[i]
-                            .scalar_mul_const_time(&y_rand.inverse())
-                            .scalar_mul_const_time(&self.sk.expose_secret()[k + 1]); // this is `k + 1` because sk[0] and sk[1] are used for t
+                            * y_rand.invert().unwrap()
+                            * self.sk.expose_secret()[k + 1]; // this is `k + 1` because sk[0] and sk[1] are used for t
                         uk.push(uk_i);
                     }
                     usign[k - 1] = uk; // first element is index 0 (message m is index m-1)
@@ -352,23 +329,20 @@ impl Issuer {
     }
 }
 
-/// Encodes a message set into a set commitment with opening information
-fn encode(
-    public_parameters: &ParamSetCommitment,
-    mess_set: &Entry,
-) -> Result<(G1, OpeningInformation), CurveError> {
-    CrossSetCommitment::commit_set(public_parameters, mess_set)
-}
-
 /// Verifies a [Signature] for a given message set against a [VK] verification key
 /// # Arguments
 /// - `vk`: [VK] verification key
 /// - `pk_u`: [G1] user public key
 /// - `commitment_vector`: &[G1] vector of commitments
 /// - `sigma`: &[Signature]
-pub fn verify(vk: &[VK], pk_u: &G1, commitment_vector: &[G1], sigma: &Signature) -> bool {
-    let g_1 = &G1::generator();
-    let g_2 = &G2::generator();
+pub fn verify(
+    vk: &[VK],
+    pk_u: &G1Projective,
+    commitment_vector: &[G1Projective],
+    sigma: &Signature,
+) -> bool {
+    let g_1 = &G1Projective::GENERATOR;
+    let g_2 = &G2Projective::GENERATOR;
     let Signature { z, y_g1, y_hat, t } = sigma;
 
     let pairing_op = commitment_vector
@@ -387,7 +361,8 @@ pub fn verify(vk: &[VK], pk_u: &G1, commitment_vector: &[G1], sigma: &Signature)
         if let VK::G2(vk1) = &vk[1] {
             let a = pairing(y_g1, g_2) == pairing(g_1, y_hat);
             let b = pairing(t, g_2) == pairing(y_g1, vk2) * pairing(pk_u, vk1);
-            let c = pairing(z, y_hat) == pairing_op.iter().fold(GT::one(), GT::mul);
+            let c = pairing(z, y_hat) == pairing_op.iter().fold(Gt::IDENTITY, Gt::mul);
+            eprintln!("a: {}, b: {}, c: {}", a, b, c);
             a && b && c
         } else {
             panic!("Invalid verification key");
@@ -398,8 +373,8 @@ pub fn verify(vk: &[VK], pk_u: &G1, commitment_vector: &[G1], sigma: &Signature)
 }
 
 pub struct UserKey {
-    sk_u: Secret<FieldElement>,
-    pk_u: G1,
+    sk_u: Secret<Scalar>,
+    pk_u: G1Projective,
 }
 
 impl Default for UserKey {
@@ -410,9 +385,9 @@ impl Default for UserKey {
 
 impl UserKey {
     pub fn new() -> UserKey {
-        let sk_u = Secret::new(FieldElement::random());
+        let sk_u = Secret::new(Scalar::random(ThreadRng::default()));
         UserKey {
-            pk_u: G1::generator().scalar_mul_const_time(sk_u.expose_secret()),
+            pk_u: G1Projective::mul_by_generator(sk_u.expose_secret()),
             sk_u,
         }
     }
@@ -420,13 +395,12 @@ impl UserKey {
     /// Generates a pseudonym for the user tuned to this Issuer's Pulic Parameters.
     pub fn nym(&self, public_parameters: ParamSetCommitment) -> Nym {
         // pick randomness
-        let psi = FieldElement::random();
-        let chi = FieldElement::random();
-        let g_1 = G1::generator();
+        let psi = Scalar::random(ThreadRng::default());
+        let chi = Scalar::random(ThreadRng::default());
 
-        // pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1
+        // pk_u: &G1, chi: &Scalar, psi: &Scalar, g_1: &G1
         // let nym: RandomizedPubKey = spseq_uc::rndmz_pk(&self.pk_u, &chi, &psi, &g_1);
-        let nym_public_key: RandomizedPubKey = RandomizedPubKey(&psi * (&self.pk_u + &chi * g_1));
+        let nym_public_key = psi * (self.pk_u + G1Projective::mul_by_generator(&chi));
         let secret_wit = Secret::new((self.sk_u.expose_secret() + chi) * psi);
 
         Nym::new(nym_public_key, secret_wit, public_parameters)
@@ -437,7 +411,7 @@ impl UserKey {
 /// - `secret`: [`Secret`], secret witness of the user
 /// - pub `public`: [`NymPublic`], proof of the user
 pub struct Nym {
-    secret: Secret<FieldElement>,
+    secret: Secret<Scalar>,
     pub public: NymPublic,
 }
 
@@ -457,14 +431,15 @@ pub struct NymPublic {
 /// - `pedersen_open`: PedersenOpen, opening information of the user
 /// - `pedersen_commit`: G1, commitment of the user
 /// - `public_key`: RandomizedPubKey, public key of the Nym
-/// - `response`: FieldElement, response of the user
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+/// - `response`: Scalar, response of the user
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NymProof {
-    pub challenge: FieldElement,
+    pub challenge: Scalar,
     pub pedersen_open: PedersenOpen,
-    pub pedersen_commit: G1,
-    pub public_key: RandomizedPubKey,
-    pub response: FieldElement,
+    pub pedersen_commit: G1Projective,
+    pub public_key: G1Projective,
+    pub response: Scalar,
 }
 
 impl Nym {
@@ -472,11 +447,11 @@ impl Nym {
     ///
     /// # Arguments
     /// - `nym_public_key`: [RandomizedPubKey], public key of the Nym
-    /// - `secret_wit`: [`Secret`]<[FieldElement]>, secret witness of the user
+    /// - `secret_wit`: [`Secret`]<[Scalar]>, secret witness of the user
     /// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
     pub fn new(
-        nym_public_key: RandomizedPubKey,
-        secret_wit: Secret<FieldElement>,
+        nym_public_key: G1Projective,
+        secret_wit: Secret<Scalar>,
         public_parameters: ParamSetCommitment,
     ) -> Nym {
         // create a proof for nym
@@ -484,18 +459,17 @@ impl Nym {
         let (pedersen_commit, pedersen_open) = damgard.announce();
 
         let state = ChallengeState::new(
-            Generator::G1(damgard.pedersen.g.clone()),
-            vec![Group::G1(damgard.pedersen.h.clone())],
-            &pedersen_commit.to_bytes(false),
+            vec![damgard.pedersen.h.to_affine()],
+            &pedersen_commit.to_bytes(),
         );
 
         let challenge = DamgardTransform::challenge(&state);
 
-        // (challenge: &Challenge, announce_randomness: &FieldElement, stm: &G2, secret_wit: &FieldElement)
+        // (challenge: &Challenge, announce_randomness: &Scalar, stm: &G2, secret_wit: &Scalar)
         let response = DamgardTransform::response(
             &challenge,
             &pedersen_open.announce_randomness,
-            &nym_public_key,
+            &nym_public_key.into(),
             &secret_wit,
         );
 
@@ -571,11 +545,11 @@ impl Nym {
         // We make this change because we want to change the rep before we offer the credential to someone else
         // as opposed to changing it before we accept it for ourselves.
 
-        // mu has to be `FieldElement::one()` here because it can only be randomized once,
+        // `mu` has to be `Scalar::one()` here because it can only be randomized _once_,
         // which is during the prove() function
-        let mu = FieldElement::one();
+        let mu = Scalar::ONE;
         // pick randomness psi.
-        let psi = FieldElement::random();
+        let psi = Scalar::random(ThreadRng::default());
 
         let (nym_p_pk, cred_prime, chi) =
             spseq_uc::change_rep(&self.public.proof.public_key, cred, &mu, &psi, true);
@@ -590,6 +564,7 @@ impl Nym {
 
         let mut cred_prime = cred_prime;
         if let Some(addl_attrs) = addl_attrs {
+            eprintln!("Changing Relation in offer");
             // Note: change_rel does NOT change Signature { t, ..}
             cred_prime = match spseq_uc::change_rel(
                 &self.public.parameters,
@@ -603,12 +578,12 @@ impl Nym {
         }
 
         // Credential Signature is now for the new Nym
-        // assert!(verify(
-        //     &cred_prime.vk,
-        //     &nym_p_pk,
-        //     &cred_prime.commitment_vector,
-        //     &cred_prime.sigma
-        // ));
+        assert!(verify(
+            &cred_prime.vk,
+            &nym_p_pk,
+            &cred_prime.commitment_vector,
+            &cred_prime.sigma
+        ));
 
         // negate Signature { t, ..} with nym.secret
         let orphan = nym.send_convert_sig(&cred_prime.vk, cred_prime.sigma.clone());
@@ -665,7 +640,7 @@ impl Nym {
 
         // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
-            sigma.t += (vk0 * self.secret.expose_secret()).negation();
+            sigma.t += (vk0 * self.secret.expose_secret()).neg();
             sigma
         } else {
             panic!("Invalid verification key");
@@ -706,11 +681,11 @@ impl Nym {
         all_attributes: &[Entry],
         selected_attrs: &[Entry],
     ) -> CredProof {
-        let mu = FieldElement::random(); // mu can be random() since `prove` is the last step in the Cred process
-        let psi = FieldElement::random();
+        let mu = Scalar::random(ThreadRng::default()); // mu can be random() since `prove` is the last step in the Cred process
+        let psi = Scalar::random(ThreadRng::default());
 
         // run change rep to randomize credential and user pk (i.e., create a new nym)
-        // vk: &[VK], pk_u: &G1, orig_sig: &EqcSignature, mu: &FieldElement, psi: &FieldElement, b: bool
+        // vk: &[VK], pk_u: &G1, orig_sig: &EqcSignature, mu: &Scalar, psi: &Scalar, b: bool
         // No need to update or reveal the update_key for a proof (only needed for delegation)
         let (nym_p, cred_p, chi) =
             spseq_uc::change_rep(&self.public.proof.public_key, cred, &mu, &psi, false);
@@ -726,14 +701,14 @@ impl Nym {
             .fold(
                 (Vec::new(), Vec::new()),
                 |(mut witness, mut commitment_vectors), (i, selected_attr)| {
-                    if let Ok(Some(opened)) = CrossSetCommitment::open_subset(
+                    if let Some(opened) = CrossSetCommitment::open_subset(
                         &nym.public.parameters,
                         &all_attributes[i],
                         &cred_p.opening_vector[i],
                         selected_attr,
                     ) {
                         witness.push(opened); //can only have as many witnesses as there are openable selected attributes
-                        commitment_vectors.push(cred_p.commitment_vector[i].clone());
+                        commitment_vectors.push(cred_p.commitment_vector[i]);
                         // needs to be the same length as the witness vector
                     }
                     (witness, commitment_vectors)
@@ -760,10 +735,10 @@ impl AsRef<Nym> for Nym {
 /// [Signature] of a [Credential]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Signature {
-    z: G1,
-    y_g1: G1,
-    y_hat: G2,
-    t: G1,
+    z: G1Projective,
+    y_g1: G1Projective,
+    y_hat: G2Projective,
+    t: G1Projective,
 }
 
 /// Newtype wrapper for a [Credential] which has an orphan [Signature]
@@ -800,8 +775,8 @@ impl From<Offer> for Credential {
 /// - `nym_public`: [`NymPublic`], proof of the pseudonym
 pub struct CredProof {
     sigma: Signature,
-    commitment_vector: Vec<G1>,
-    witness_pi: G1,
+    commitment_vector: Vec<G1Projective>,
+    witness_pi: G1Projective,
     nym_public: NymPublic,
 }
 
@@ -827,7 +802,7 @@ pub fn verify_proof(
         .iter()
         .zip(selected_attrs.iter())
         .filter(|(_, selected_attr)| !selected_attr.is_empty())
-        .map(|(commitment_vector, _)| commitment_vector.clone())
+        .map(|(commitment_vector, _)| *commitment_vector)
         .collect::<Vec<_>>();
 
     // check the proof is valid for each
@@ -836,12 +811,12 @@ pub fn verify_proof(
         &commitment_vectors,
         selected_attrs,
         &proof.witness_pi,
-    )?;
+    );
 
     let check_zkp_verify =
         DamgardTransform::verify(&proof.nym_public.proof, &proof.nym_public.damgard);
 
-    // signature is based on the original commitment vector. Unless we adapt it when the restriction is applied?
+    // signature is based on the original commitment vector. Unless we adapt it when the restriction is applied
     let verify_sig = verify(
         vk,
         &proof.nym_public.proof.public_key,
@@ -858,7 +833,16 @@ mod tests {
 
     use super::*;
     use crate::attributes::{attribute, Attribute};
-    use crate::entry::entry;
+
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        if log::log_enabled!(log::Level::Debug) {
+            log::error!("Debug logging enabled");
+        }
+
+        eprintln!("Running tests message !!");
+    }
 
     struct TestMessages {
         message1_str: Vec<Attribute>,
@@ -889,7 +873,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sign() -> Result<(), CurveError> {
+    fn test_sign() -> Result<(), IssuerError> {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
@@ -981,7 +965,7 @@ mod tests {
 
     // Generate a signature, run changrep function and verify it
     #[test]
-    fn test_changerep() -> Result<(), CurveError> {
+    fn test_changerep() -> Result<(), IssuerError> {
         // Issuer with 5 and 10
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
@@ -1005,8 +989,8 @@ mod tests {
         // run changerep function (without randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
         let updatable = false;
-        let mu = FieldElement::random();
-        let psi = FieldElement::random();
+        let mu = Scalar::random(ThreadRng::default());
+        let psi = Scalar::random(ThreadRng::default());
 
         let (rndmz_pk_u, signature, _chi) =
             spseq_uc::change_rep(&user.pk_u, &signature_original, &mu, &psi, updatable);
@@ -1025,7 +1009,7 @@ mod tests {
     /// This test is similar to test_changerep, but it randomizes the update_key
     /// and verifies the signature using the randomized update_key
     #[test]
-    fn test_changerep_update_key() -> Result<(), CurveError> {
+    fn test_changerep_update_key() -> Result<(), IssuerError> {
         // Issuer with 5 and 10
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
@@ -1049,8 +1033,8 @@ mod tests {
         // run changerep function (with randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
         let updatable = true;
-        let mu = FieldElement::random();
-        let psi = FieldElement::random();
+        let mu = Scalar::random(ThreadRng::default());
+        let psi = Scalar::random(ThreadRng::default());
 
         let (rndmz_pk_u, signature, _chi) =
             spseq_uc::change_rep(&user.pk_u, &signature_original, &mu, &psi, updatable);
@@ -1068,7 +1052,7 @@ mod tests {
     /// Generate a signature, run changrel function one the signature, add one additional commitment using update_key (uk) and verify it
     /// This test is similar to test_changerep_uk, but it adds one additional commitment to the signature
     #[test]
-    fn test_change_rel_from_sign() -> Result<(), UpdateError> {
+    fn test_change_rel_from_sign() -> Result<(), IssuerError> {
         // Generate a signature, run changrel function one the signature, add one additional commitment using update_key (uk) and verify it
 
         // Issuer with 5 and 10
@@ -1130,7 +1114,7 @@ mod tests {
         let message_l = Entry(messages_vectors.message3_str);
         // µ ∈ Zp means that µ is a random element in Zp. Zp is the set of integers modulo p.
         // mu is only not a one() when chage_rep has been immediately called before using the same mu
-        let mu = FieldElement::one();
+        let mu = Scalar::ONE;
 
         let signature_changed = spseq_uc::change_rel(
             &issuer.public.parameters,
@@ -1177,8 +1161,8 @@ mod tests {
         // run changerep function (with randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
         let updatable = true;
-        let mu = FieldElement::random();
-        let psi = FieldElement::random();
+        let mu = Scalar::random(ThreadRng::default());
+        let psi = Scalar::random(ThreadRng::default());
 
         let (rndmz_pk_u, signature_prime, _chi) = spseq_uc::change_rep(
             &nym.public.proof.public_key,
@@ -1238,8 +1222,8 @@ mod tests {
 
         // run changerep function (with randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
-        let mu = FieldElement::one();
-        let psi = FieldElement::random();
+        let mu = Scalar::ONE;
+        let psi = Scalar::random(ThreadRng::default());
         let (rndmz_pk_u, cred_r, _chi) =
             spseq_uc::change_rep(&nym.public.proof.public_key, &cred, &mu, &psi, true);
 
@@ -1251,8 +1235,8 @@ mod tests {
             &cred_r.sigma
         ));
 
-        let mu = FieldElement::random(); // only works the second time if the first is mu = one()
-        let psi = FieldElement::random();
+        let mu = Scalar::random(ThreadRng::default()); // only works the second time if the first is mu = one()
+        let psi = Scalar::random(ThreadRng::default());
         let (rndmz_pk_u, cred_r, _chi) =
             spseq_uc::change_rep(&rndmz_pk_u, &cred_r, &mu, &psi, true);
 
@@ -1281,7 +1265,7 @@ mod tests {
 
     /// run convert protocol (send_convert_sig, receive_convert_sig) to switch a pk_u to new pk_u and verify it
     #[test]
-    fn test_convert() -> Result<(), CurveError> {
+    fn test_convert() -> Result<(), IssuerError> {
         // 1. sign_keygen
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
@@ -1323,7 +1307,7 @@ mod tests {
     }
 
     #[test]
-    fn test_issue_root_cred() -> Result<(), CurveError> {
+    fn test_issue_root_cred() -> Result<(), IssuerError> {
         // 1. sign_keygen
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
@@ -1428,9 +1412,9 @@ mod tests {
 
         // Test proving a credential to verifiers
         let all_attributes = vec![
-            entry(&message1_str),
-            entry(&message2_str),
-            entry(&message3_str),
+            Entry::new(&message1_str),
+            Entry::new(&message2_str),
+            Entry::new(&message3_str),
         ];
 
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
@@ -1479,9 +1463,9 @@ mod tests {
 
         // Test proving a credential to verifiers
         let mut all_attributes = vec![
-            entry(&message1_str),
-            entry(&message2_str),
-            entry(&message3_str),
+            Entry::new(&message1_str),
+            Entry::new(&message2_str),
+            Entry::new(&message3_str),
         ];
 
         let l_message = MaxEntries::new(10);
@@ -1500,8 +1484,8 @@ mod tests {
 
         // We can retrict proving a credential by zerioizing the opening vector of the Entry
         let mut opening_vector_restricted = cred.opening_vector.clone();
-        opening_vector_restricted[0] = FieldElement::zero(); // means the selected attributes cannot include the first commit in the vector
-        opening_vector_restricted[1] = FieldElement::zero(); // selected attributes exclude the second commit in the vector
+        opening_vector_restricted[0] = Scalar::ZERO; // means the selected attributes cannot include the first commit in the vector
+        opening_vector_restricted[1] = Scalar::ZERO; // selected attributes exclude the second commit in the vector
 
         let cred_restricted = Credential {
             opening_vector: opening_vector_restricted, // restrict opening to read only
@@ -1567,6 +1551,8 @@ mod tests {
     #[test]
     // second offer chain
     fn test_second_offer() -> Result<()> {
+        init();
+
         // Delegate a subset of attributes
         let age = attribute("age = 30");
         let name = attribute("name = Alice");
@@ -1583,9 +1569,9 @@ mod tests {
 
         // Test proving a credential to verifiers
         let mut all_attributes = vec![
-            entry(&message1_str),
-            entry(&message2_str),
-            entry(&message3_str),
+            Entry::new(&message1_str),
+            Entry::new(&message2_str),
+            Entry::new(&message3_str),
         ];
 
         let l_message = MaxEntries::new(10);
@@ -1625,7 +1611,7 @@ mod tests {
             bobby_cred.commitment_vector.len() + 1
         );
 
-        // charlie accepts
+        // charlie accepts (FAILING HERE)
         let charlie_cred = charlie_nym.accept(&bobby_offer);
 
         // charlie makes a proof of insurance
@@ -1644,4 +1630,7 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_range() {}
 }

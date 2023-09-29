@@ -4,13 +4,13 @@
 //!
 //! # Attributes API
 //! ```rust
-//! use delanocreds::attributes::{Attribute, attribute};
+//! use delanocreds::Attribute;
 //!
 //! // create a new Attribute
 //! let some_test_attr = "read";
 //! let read_attr = Attribute::new(some_test_attr); // using the new method
 //! let create_attr = Attribute::from(some_test_attr); // using the from method
-//! let update_attr = attribute(some_test_attr); // using the attribute convenience method
+//! let update_attr = Attribute::from(some_test_attr);
 //!
 //! // Try Attribute from cid. Fails if not SHAKE256 hash with length 48
 //! let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
@@ -27,12 +27,17 @@
 //!
 //! // select from the attributes
 //! let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);
-use crate::ec::curve::{CurveError, FieldElement};
+use crate::ec::Scalar;
+use bls12_381_plus::elliptic_curve::bigint::{self, Encoding};
 use cid::multibase;
+use cid::multihash::{Code, MultihashDigest};
+use cid::Cid;
+use std::array::TryFromSliceError;
 use std::{fmt::Display, ops::Deref};
 
 const RAW: u64 = 0x55;
-const SHAKE256_LEN: usize = 48;
+const DIGEST_LEN: usize = 32;
+const SHA2_256: u64 = 0x12;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute(cid::Cid);
@@ -77,8 +82,8 @@ impl Attribute {
     /// ```
     pub fn from_cid(cid: &cid::Cid) -> Option<Self> {
         if cid.codec() == RAW
-            && cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
-            && cid.hash().digest().len() == SHAKE256_LEN
+            && cid.hash().code() == SHA2_256
+            && cid.hash().digest().len() == DIGEST_LEN
         {
             Some(Attribute(*cid))
         } else {
@@ -99,12 +104,8 @@ impl Display for Attribute {
 ///
 /// This is an efficiency step to avoid re-hashing the raw input.
 pub fn attribute(bytes: impl AsRef<[u8]>) -> Attribute {
-    // pre hash the input
-    let mut digest = [0u8; SHAKE256_LEN];
-    let mhash = shake_multihash::shake256_mhash(bytes.as_ref(), &mut digest).expect(
-        "SHAKE256_LEN to be 48, which is less then 64 required by multihash::MultihashGeneric<64>",
-    );
-    Attribute(cid::Cid::new_v1(RAW, mhash))
+    let mhash = Code::Sha2_256.digest(bytes.as_ref());
+    Attribute(Cid::new_v1(RAW, mhash))
 }
 
 // implement TryFrom Cid to Attribute
@@ -113,8 +114,8 @@ impl TryFrom<&cid::Cid> for Attribute {
 
     fn try_from(cid: &cid::Cid) -> Result<Self, Self::Error> {
         if cid.codec() == RAW
-            && cid.hash().code() == shake_multihash::SHAKE_256_HASH_CODE
-            && cid.hash().digest().len() == SHAKE256_LEN
+            && cid.hash().code() == SHA2_256
+            && cid.hash().digest().len() == DIGEST_LEN
         {
             Ok(Attribute(*cid))
         } else {
@@ -166,11 +167,13 @@ impl From<Attribute> for multihash::Multihash {
     }
 }
 
-impl TryFrom<Attribute> for FieldElement {
-    type Error = CurveError;
+impl TryFrom<Attribute> for Scalar {
+    type Error = TryFromSliceError;
 
     fn try_from(attribute: Attribute) -> Result<Self, Self::Error> {
-        FieldElement::from_bytes(attribute.0.hash().digest())
+        let bytes: [u8; 32] = attribute.0.hash().digest().try_into()?;
+        Ok(Scalar::from_raw(bigint::U256::from_be_bytes(bytes).into()))
+        // Scalar::from_bytes(attribute.0.hash().digest())
     }
 }
 

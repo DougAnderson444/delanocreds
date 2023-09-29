@@ -1,33 +1,24 @@
 use super::*;
-use crate::ec::curve::{polynomial_from_coeff, CurveError, FieldElement, G1};
+use crate::ec::curve::polynomial_from_roots;
+use crate::ec::{G1Projective, Scalar};
 use crate::keypair::Signature;
-use std::ops::Deref;
 
 /// Update Key alias
-pub type UpdateKey = Option<Vec<Vec<G1>>>;
-pub type OpeningInformation = FieldElement;
+pub type UpdateKey = Option<Vec<Vec<G1Projective>>>;
 
+/// Error that is thrown when the update key is not available for the credential
 #[derive(Debug)]
 pub enum UpdateError {
-    SerializeError(CurveError),
-    Error,
+    Error(String),
 }
 
-// `std::error::Error`
 impl std::error::Error for UpdateError {}
 
 impl std::fmt::Display for UpdateError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            UpdateError::SerializeError(e) => write!(f, "SerializeError: {}", e),
-            UpdateError::Error => write!(f, "Error"),
+            UpdateError::Error(e) => write!(f, "UpdateError: {}", e),
         }
-    }
-}
-
-impl From<CurveError> for UpdateError {
-    fn from(err: CurveError) -> Self {
-        UpdateError::SerializeError(err)
     }
 }
 
@@ -45,8 +36,8 @@ impl From<CurveError> for UpdateError {
 pub struct Credential {
     pub sigma: Signature,
     pub update_key: UpdateKey, // Called DelegatableKey (dk for k prime) in the paper
-    pub commitment_vector: Vec<G1>,
-    pub opening_vector: Vec<FieldElement>,
+    pub commitment_vector: Vec<G1Projective>,
+    pub opening_vector: Vec<Scalar>,
     pub vk: Vec<VK>,
 }
 
@@ -67,33 +58,30 @@ pub struct Credential {
 /// # Returns
 /// returns an updated signature σ for a new commitment vector and corresponding openings
 pub fn change_rep(
-    pk_u: &G1,
+    pk_u: &G1Projective,
     cred: &Credential,
-    mu: &FieldElement,
-    psi: &FieldElement,
+    mu: &Scalar,
+    psi: &Scalar,
     extendable: bool,
-) -> (RandomizedPubKey, Credential, FieldElement) {
+) -> (G1Projective, Credential, Scalar) {
     // pick randomness, chi
-    let chi = FieldElement::random();
-
+    let chi = Scalar::random(ThreadRng::default());
     // randomize Commitment and opening vectors and user public key with randomness mu, chi
-    let rndmz_commit_vector: Vec<G1> = cred.commitment_vector.iter().map(|c| mu * c).collect();
-
-    let rndmz_opening_vector: Vec<FieldElement> =
-        cred.opening_vector.iter().map(|o| mu * o).collect();
+    let rndmz_commit_vector = cred.commitment_vector.iter().map(|c| mu * c).collect();
+    let rndmz_opening_vector = cred.opening_vector.iter().map(|o| mu * o).collect();
 
     // Randomize public key with two given randomness psi and chi.
-    let rndmz_pk_u = psi * &(pk_u + &chi * &G1::generator());
+    let rndmz_pk_u = psi * (pk_u + G1Projective::mul_by_generator(&chi));
 
     // adapt the signature for the randomized commitment vector and PK_u_prime
     let Signature { z, y_g1, y_hat, t } = &cred.sigma;
 
     if let VK::G1(vk0) = &cred.vk[0] {
         let sigma_prime = Signature {
-            z: mu * &psi.inverse() * z,
+            z: mu * psi.invert().unwrap() * z,
             y_g1: psi * y_g1,
             y_hat: psi * y_hat,
-            t: psi * &(t + &chi * vk0),
+            t: psi * (t + chi * vk0),
         };
 
         // randomize update key with randomness mu, psi
@@ -104,7 +92,7 @@ pub fn change_rep(
                 for k in cred.commitment_vector.len()..usign.len() {
                     usign_prime[k] = usign[k]
                         .iter()
-                        .map(|item| mu * &psi.inverse() * item)
+                        .map(|item| mu * psi.invert().unwrap() * item)
                         .collect();
                 }
                 Some(usign_prime)
@@ -113,7 +101,7 @@ pub fn change_rep(
         };
 
         (
-            RandomizedPubKey(rndmz_pk_u),
+            rndmz_pk_u,
             Credential {
                 sigma: sigma_prime,
                 update_key: fresh_update_key,
@@ -149,7 +137,7 @@ pub fn change_rel(
     parameters: &ParamSetCommitment,
     addl_attrs: &Entry,
     orig_sig: Credential,
-    mu: &FieldElement,
+    mu: &Scalar,
 ) -> Result<Credential, UpdateError> {
     // Validate the input. There must be room between the length of the current commitment vector
     // and the length of the update key to append a new entry.
@@ -160,25 +148,26 @@ pub fn change_rel(
         // can only change attributes if we have the messages and an update_key
         Some(usign) if index_l < usign.len() => {
             let Signature { z, y_g1, y_hat, t } = orig_sig.sigma;
-            let (commitment_l, opening_l) = encode(parameters, addl_attrs)?;
+            let (commitment_l, opening_l) = CrossSetCommitment::commit_set(parameters, addl_attrs);
 
-            let rndmz_commitment_l = mu * &commitment_l;
-            let rndmz_opening_l = mu * &opening_l;
+            let rndmz_commitment_l = mu * commitment_l;
+            let rndmz_opening_l = mu * opening_l;
 
-            let set_l = convert_entry_to_bn(addl_attrs)?;
-            let monypolcoefficient = polynomial_from_coeff(&set_l[..]);
+            let set_l = entry_to_scalar(addl_attrs);
+            let monypolcoefficient = polynomial_from_roots(&set_l[..]);
 
             let list = usign.get(index_l).unwrap();
             let sum_points_uk_i = list
                 .iter()
                 .zip(monypolcoefficient.coefficients().iter())
-                .fold(G1::identity(), |acc, (list_i, monypolcoefficient_i)| {
-                    acc + list_i.scalar_mul_const_time(monypolcoefficient_i)
-                });
+                .fold(
+                    G1Projective::identity(),
+                    |acc, (list_i, monypolcoefficient_i)| acc + list_i * monypolcoefficient_i,
+                );
 
-            let gama_l = sum_points_uk_i.scalar_mul_const_time(&opening_l);
+            let gama_l = sum_points_uk_i * opening_l;
 
-            let z_tilde = z + &gama_l;
+            let z_tilde = z + gama_l;
 
             let sigma_tilde = Signature {
                 z: z_tilde,
@@ -200,34 +189,8 @@ pub fn change_rel(
                 ..orig_sig
             })
         }
-        _ => Err(UpdateError::Error),
+        _ => Err(UpdateError::Error(
+            "No update key, cannot change relations".to_string(),
+        )),
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RandomizedPubKey(pub G1);
-
-/// Impl As_Ref
-impl AsRef<G1> for RandomizedPubKey {
-    fn as_ref(&self) -> &G1 {
-        &self.0
-    }
-}
-
-impl Deref for RandomizedPubKey {
-    type Target = G1;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<RandomizedPubKey> for G1 {
-    fn from(val: RandomizedPubKey) -> Self {
-        val.0
-    }
-}
-
-pub fn rndmz_pk(pk_u: &G1, chi: &FieldElement, psi: &FieldElement, g_1: &G1) -> RandomizedPubKey {
-    RandomizedPubKey(psi * (pk_u + chi * g_1))
 }

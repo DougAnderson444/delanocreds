@@ -16,11 +16,11 @@ Holders can also selectively prove attributes and remove the ability for delegat
 
 Roadmap:
 
--   [x] Passing tests
--   [x] Basic Public API
--   [ ] Stable API
--   [ ] DelanoWallet (Store, Sign, Backup Credentials)
--   [ ] DelanoNet (Data Exchange Network)
+- [x] Passing tests
+- [x] Basic Public API
+- [ ] Stable API
+- [ ] DelanoWallet (Store, Sign, Backup Credentials)
+- [ ] DelanoNet (Data Exchange Network)
 
 ## Delegation
 
@@ -28,8 +28,8 @@ What can be delegated is the ability to add a number of additional attribute Ent
 
 Even if there is no ability for a credential holder to add additional attributes, the following always holds true:
 
--   Credentials holders can always assign their credential to a new public key
--   Attributes are always able to be selectively shown or hidden by a holder
+- Credentials holders can always assign their credential to a new public key
+- Attributes are always able to be selectively shown or hidden by a holder
 
 It is important to note that the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.
 
@@ -38,17 +38,17 @@ able to assign the credential to a new public key for the attributes they _do_ h
 
 ### Root Issuer Summary of Choices/Options:
 
--   **Maxiumum Attribute Entries**: Maximum number of `Entry`s per `Credential`.
--   **Maximum Cardinality**: Maximum number of `Attribute` per `Entry`
+- **Maxiumum Attribute Entries**: Maximum number of `Entry`s per `Credential`.
+- **Maximum Cardinality**: Maximum number of `Attribute` per `Entry`
 
 ### Attributes
 
-`Attribute`s can be created from any bytes, such as `age > 21` or even a `jpg`. These bytes are hashed to the BLS12-381 curve, which means they are also content addressable! Once an `Attribute` is created, it can be referenced by it's [`Content Identifier` (`CID`)](https://cid.ipfs.tech/) instead of the value itself. This means we can also refer to attributes by their `CID`, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
+`Attribute`s can be created from any bytes, such as `age > 21` or even a `.jpg` file. These bytes are hashed usin Sha2-256, which means they are also content addressable! Once an `Attribute` is created, it can be referenced by it's [`Content Identifier` (`CID`)](https://cid.ipfs.tech/) instead of the value itself. This means we can also refer to attributes by their `CID`, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
 
-The algorithm used to hash the attributes is Sha3 SHAKE256, with a length of `48 bytes` which is longer than the typical `32 bytes`. If you try to create an `Attribute` out of a `CID` with a different hash or length, it will fail and result in an error. For this reason, use the `Attribute` methods provided by this library when creating `Attribute`s.
+The algorithm used to hash the attributes is Sha2-256, with a length of `32 bytes` which is the typical `32 byte` digest commonly seen. If you try to create an `Attribute` out of a `CID` with a different hash or length, it will fail and result in an error. For this reason, use the `Attribute` methods provided by this library when creating `Attribute`s.
 
 ```rust
-use delanocreds::attributes::Attribute;
+use delanocreds::Attribute;
 
 let some_test_attr = "read";
 
@@ -59,7 +59,7 @@ let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap(); // Error if w
 assert_eq!(read_attr, attr_from_cid);
 
 // Attribute from_cid
-let attr_from_cid = Attribute::from_cid(&read_attr).unwrap(); // Returns `None` if wrong type of CID
+let attr_from_cid = Attribute::from_cid(&read_attr).expect("a Sha2-256 hash type"); // Returns `None` if wrong type of CID
 assert_eq!(read_attr, attr_from_cid);
 ```
 
@@ -85,9 +85,9 @@ This is done by zeroizing the `Opening Information` for the `Entry` commitment i
 
 The intention is to provide the following bindings:
 
--   [x] Rust API
--   [ ] wasm bindgen (wasm32-unknown-unknown)
--   [ ] wasm interface types (WIT)
+- [x] Rust API
+- [ ] wasm bindgen (wasm32-unknown-unknown)
+- [ ] wasm interface types (WIT)
 
 ## Rust API
 
@@ -95,9 +95,9 @@ Current full API is available by looking at the `src/lib.rs` tests. Below is a s
 
 ```rust
 use anyhow::Result;
-use delanocreds::entry::{Entry, MaxEntries};
-use delanocreds::attributes::Attribute;
-use delanocreds::keypair::{Issuer, UserKey, verify_proof};
+use delanocreds::{Entry, MaxEntries};
+use delanocreds::Attribute;
+use delanocreds::{Issuer, UserKey, verify_proof};
 
 fn main() -> Result<()> {
     // Build a RootIssuer with ./config.rs default sizes
@@ -158,20 +158,20 @@ fn main() -> Result<()> {
 
 This DAC scheme has the following advantages over other anonymous credential schemes:
 
--   **Attributes**: User can selectively disclose and prove some of the attributes in the credential.
--   **Expressiveness**: S (selective disclosure), R (arbitrary computable relations over attributes, meaning you can do more than just selective disclosure)
--   **Rest**: Means whether it is possible to apply a restriction on the delegator’s power during the delegation.
--   **Selective Anonymity**: Strong anonymity guarantees meaning that no one can trace or learn information about the user’s identity or anything beyond what they suppose to show during both the issuing/delegation and showing of credentials.
--   **Credential Size**: O(1), meaning the size of the credential is constant.
--   **Show Size**: O(L), meaning the size of the showing grows linearly in the number of delegations.
--   **Undisclosed attributes**: O(u), meaning the size of the undisclosed attributes grows linearly in the number of delegations.
+- **Attributes**: User can selectively disclose and prove some of the attributes in the credential.
+- **Expressiveness**: S (selective disclosure), R (arbitrary computable relations over attributes, meaning you can do more than just selective disclosure)
+- **Rest**: Means whether it is possible to apply a restriction on the delegator’s power during the delegation.
+- **Selective Anonymity**: Strong anonymity guarantees meaning that no one can trace or learn information about the user’s identity or anything beyond what they suppose to show during both the issuing/delegation and showing of credentials.
+- **Credential Size**: O(1), meaning the size of the credential is constant.
+- **Show Size**: O(L), meaning the size of the showing grows linearly in the number of delegations.
+- **Undisclosed attributes**: O(u), meaning the size of the undisclosed attributes grows linearly in the number of delegations.
 
 Table 1. Comparison of practical DAC schemes
 
 | Scheme   | Attributes | Expressiveness | Rest | Selective Anonymity | Credential Size | Show Size |
 | -------- | ---------- | -------------- | ---- | ------------------- | --------------- | --------- |
 | [BB18]() | ✔️         | S/R            | ≈    | 🌓†                 | O(1)            | O(u)      |
-| [CDD]()  | ✔️         | S/R            | ✖️   | 🌗♣                 | O(nL)           | O(uL)     |
+| [CDD]()  | ✔️         | S/R            | ✖️   | 🌗♣                | O(nL)           | O(uL)     |
 | [CL]()   | ≈          | ✖️             | ✖️   | 🌙\*                | O(nL)           | O(uL)     |
 | [This]() | ✔️         | S              | ✔️   | 🌚‡                 | O(1)            | O(L)      |
 
@@ -225,18 +225,18 @@ After running `cargo run --release`:
 
 Bench Variables:
 
--   l - upper bound for the length of the commitment vector
--   t - upper bound for the cardinality of the committed sets
--   n < t - number of attributes in each attribute set A_i in commitment
--   C_i (same for each commitment level)
--   k - length of attribute set vector
--   k_prime - number of attributes sets which can be delegated
+- l - upper bound for the length of the commitment vector
+- t - upper bound for the cardinality of the committed sets
+- n < t - number of attributes in each attribute set A_i in commitment
+- C_i (same for each commitment level)
+- k - length of attribute set vector
+- k_prime - number of attributes sets which can be delegated
 
 We set the above parameters as t = 25, l = 15, k = 4, k' = 7 and n = 10 to cover many different use-cases
 
 Assumption:
 
--   each time a credential is delegated, an attribute is added
+- each time a credential is delegated, an attribute is added
 
 # Docs
 

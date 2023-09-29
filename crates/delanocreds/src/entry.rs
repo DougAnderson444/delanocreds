@@ -11,9 +11,10 @@
 //! thus opening and atrributes have a relationship with each other. The opening vector is held in the credential,
 //! ths the credential and the attributes have a relationship with each other.
 //!
+use bls12_381_plus::elliptic_curve::bigint::Encoding;
+use bls12_381_plus::Scalar;
+
 use crate::attributes::Attribute;
-use crate::ec::curve::FieldElement;
-use crate::error::CurveError;
 use std::ops::Deref;
 
 /// Entry is a vector of Attributes
@@ -25,10 +26,6 @@ impl Entry {
     pub fn new(attributes: &[Attribute]) -> Self {
         Entry(attributes.to_vec())
     }
-}
-
-pub fn entry(attributes: &[Attribute]) -> Entry {
-    Entry(attributes.to_vec())
 }
 
 impl Deref for Entry {
@@ -54,11 +51,18 @@ impl std::iter::FromIterator<Attribute> for Entry {
     }
 }
 
-/// Iterates through each Attribute in the Entry and converts it to a FieldElement
-pub fn convert_entry_to_bn(input: &Entry) -> Result<Vec<FieldElement>, CurveError> {
+/// Iterates through each Attribute in the Entry and converts it to a Scalar
+pub fn entry_to_scalar(input: &Entry) -> Vec<Scalar> {
     input
         .iter()
-        .map(|attr| FieldElement::from_bytes(attr.digest()))
+        .map(|attr| {
+            Scalar::from_raw(
+                bls12_381_plus::elliptic_curve::bigint::U256::from_be_bytes(
+                    attr.digest().try_into().expect("digest to be 32 bytes"),
+                )
+                .into(),
+            )
+        })
         .collect()
 }
 
@@ -118,5 +122,12 @@ mod test {
         // check whether Entry can be checked for is_empty
         let entry = Entry(vec![]);
         assert!(entry.is_empty());
+    }
+
+    #[test]
+    fn test_convert_entry_to_big() {
+        let entry = Entry::new(&[Attribute::new("test")]);
+        let scalars = entry_to_scalar(&entry);
+        assert_eq!(scalars.len(), 1);
     }
 }
