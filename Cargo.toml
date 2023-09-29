@@ -3,8 +3,11 @@ members = [".", "crates/*"]
 resolver = "2"
 
 [workspace.dependencies]
-delano-crypto = { path = "crates/delano-crypto" }
 delanocreds = { path = "crates/delanocreds" }
+blastkids = "0.1"
+bls12_381_plus = "0.8.5"
+delano-keys = { path = "crates/delano-keys" }
+secrecy = "0.8"
 
 [package]
 edition = "2021"
@@ -14,11 +17,13 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.44"
-delano-crypto = { workspace = true }
 delanocreds = { workspace = true }
+blastkids = { workspace = true }
 
 [dev-dependencies]
-delano-crypto = { workspace = true }
+blastkids = { workspace = true }
+delano-keys = { workspace = true }
+secrecy = { workspace = true }
 
 [profile.release]
 codegen-units = 1        # allow for maximum size reduction optimizations
@@ -31,3 +36,7 @@ overflow-checks = false
 panic = 'abort'          # Abort on panic
 rpath = false
 strip = true             # Automatically strip symbols from the binary.
+
+[patch.crates-io]
+blastkids = { git = "https://github.com/DougAnderson444/blastkids.git", branch = "master" }
+bls12_381_plus = { git = "https://github.com/DougAnderson444/bls12_381_plus", branch = "gt-mul" }
