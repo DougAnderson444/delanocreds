@@ -8,6 +8,7 @@ repository = "https://github.com/DougAnderson444/delanocreds"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
 leptos = { version = "0.4.10", features = ["csr", "nightly"] }
 leptos_meta = { version = "0.4.10", features = ["csr", "nightly"] }
@@ -18,7 +19,8 @@ console_log = { version = "1" }
 getrandom = { version = "0.2", features = ["js"] }
 log = "0.4"
 seed-keeper-core = "0.3"
-blastkids = "0.1"
+delano-keys = { workspace = true }
+delanocreds = { workspace = true }
 
 # [patch.crates-io]
 # seed-keeper-core = { version = "0.3", git = "https://github.com/DougAnderson444/seed-keeper", branch = "master" }
