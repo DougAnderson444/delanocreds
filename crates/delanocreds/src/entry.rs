@@ -11,6 +11,7 @@
 //! thus opening and atrributes have a relationship with each other. The opening vector is held in the credential,
 //! ths the credential and the attributes have a relationship with each other.
 //!
+use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::bigint::Encoding;
 use bls12_381_plus::Scalar;
 
@@ -55,14 +56,7 @@ impl std::iter::FromIterator<Attribute> for Entry {
 pub fn entry_to_scalar(input: &Entry) -> Vec<Scalar> {
     input
         .iter()
-        .map(|attr| {
-            Scalar::from_raw(
-                bls12_381_plus::elliptic_curve::bigint::U256::from_be_bytes(
-                    attr.digest().try_into().expect("digest to be 32 bytes"),
-                )
-                .into(),
-            )
-        })
+        .map(|attr| bigint::U256::from_be_slice(attr.digest()).into())
         .collect()
 }
 
@@ -85,6 +79,12 @@ impl From<u8> for MaxEntries {
 impl From<MaxEntries> for usize {
     fn from(item: MaxEntries) -> Self {
         item.0
+    }
+}
+
+impl From<MaxEntries> for u8 {
+    fn from(item: MaxEntries) -> Self {
+        item.0 as u8
     }
 }
 
