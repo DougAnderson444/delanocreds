@@ -23,3 +23,23 @@ This is a workspace broken down into:
 ```bash
 cargo run
 ```
+
+## Tests
+
+Workspace and integration tests are located in `./tests` and can be run with:
+
+```bash
+cargo test
+```
+
+Wasm test in `./tests/wasm.rs` using `wasm-bindgen-test` and [wasm-bindgen-cli](https://rustwasm.github.io/wasm-bindgen/wasm-bindgen-test/usage.html#appendix-using-wasm-bindgen-test-without-wasm-pack)
+
+```bash
+cargo test --target wasm32-unknown-unknown
+```
+
+## Build Wasm
+
+```bash
+cargo build --workspace --target wasm32-unknown-unknown
+```
