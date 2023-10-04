@@ -2,3 +2,6 @@
 BASE_PATH = "/delanocreds/" # Github pages base path for leptos-site (doesn't seem to work for child config files?)
 RUST_BACKTRACE = "1"
 RUST_LOG="debug"
+
+[target.wasm32-unknown-unknown]
+runner = 'wasm-bindgen-test-runner'
