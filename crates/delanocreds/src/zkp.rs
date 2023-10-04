@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use anyhow::Result;
 use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::bigint::Encoding;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
@@ -9,13 +8,21 @@ use bls12_381_plus::group::prime::PrimeCurveAffine;
 use bls12_381_plus::group::Curve;
 use bls12_381_plus::group::GroupEncoding;
 use bls12_381_plus::G1Affine;
-use bls12_381_plus::G2Affine;
-use bls12_381_plus::{G1Projective, G2Projective, Scalar};
+use bls12_381_plus::{G1Projective, Scalar};
 use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
 
 use crate::keypair::NymProof;
+
+// These functions were in the original implementation but are unused in this Implementation
+// Keeping them here unused under a 'zkp' flag for potential future use as needed
+#[cfg(feature = "zkp")]
+use anyhow::Result;
+#[cfg(feature = "zkp")]
+use bls12_381_plus::G2Affine;
+#[cfg(feature = "zkp")]
+use bls12_381_plus::G2Projective;
 
 /// The Challenge State is a struct that contains the name of the challenge,
 /// the generator, the statement, and the hash of the announcement
@@ -52,9 +59,13 @@ pub type Challenge = Scalar;
 /// Schnorr proof (non-interactive using Fiat Shamir heuristic) of the statement
 /// ZK(x, m_1....m_n; h = g^x and h_1^m_1...h_n^m_n) and generalized version
 pub mod zkp_schnorr_fiat_shamir {
+
+    #[cfg(feature = "zkp")]
     use super::*;
 
     /// The code below is from the original implementation of the Schnorr proof (non-interactive using FS heuristic) of the statement ZK(x ; h = g^x)
+    /// Enbles only with feature zkp
+    #[cfg(feature = "zkp")]
     pub fn challenge<T: PrimeCurveAffine + GroupEncoding<Repr = impl AsRef<[u8]>>>(
         state: &ChallengeState<T>,
     ) -> Scalar {
@@ -77,6 +88,7 @@ pub mod zkp_schnorr_fiat_shamir {
     }
 
     /// Schnorr proof (non-interactive using FS heuristic)
+    #[cfg(feature = "zkp")]
     pub fn non_interact_prove(
         stms: &Vec<G2Affine>,
         secret_wit: &Vec<Secret<Scalar>>,
@@ -119,6 +131,7 @@ pub mod zkp_schnorr_fiat_shamir {
     }
 
     /// Verify the statement ZK(x ; h = g^x)
+    #[cfg(feature = "zkp")]
     pub fn non_interact_verify(stms: &[G2Affine], proof_list: &(Vec<Scalar>, Challenge)) -> bool {
         let (r, c) = proof_list;
 
@@ -162,9 +175,7 @@ pub trait Schnorr {
 
         let digest = Sha256::digest(&state_bytes);
 
-        let big_digest = bigint::U256::from_be_bytes(digest.into());
-
-        Scalar::from_raw(big_digest.into())
+        bigint::U256::from_be_slice(&digest).into()
     }
 
     /// Create a Schnorr response to our own challenge
@@ -188,6 +199,7 @@ impl Schnorr for ZKPSchnorr {
     }
 }
 
+#[cfg(feature = "zkp")]
 impl ZKPSchnorr {
     /// Verify the statement ZK(x ; h = g^x)
     pub fn verify(
@@ -315,6 +327,7 @@ mod tests {
     use bls12_381_plus::group::Curve;
 
     #[test]
+    #[cfg(feature = "zkp")]
     fn test_non_interact_prove() {
         // 1. Setup
         // 2. Prove
@@ -349,6 +362,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "zkp")]
     fn test_interact_prove() {
         // Create a random statement for testing
         let secret_x = Secret::new(Scalar::random(ThreadRng::default()));
