@@ -2,7 +2,6 @@ use delanocreds::{Issuer, MaxCardinality};
 use leptos::*;
 // use leptos_router::use_navigate;
 
-use leptos_router::Form;
 use seed_keeper_core::{derive_key, seed::Seed, ExposeSecret};
 
 use crate::app::LabelAndPin;
@@ -25,9 +24,7 @@ pub(crate) fn CreateKey(cx: Scope, label_and_pin: LabelAndPin) -> impl IntoView 
         Ok(key) => key,
         Err(e) => {
             log::error!("Failed to generate key: {:?}", e);
-            return view! {cx,
-                "Failed to generate key"
-            };
+            return view! { cx, "Failed to generate key" };
         }
     };
 
@@ -62,16 +59,12 @@ pub(crate) fn CreateKey(cx: Scope, label_and_pin: LabelAndPin) -> impl IntoView 
     // now use these secret keys in Issuer
     let issuer = Issuer::new_with_secret(expanded, MaxCardinality::default());
 
-    view! {cx,
-        "Ready to Issue Credentials!"
-    }
+    view! { cx, "Ready to Issue Credentials!" }
 }
 
 /// Use Label and Pin to Create an encrypted key, and save it to the #hash part of the URL
 #[component]
 pub(crate) fn DecryptKey(cx: Scope, label_and_pin: LabelAndPin) -> impl IntoView {
     // get random 32 bytes
-    view! {cx,
-        "Let's decrypt your key for you."
-    }
+    view! { cx, "Let's decrypt your key for you." }
 }

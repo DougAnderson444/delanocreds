@@ -32,8 +32,13 @@ pub fn App(cx: Scope) -> impl IntoView {
 
     view! { cx,
         <Router>
+            <nav>
+                <div class="my-0 mx-auto max-w-3xl text-center">
+                    <h2 class="p-6 text-4xl font-bold">"Delanocreds."</h2>
+                </div>
+            </nav>
             <Routes>
-                <Route path="/delanocreds/" view=Home />
+                <Route path="/delanocreds/" view=Home/>
             </Routes>
         </Router>
     }
