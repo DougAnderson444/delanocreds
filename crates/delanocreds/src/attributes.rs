@@ -1,5 +1,5 @@
 //! A crate for creating:
-//! - Individual [Attribute], a 48 byte [Shake256 Multihash](https://github.com/DougAnderson444/shake-multihash) [CID](https://cid.ipfs.tech/) generated from bytes (likely from a string)
+//! - Individual [Attribute], a 32 byte Sha2-256 [CID](https://cid.ipfs.tech/) generated from bytes (likely from a string)
 //! - [crate::entry::Entry] is a vector of [Attribute]s up to [crate::keypair::MaxCardinality]
 //!
 //! # Attributes API
@@ -12,7 +12,7 @@
 //! let create_attr = Attribute::from(some_test_attr); // using the from method
 //! let update_attr = Attribute::from(some_test_attr);
 //!
-//! // Try Attribute from cid. Fails if not SHAKE256 hash with length 48
+//! // Try Attribute from cid. Fails if not SHA2-256 hash with length 32
 //! let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
 //! assert_eq!(read_attr, attr_from_cid);
 //!
@@ -28,11 +28,10 @@
 //! // select from the attributes
 //! let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);
 use crate::ec::Scalar;
-use bls12_381_plus::elliptic_curve::bigint::{self, Encoding};
+use bls12_381_plus::elliptic_curve::bigint;
 use cid::multibase;
 use cid::multihash::{Code, MultihashDigest};
 use cid::Cid;
-use std::array::TryFromSliceError;
 use std::{fmt::Display, ops::Deref};
 
 const RAW: u64 = 0x55;
@@ -163,17 +162,15 @@ impl From<Attribute> for String {
 
 impl From<Attribute> for multihash::Multihash {
     fn from(attribute: Attribute) -> Self {
-        multihash::Multihash::from_bytes(attribute.0.hash().digest()).unwrap()
+        multihash::Multihash::from_bytes(attribute.0.hash().digest())
+            .expect("correct length of digest for this multihash")
     }
 }
 
-impl TryFrom<Attribute> for Scalar {
-    type Error = TryFromSliceError;
-
-    fn try_from(attribute: Attribute) -> Result<Self, Self::Error> {
-        let bytes: [u8; 32] = attribute.0.hash().digest().try_into()?;
-        Ok(Scalar::from_raw(bigint::U256::from_be_bytes(bytes).into()))
-        // Scalar::from_bytes(attribute.0.hash().digest())
+impl From<Attribute> for Scalar {
+    fn from(attribute: Attribute) -> Self {
+        let bytes = attribute.0.hash().digest();
+        bigint::U256::from_be_slice(bytes).into()
     }
 }
 
