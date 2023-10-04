@@ -40,20 +40,12 @@ impl ParamSetCommitment {
         // Hence use [..=] instead of [..] to ensure the last element is included.
         let pp_commit_g1 = (0..=*t)
             .map(|i| {
-                G1Projective::mul_by_generator(
-                    &base
-                        .expose_secret()
-                        .pow(&bigint::U256::from_u64(i as u64).into()),
-                )
+                G1Projective::mul_by_generator(&base.expose_secret().pow(&[i as u64, 0, 0, 0]))
             })
             .collect::<Vec<G1Projective>>();
         let pp_commit_g2 = (0..=*t)
             .map(|i| {
-                G2Projective::mul_by_generator(
-                    &base
-                        .expose_secret()
-                        .pow(&bigint::U256::from_u64(i as u64).into()),
-                )
+                G2Projective::mul_by_generator(&base.expose_secret().pow(&[i as u64, 0, 0, 0]))
             })
             .collect::<Vec<G2Projective>>();
 
@@ -400,11 +392,8 @@ impl CrossSetCommitment {
 
 fn hash_to_scalar(commit: &G1Projective) -> Scalar {
     // Note the choice of compressed vs uncompressed bytes is arbitrary.
-    let chash: [u8; 32] = Sha256::digest(commit.to_affine().to_uncompressed().as_ref())
-        .try_into()
-        .expect("32 bytes");
-    let hash_i = bigint::U256::from_be_bytes(chash);
-    Scalar::from_raw(hash_i.into())
+    let chash = Sha256::digest(commit.to_affine().to_uncompressed().as_ref());
+    bigint::U256::from_be_slice(&chash).into()
 }
 
 pub fn generate_pre_commit(
@@ -435,9 +424,81 @@ pub fn not_intersection(list_s: &[Scalar], list_t: Vec<Scalar>) -> Vec<Scalar> {
         .collect::<Vec<Scalar>>()
 }
 
+#[cfg(target_arch = "wasm32")]
+/// This function gets imported and called by ./tests/wasm.rs to run the same tests this module
+/// runs, only in wasm32.
+pub fn test_aggregate_verify_cross() {
+    use super::*;
+    // check aggregation of witnesses using cross set commitment scheme
+
+    // Set 1
+    let age = "age = 30";
+    let name = "name = Alice";
+    let drivers = "driver license = 12";
+
+    // Set 2
+    let gender = "Gender = male";
+    let company = "company = ACME Inc.";
+    let alt_drivers = "driver license type = B";
+
+    let set_str: Entry = Entry(vec![
+        Attribute::new(age),
+        Attribute::new(name),
+        Attribute::new(drivers),
+    ]);
+
+    let set_str2: Entry = Entry(vec![
+        Attribute::new(gender),
+        Attribute::new(company),
+        Attribute::new(alt_drivers),
+    ]);
+
+    // create two set commitments for two sets set_str and set_str2
+    let max_cardinal = 5;
+
+    // CrossSetCommitment should be;
+    // Ways to create a CrossSetCommitment:
+    // new(max_cardinal) -> CrossSetCommitment
+    // from(PublicParameters) -> CrossSetCommitmen
+
+    let csc = CrossSetCommitment::new(MaxCardinality(max_cardinal));
+    let (commitment_1, opening_info_1) = CrossSetCommitment::commit_set(&csc.param_sc, &set_str);
+    let (commitment_2, opening_info_2) = CrossSetCommitment::commit_set(&csc.param_sc, &set_str2);
+
+    let commit_vector = &vec![commitment_1, commitment_2];
+
+    // create a witness for each subset -> W1 and W2
+    let subset_str_1 = Entry(vec![
+        Attribute::new(age),
+        Attribute::new(name),
+        Attribute::new(drivers),
+    ]);
+
+    let subset_str_2 = Entry(vec![Attribute::new(gender), Attribute::new(company)]);
+
+    let witness_1 =
+        CrossSetCommitment::open_subset(&csc.param_sc, &set_str, &opening_info_1, &subset_str_1)
+            .expect("Some Witness");
+
+    let witness_2 =
+        CrossSetCommitment::open_subset(&csc.param_sc, &set_str2, &opening_info_2, &subset_str_2)
+            .expect("Some Witness");
+
+    // aggregate all witnesses for a subset is correct -> proof
+    let proof = CrossSetCommitment::aggregate_cross(&vec![witness_1, witness_2], commit_vector);
+
+    // verification aggregated witnesses
+    assert!(CrossSetCommitment::verify_cross(
+        &csc.param_sc,
+        commit_vector,
+        &[subset_str_1, subset_str_2],
+        &proof
+    ));
+}
+
 #[cfg(test)]
 mod test {
-    use crate::attributes::attribute;
+    use crate::attributes::Attribute;
 
     use super::*;
 
@@ -450,7 +511,11 @@ mod test {
         let name = "name = Alice";
         let drivers = "driver license = 12";
 
-        let set_str: Entry = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
+        let set_str: Entry = Entry(vec![
+            Attribute::new(age),
+            Attribute::new(name),
+            Attribute::new(drivers),
+        ]);
 
         let sc = SetCommitment::new(MaxCardinality(max_cardinal));
         let (commitment, witness) = SetCommitment::commit_set(&sc.param_sc, &set_str);
@@ -472,9 +537,13 @@ mod test {
         let name = "name = Alice";
         let drivers = "driver license = 12";
 
-        let set_str = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
+        let set_str = Entry(vec![
+            Attribute::new(age),
+            Attribute::new(name),
+            Attribute::new(drivers),
+        ]);
 
-        let subset_str_1 = Entry(vec![attribute(age), attribute(name)]);
+        let subset_str_1 = Entry(vec![Attribute::new(age), Attribute::new(name)]);
         let sc = SetCommitment::new(MaxCardinality(max_cardinal));
         let (commitment, opening_info) = SetCommitment::commit_set(&sc.param_sc, &set_str);
         let witness_subset =
@@ -507,12 +576,16 @@ mod test {
         let company = "company = ACME Inc.";
         let alt_drivers = "driver license type = B";
 
-        let set_str: Entry = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
+        let set_str: Entry = Entry(vec![
+            Attribute::new(age),
+            Attribute::new(name),
+            Attribute::new(drivers),
+        ]);
 
         let set_str2: Entry = Entry(vec![
-            attribute(gender),
-            attribute(company),
-            attribute(alt_drivers),
+            Attribute::new(gender),
+            Attribute::new(company),
+            Attribute::new(alt_drivers),
         ]);
 
         // create two set commitments for two sets set_str and set_str2
@@ -532,9 +605,13 @@ mod test {
         let commit_vector = &vec![commitment_1, commitment_2];
 
         // create a witness for each subset -> W1 and W2
-        let subset_str_1 = Entry(vec![attribute(age), attribute(name), attribute(drivers)]);
+        let subset_str_1 = Entry(vec![
+            Attribute::new(age),
+            Attribute::new(name),
+            Attribute::new(drivers),
+        ]);
 
-        let subset_str_2 = Entry(vec![attribute(gender), attribute(company)]);
+        let subset_str_2 = Entry(vec![Attribute::new(gender), Attribute::new(company)]);
 
         let witness_1 = CrossSetCommitment::open_subset(
             &csc.param_sc,
@@ -564,6 +641,18 @@ mod test {
         ));
     }
 
+    #[test]
+    fn test_little_endien_power() {
+        let base: Scalar = Scalar::ONE + Scalar::ONE;
+
+        // Little endian means the least signifcant byte is written first
+        let result = &base.pow(&[2u64, 0, 0, 0]);
+
+        let expected = Scalar::from(4u64);
+
+        assert_eq!(result, &expected);
+    }
+
     // #[test]
     // fn test_generator() {
     //     let g1 = G1Projective::GENERATOR;
@@ -571,22 +660,9 @@ mod test {
     //     println!("G1 generator: {:?}", g1);
     //     println!("G2 generator: {:?}", g2);
     //
-    //     // rand FE
+    //     // rand Scalar
     //     let fe = Scalar::random(ThreadRng::default());
-    //     println!("Random FE: {:?}", fe);
+    //     println!("Random Scalar: {:?}", fe);
     //
-    //     // 0000000000000000000000000000000059E14D2F2D6C0921BA968FF4243145E2760FBB35D3B857329BEE29013E41DEAE
-    //     // 12345678901234567890123456789012
-    //     //                                 1234567890123456789012345678901234567890123456789012345678901234
-    //     // Number of non-zero bytes: 32
-    //
-    //     // 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
-    //     //   12345678901234567890123456789012
-    //     //                                   1234567890123456789012345678901234567890123456789012345678901234
-    //     //
-    //     // The line above has 64 characters, or 32 bytes.
-    //
-    //     // 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
-    //     // The line above has 100 characters
     // }
 }
