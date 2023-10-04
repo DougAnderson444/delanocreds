@@ -16,8 +16,6 @@ use crate::app::LabelAndPin;
 
 #[component]
 pub(crate) fn Home(cx: Scope) -> impl IntoView {
-    let active_view = create_rw_signal::<View>(cx, View::default());
-
     let (label_and_pin, set_label_n_pin) = create_signal(cx, LabelAndPin::default());
 
     // share the ability to set and read pin info to all children
@@ -33,13 +31,11 @@ pub(crate) fn Home(cx: Scope) -> impl IntoView {
                     LabelAndPin { label, .. } if label.is_empty() => {
                         // No label, so show create screen
                         log::info!("Hash: {:?} but no label yet", h);
-                        // active_view.update(|v| *v = view! {cx, <Splash /> })
                         view! { cx, <Splash/> }
                     }
                     lap => {
                         // There is a label, so use it to create the key
                         log::info!("Label {:?} and Hash: {:?}", lap.label, h);
-                        //active_view.update(|v| *v = view! {cx, <CreateKey label_and_pin=lap /> })
                         view! { cx, <CreateKey label_and_pin=lap/> }
                     }
                 }
@@ -49,13 +45,11 @@ pub(crate) fn Home(cx: Scope) -> impl IntoView {
                     LabelAndPin { label, .. } if label.is_empty() => {
                         // No label, so show create screen
                         log::info!("No Hash, no label bro");
-                        //active_view.update(|v| *v = view! {cx, <Splash /> })
                         view! { cx, <Splash/> }
                     }
                     lap => {
                         // There is a label, so use it to create the key
                         log::info!("No hash, new Label {:?}", lap.label);
-                        // active_view.update(|v| *v = view! {cx, <CreateKey label_and_pin=lap /> })
                         view! { cx, <CreateKey label_and_pin=lap/> }
                     }
                 }
@@ -101,23 +95,33 @@ pub fn Splash(cx: Scope) -> impl IntoView {
 
 #[component]
 pub fn PinPad(cx: Scope) -> impl IntoView {
+    // Indicate whether we are bus generating the key (or not)
+    let generating = create_rw_signal(cx, false);
+
     let (pin, set_pin) = create_signal(cx, "".to_string());
     let (label, set_label) = create_signal(cx, "".to_string());
 
     let pin_too_short = { move || pin.get().len() < 4 };
     let label_too_short = { move || label.get().len() < 8 };
-    let button_label = move || match (pin_too_short(), label_too_short()) {
-        (true, true) => "Label and Pin too short",
-        (true, false) => "Pin too short",
-        (false, true) => "Label too short",
-        (false, false) => "Enter",
+    let button_label = move || match (pin_too_short(), label_too_short(), generating.get()) {
+        (true, true, false) => "Label and Pin too short",
+        (true, false, false) => "Pin too short",
+        (false, true, false) => "Label too short",
+        (false, false, false) => "Enter",
+        (_, _, true) => "Generating key...",
     };
 
     let setter =
         use_context::<WriteSignal<LabelAndPin>>(cx).expect("to have found the setter provided");
 
     let on_submit = move |ev: SubmitEvent| {
+        // set generating to true
+        generating.set(true);
+
         ev.prevent_default();
+
+        log::debug!("generating: {:?}", generating.get());
+
         setter.update(|value| {
             *value = LabelAndPin {
                 label: label.get().to_owned(),
@@ -219,8 +223,9 @@ pub fn PinPad(cx: Scope) -> impl IntoView {
                     <input
                         type="submit"
                         value={move || { button_label() }}
-                        disabled=move || pin_too_short() || label_too_short()
-                        class="w-full px-4 py-4 my-1 rounded shadow-lg disabled:bg-red-400 bg-green-500 disabled:text-slate-100 text-white"
+                        disabled=move || pin_too_short() || label_too_short() || generating()
+                        class="w-full px-4 py-4 my-1 rounded shadow-lg disabled:bg-red-400 bg-green-500 disabled:text-slate-100 text-white cursor-pointer"
+                        class=("bg-red-400", move || generating() == true)
                     />
                 </div>
             </form>
