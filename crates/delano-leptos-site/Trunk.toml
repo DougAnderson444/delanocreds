@@ -13,3 +13,8 @@ watch = ["./src/"]
 open = true
 # Disable auto-reload of the web app.
 no_autoreload = false
+
+[[hooks]]
+stage = "pre_build"
+command = "sh"
+command_arguments = ["-c", "npx tailwindcss -i input.css -o style/output.css"]
