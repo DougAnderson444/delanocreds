@@ -19,6 +19,10 @@ pub use keypair::{
     NymPublic, UserKey, VK,
 };
 
+// wasm32 tests
+#[cfg(target_arch = "wasm32")]
+pub use set_commits::test_aggregate_verify_cross;
+
 // Test the README.md code snippets
 #[cfg(doctest)]
 pub struct ReadmeDoctests;
