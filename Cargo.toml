@@ -41,6 +41,4 @@ rpath = false
 strip = true             # Automatically strip symbols from the binary.
 
 [patch.crates-io]
-blastkids = { path = "../blastkids" }
 bls12_381_plus = { git = "https://github.com/DougAnderson444/bls12_381_plus", branch = "wasm" }
-# bls12_381_plus = { path = "../../clones/bls12_381_plus", version = "0.8.6" }

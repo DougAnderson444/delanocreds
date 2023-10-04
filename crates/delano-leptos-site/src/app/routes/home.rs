@@ -220,7 +220,7 @@ pub fn PinPad(cx: Scope) -> impl IntoView {
                         type="submit"
                         value={move || { button_label() }}
                         disabled=move || pin_too_short() || label_too_short()
-                        class="w-full  px-4 py-2 my-1 rounded shadow-lg disabled:bg-slate-50 bg-blue-500 disabled:text-slate-700 text-white"
+                        class="w-full px-4 py-4 my-1 rounded shadow-lg disabled:bg-red-400 bg-green-500 disabled:text-slate-100 text-white"
                     />
                 </div>
             </form>
