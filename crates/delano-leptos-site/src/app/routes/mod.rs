@@ -1,2 +1,2 @@
-pub mod authd;
+pub mod account;
 pub mod home;

@@ -9,11 +9,10 @@ mod routes;
 /// Where Global State is structured
 mod state;
 
+use constants::{ACCOUNT, HOME};
 use leptos::*;
 use leptos_router::*;
-
-use constants::{ACCOUNT, HOME};
-use routes::authd::Authd;
+use routes::account::Account;
 use routes::home::Home;
 use seed_keeper_core::Zeroizing;
 use state::*;
@@ -32,9 +31,12 @@ pub(crate) struct LabelAndPin {
 pub fn App() -> impl IntoView {
     // Make the state available to all children
     let (_, set_label_n_pin) = create_signal(LabelAndPin::default());
+    let (manager, set_manager) = create_signal(ManagerState::default());
 
     // share the ability to set and read pin info to all children
     provide_context(set_label_n_pin);
+    provide_context(manager);
+    provide_context(set_manager);
 
     view! {
         <Router>
@@ -46,7 +48,7 @@ pub fn App() -> impl IntoView {
             <div class="p-2 my-0 mx-auto max-w-3xl">
                 <Routes>
                     <Route path=HOME view=Home/>
-                    <Route path=ACCOUNT view=Authd />
+                    <Route path=ACCOUNT view=Account/>
                     <Route path="/*any" view=|| view! { <h1>"Not Found"</h1> }/>
                 </Routes>
             </div>
