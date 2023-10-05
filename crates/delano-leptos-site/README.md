@@ -19,3 +19,9 @@ trunk serve --open
 ```
 
 The browser will automatically open [http://127.0.0.1:8080/](http://127.0.0.1:8080/)
+
+To serve in `release` mode, with all the speed and size optimizations, use:
+
+```shell
+trunk serve --release --open
+```
