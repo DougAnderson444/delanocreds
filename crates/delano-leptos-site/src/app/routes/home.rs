@@ -1,10 +1,11 @@
 use leptos::ev::SubmitEvent;
 use leptos::{leptos_dom::helpers::location_hash, *};
 use leptos_router::unescape;
-use leptos_router::*;
+use seed_keeper_core::seed::Seed;
+use seed_keeper_core::{derive_key, ExposeSecret};
 
-use crate::app::list::List;
-use crate::app::screens::CreateKey;
+use crate::app::components::list::List;
+// use crate::app::screens::CreateKey;
 use crate::app::LabelAndPin;
 
 // /// The Label and Encrypted key params in the hash value
@@ -15,11 +16,11 @@ use crate::app::LabelAndPin;
 // }
 
 #[component]
-pub(crate) fn Home(cx: Scope) -> impl IntoView {
-    let (label_and_pin, set_label_n_pin) = create_signal(cx, LabelAndPin::default());
+pub(crate) fn Home() -> impl IntoView {
+    let (label_and_pin, set_label_n_pin) = create_signal(LabelAndPin::default());
 
     // share the ability to set and read pin info to all children
-    provide_context(cx, set_label_n_pin);
+    provide_context(set_label_n_pin);
 
     let hash = location_hash().as_ref().map(|hash| unescape(hash));
 
@@ -31,12 +32,13 @@ pub(crate) fn Home(cx: Scope) -> impl IntoView {
                     LabelAndPin { label, .. } if label.is_empty() => {
                         // No label, so show create screen
                         log::info!("Hash: {:?} but no label yet", h);
-                        view! { cx, <Splash/> }
+                        view! { <Splash/> }.into_view()
                     }
                     lap => {
                         // There is a label, so use it to create the key
                         log::info!("Label {:?} and Hash: {:?}", lap.label, h);
-                        view! { cx, <CreateKey label_and_pin=lap/> }
+                        // view! { <CreateKey label_and_pin=lap/> }
+                        authn(label_and_pin())
                     }
                 }
             }
@@ -45,12 +47,12 @@ pub(crate) fn Home(cx: Scope) -> impl IntoView {
                     LabelAndPin { label, .. } if label.is_empty() => {
                         // No label, so show create screen
                         log::info!("No Hash, no label bro");
-                        view! { cx, <Splash/> }
+                        view! { <Splash/> }.into_view()
                     }
                     lap => {
                         // There is a label, so use it to create the key
                         log::info!("No hash, new Label {:?}", lap.label);
-                        view! { cx, <CreateKey label_and_pin=lap/> }
+                        authn(label_and_pin())
                     }
                 }
             }
@@ -61,10 +63,8 @@ pub(crate) fn Home(cx: Scope) -> impl IntoView {
 
 /// Wraps each child in an `<li>` and embeds them in a `<ul>`.
 #[component]
-pub fn Splash(cx: Scope) -> impl IntoView {
-    let (count, set_count) = create_signal(cx, 0);
-
-    view! { cx,
+pub fn Splash() -> impl IntoView {
+    view! {
         <div class="my-0 mx-auto max-w-3xl text-center">
             <List>
                 <p>
@@ -94,12 +94,12 @@ pub fn Splash(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn PinPad(cx: Scope) -> impl IntoView {
+pub fn PinPad() -> impl IntoView {
     // Indicate whether we are bus generating the key (or not)
-    let generating = create_rw_signal(cx, false);
+    let generating = create_rw_signal(false);
 
-    let (pin, set_pin) = create_signal(cx, "".to_string());
-    let (label, set_label) = create_signal(cx, "".to_string());
+    let (pin, set_pin) = create_signal("".to_string());
+    let (label, set_label) = create_signal("".to_string());
 
     let pin_too_short = { move || pin.get().len() < 4 };
     let label_too_short = { move || label.get().len() < 8 };
@@ -112,7 +112,7 @@ pub fn PinPad(cx: Scope) -> impl IntoView {
     };
 
     let setter =
-        use_context::<WriteSignal<LabelAndPin>>(cx).expect("to have found the setter provided");
+        use_context::<WriteSignal<LabelAndPin>>().expect("to have found the setter provided");
 
     let on_submit = move |ev: SubmitEvent| {
         // set generating to true
@@ -130,7 +130,7 @@ pub fn PinPad(cx: Scope) -> impl IntoView {
         });
     };
 
-    view! { cx,
+    view! {
         <div class="flex flex-col items-center justify-center">
             <div class="text-2xl font-sans tracking-tight items-center justify-center">"Label"</div>
             <input
@@ -222,7 +222,7 @@ pub fn PinPad(cx: Scope) -> impl IntoView {
                 <div class="flex flex-row justify-between w-full space-x-2">
                     <input
                         type="submit"
-                        value={move || { button_label() }}
+                        value=move || { button_label() }
                         disabled=move || pin_too_short() || label_too_short() || generating()
                         class="w-full px-4 py-4 my-1 rounded shadow-lg disabled:bg-red-400 bg-green-500 disabled:text-slate-100 text-white cursor-pointer"
                         class=("bg-red-400", move || generating() == true)
@@ -235,8 +235,8 @@ pub fn PinPad(cx: Scope) -> impl IntoView {
 
 /// Pin pad button component
 #[component]
-pub fn PinButton(cx: Scope, label: String) -> impl IntoView {
-    view! { cx,
+pub fn PinButton(label: String) -> impl IntoView {
+    view! {
         <button
             type="number"
             class="px-4 py-2 my-1 rounded border w-full mb-2 bg-slate-100 border-slate-300"
@@ -244,4 +244,42 @@ pub fn PinButton(cx: Scope, label: String) -> impl IntoView {
             {label}
         </button>
     }
+}
+
+fn authn(label_and_pin: LabelAndPin) -> View {
+    use crate::app::constants::ACCOUNT;
+    use base64::{engine::general_purpose, Engine as _};
+
+    // get random 32 bytes using getrandom
+    let mut seed = Seed::new([0u8; 32].into());
+    if let Err(e) = getrandom::getrandom(&mut seed) {
+        log::error!("getrandom failed: {:?}", e);
+    }
+
+    log::debug!("Generating key...");
+
+    let key = derive_key(&label_and_pin.pin, &label_and_pin.label).expect("Key to derive fine");
+
+    // log::debug!("Generated key: {:?}", key);
+    let encrypted = seed_keeper_core::wrap::encrypt(
+        (&key.expose_secret()[..])
+            .try_into()
+            .expect("seed to be 32 bytes"),
+        &seed.as_ref(),
+    );
+
+    log::debug!("Encrypted key: {:?}", encrypted);
+
+    // and we store encrypted key in the URL fragment for easy bookmarking
+    let hash = format!(
+        "#label={}&encrypted_key={}",
+        label_and_pin.label,
+        general_purpose::URL_SAFE_NO_PAD.encode(encrypted)
+    );
+
+    let navigate = leptos_router::use_navigate();
+    request_animation_frame(move || {
+        _ = navigate(&format!("{ACCOUNT}/{hash}"), Default::default());
+    });
+    view! { <pre>"Navigating to Account page..."</pre> }.into_view()
 }
