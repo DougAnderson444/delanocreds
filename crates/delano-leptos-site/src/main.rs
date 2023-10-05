@@ -5,10 +5,10 @@ use cfg_if::cfg_if;
 use leptos::*;
 
 cfg_if! {
-    if #[cfg(feature = "console_log")] {
+    if #[cfg(feature = "wasm-logger")] {
         fn init_log() {
-            use log::Level;
-            console_log::init_with_level(log::Level::Debug).expect("log should initilize fine");
+            console_error_panic_hook::set_once();
+            wasm_logger::init(wasm_logger::Config::default());
         }
     } else {
         fn init_log() {}
