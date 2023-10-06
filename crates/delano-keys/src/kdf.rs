@@ -35,6 +35,28 @@ pub struct Manager {
     master_sk: Secret<Scalar>,
 }
 
+impl Clone for Manager {
+    fn clone(&self) -> Self {
+        Self {
+            master_sk: (*self.master_sk.expose_secret()).into(),
+        }
+    }
+}
+
+impl PartialEq for Manager {
+    fn eq(&self, other: &Self) -> bool {
+        self.master_sk.expose_secret() == other.master_sk.expose_secret()
+    }
+}
+
+impl Default for Manager {
+    fn default() -> Self {
+        Self {
+            master_sk: Secret::new(Scalar::ZERO),
+        }
+    }
+}
+
 impl Manager {
     /// Create a new Manager from a master secret key
     /// and derive the master public key from it.
