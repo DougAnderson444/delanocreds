@@ -6,6 +6,12 @@ use std::fmt::Display;
 
 use seed_keeper_core::Zeroizing;
 
+/// We are going to persist the Delancocreds Manager in a persistent Global State.
+/// If the user has unlocked thier account, we will have used their seed to create a Manager.
+/// So we can check for the existence of the Manager to see if the user has unlocked their account.
+/// For this reason, we will use a `Option<Manager>` to represent the state of the user's account.
+pub type ManagerState = Option<delano_keys::kdf::Manager>;
+
 /// The Label and Encrypted key params in the hash value
 ///
 /// `label` - A 6+ character string, usually a username, email, or phrase to identify the key
