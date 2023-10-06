@@ -34,10 +34,6 @@ pub(crate) fn Account() -> impl IntoView {
         navigate(&dest, Default::default());
         view! { "Navigating home..."}.into_view()
     } else {
-        // Lastly, navigate to the account page
-        request_animation_frame(move || {
-            navigate(&format!("{ACCOUNT}#{hash}"), Default::default());
-        });
         // if some, continue
         let m = maybe_manager.get().unwrap();
 
