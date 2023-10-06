@@ -1,12 +1,11 @@
+use crate::app::components::list::List;
+use crate::app::state::ManagerState;
+use crate::app::LabelAndPin;
 use leptos::ev::SubmitEvent;
 use leptos::{leptos_dom::helpers::location_hash, *};
 use leptos_router::unescape;
 use seed_keeper_core::seed::Seed;
 use seed_keeper_core::{derive_key, ExposeSecret};
-
-use crate::app::components::list::List;
-// use crate::app::screens::CreateKey;
-use crate::app::LabelAndPin;
 
 // /// The Label and Encrypted key params in the hash value
 // #[derive(Params)]
@@ -28,7 +27,7 @@ pub(crate) fn Home() -> impl IntoView {
     move || {
         match hash.clone() {
             Some(h) if !h.is_empty() => {
-                match (move || label_and_pin.get())() {
+                match label_and_pin.get() {
                     LabelAndPin { label, .. } if label.is_empty() => {
                         // No label, so show create screen
                         log::info!("Hash: {:?} but no label yet", h);
@@ -43,7 +42,7 @@ pub(crate) fn Home() -> impl IntoView {
                 }
             }
             _ => {
-                match (move || label_and_pin.get())() {
+                match label_and_pin.get() {
                     LabelAndPin { label, .. } if label.is_empty() => {
                         // No label, so show create screen
                         log::info!("No Hash, no label bro");
@@ -225,7 +224,7 @@ pub fn PinPad() -> impl IntoView {
                         value=move || { button_label() }
                         disabled=move || pin_too_short() || label_too_short() || generating()
                         class="w-full px-4 py-4 my-1 rounded shadow-lg disabled:bg-red-400 bg-green-500 disabled:text-slate-100 text-white cursor-pointer"
-                        class=("bg-red-400", move || generating() == true)
+                        class=("bg-red-400", move || generating())
                     />
                 </div>
             </form>
@@ -265,7 +264,7 @@ fn authn(label_and_pin: LabelAndPin) -> View {
         (&key.expose_secret()[..])
             .try_into()
             .expect("seed to be 32 bytes"),
-        &seed.as_ref(),
+        seed.as_ref(),
     );
 
     log::debug!("Encrypted key: {:?}", encrypted);
@@ -277,9 +276,19 @@ fn authn(label_and_pin: LabelAndPin) -> View {
         general_purpose::URL_SAFE_NO_PAD.encode(encrypted)
     );
 
+    let manager = delano_keys::kdf::Manager::from_seed(seed);
+
+    // set Manager in state::GlobalState.manager
+    let state = expect_context::<WriteSignal<ManagerState>>();
+
+    state.set(Some(manager));
+
+    // Lastly, navigate to the account page
     let navigate = leptos_router::use_navigate();
-    request_animation_frame(move || {
-        _ = navigate(&format!("{ACCOUNT}/{hash}"), Default::default());
-    });
+
+    let dest = format!("{ACCOUNT}/{hash}", ACCOUNT = ACCOUNT, hash = hash);
+    log::debug!("Navigating to: {:?}", dest);
+    navigate(&dest, Default::default());
+
     view! { <pre>"Navigating to Account page..."</pre> }.into_view()
 }
