@@ -4,7 +4,7 @@ use crate::ec::{G1Projective, G2Projective, Scalar};
 use crate::entry::entry_to_scalar;
 use crate::entry::Entry;
 use crate::keypair::MaxCardinality;
-use bls12_381_plus::elliptic_curve::bigint::{self, Encoding};
+use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::{Curve, Group};

@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use bls12_381_plus::elliptic_curve::bigint;
-use bls12_381_plus::elliptic_curve::bigint::Encoding;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::prime::PrimeCurveAffine;

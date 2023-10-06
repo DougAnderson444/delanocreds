@@ -12,7 +12,6 @@
 //! ths the credential and the attributes have a relationship with each other.
 //!
 use bls12_381_plus::elliptic_curve::bigint;
-use bls12_381_plus::elliptic_curve::bigint::Encoding;
 use bls12_381_plus::Scalar;
 
 use crate::attributes::Attribute;
