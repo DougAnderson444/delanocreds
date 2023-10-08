@@ -16,14 +16,15 @@
 
 use anyhow::Result;
 use delanocreds::{
-    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, UserKey,
+    verify_proof, Attribute, Credential, CredentialBuilder, Entry, Issuer, MaxCardinality,
+    MaxEntries, UserKey,
 };
 
 pub fn main() -> Result<()> {
     println!(" \nRunning a short basic test: \n");
     let _ = basic_bench();
     println!(" \nCreating and proving 30 of 100 credentials: \n");
-    let _ = bench_30_of_100();
+    let _ = bench_96_attributes();
 
     Ok(())
 }
@@ -149,133 +150,63 @@ pub fn basic_bench() -> Result<()> {
     Ok(())
 }
 
-fn bench_30_of_100() -> Result<()> {
-    // Bench Variables:
-    // l - upper bound for the length of the commitment vector
-    // t - upper bound for the cardinality of the committed sets
-    // n < t - number of attributes in each attribute set A_i in commitment C_i (same for each commitment level)
-    // k - length of attribute set vector
-    // k_prime - number of attributes sets which can be delegated
-
-    // we set the above parameters as t = 25, l = 15, k = 4, k' = 7 and n = 10 to cover many different use-cases
-
+fn bench_96_attributes() -> Result<()> {
     //start timer
     let start = std::time::Instant::now();
 
-    let n_cardinality = 16; // Allow up to 16 Attributes per Entry or per Proof, 6*16 = 96 max
-    let l_max_entries = 6; // Choose 5 from each Entry Level, 6*5 = 30 selected
+    // Create 6 Entry with 16 Cardinality, then prove the first 5 Attribute from each of the 6
+    // Entry, then verify the proof
+    let length = 6;
+    let cardinality = 30;
+    let total = length * cardinality;
 
-    // Delegate a subset of attributes
-    let entry = |_| {
-        Entry::new(
-            &(0..n_cardinality)
-                .collect::<std::vec::Vec<i32>>()
-                .iter()
-                .map(|_| Attribute::from(format!("age > 21")))
-                .collect::<Vec<_>>(),
-        )
-    };
-    let all_attributes = (0..l_max_entries)
-        .collect::<std::vec::Vec<usize>>()
-        .iter()
-        .map(entry)
-        .collect::<Vec<_>>();
-
-    let last = start.elapsed();
-    eprintln!("Time to setup attributes: {:?}", last);
-
-    let l_message = MaxEntries::new(l_max_entries);
-    let signer = Issuer::new(
-        MaxCardinality::new(n_cardinality.try_into().unwrap()),
-        l_message,
-    );
-
+    // create an Issuer, a User, and issue a cred to a Nym
+    let issuer = Issuer::new(MaxCardinality::new(cardinality), MaxEntries::new(length));
     let alice = UserKey::new();
-    let alice_nym = alice.nym(signer.public.parameters.clone());
+    let nym = alice.nym(issuer.public.parameters.clone());
 
-    let robert = UserKey::new();
-    let bobby_nym = robert.nym(signer.public.parameters.clone());
-
-    let position = 5; // index of the update key to be used for the added element
-    let index_l = all_attributes.len() + position;
-    let k_prime = Some(std::cmp::min(index_l, l_message.into())); // k_prime must be: MIN(messages_vector.len()) < k_prime < MAX(l_message)
-
-    eprintln!(
-        "Time to setup DAC: {:?} (+{:?})",
-        start.elapsed(),
-        start.elapsed() - last
-    );
-    let last = start.elapsed();
-
-    let cred = match signer.issue_cred(&all_attributes, k_prime, &alice_nym.public) {
-        Ok(cred) => cred,
-        Err(e) => {
-            eprintln!("Error issuing cred: {:?}", e);
-            return Ok(());
+    let mut entrys = Vec::new();
+    for i in 0..length {
+        let mut attrs = Vec::new();
+        for j in 0..cardinality {
+            attrs.push(Attribute::new(format!("entry {}, attr {}", i, j)));
         }
-    };
+        entrys.push(Entry::new(&attrs));
+    }
+
+    let mut cred_buildr = issuer.credential();
+    for entry in &entrys {
+        cred_buildr.with_entry(entry.clone());
+    }
+    let cred = cred_buildr.issue_to(&nym.public)?;
+
+    let mut all_entries = Vec::new();
+    for entry in &entrys {
+        all_entries.push(entry.clone());
+    }
+
+    let mut selected_entries = Vec::new();
+
+    // The maxmimum we can select is limited by the Set Cardinality of the Issuer
+    let limit = (cardinality as f32 / length as f32).floor() as usize;
+
+    (0..length).for_each(|i| {
+        let mut attrs = Vec::new();
+        for j in 0..limit {
+            attrs.push(all_entries[i][j].clone());
+        }
+        selected_entries.push(Entry::new(&attrs));
+    });
+
+    let proof = nym.prove(&cred, &all_entries, &selected_entries);
+
+    assert!(verify_proof(&issuer.public.vk, &proof, &selected_entries).unwrap());
 
     eprintln!(
-        "Time to issue cred: {:?} (+{:?})",
-        start.elapsed(),
-        start.elapsed() - last
-    );
-    let last = start.elapsed();
-
-    let opening_vector_restricted = cred.opening_vector;
-    // opening_vector_restricted[0] = Scalar::zero(); // means the selected attributes cannot include the first commit in the vector
-
-    let cred_restricted = Credential {
-        sigma: cred.sigma,
-        commitment_vector: cred.commitment_vector,
-        // restrict opening to read only
-        opening_vector: opening_vector_restricted,
-        update_key: cred.update_key,
-        vk: cred.vk,
-    };
-
-    // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public)?;
-
-    eprintln!(
-        "Time to offer cred: {:?} (+{:?})",
-        start.elapsed(),
-        start.elapsed() - last
-    );
-    let last = start.elapsed();
-
-    // bobby_nym accepts
-    let bobby_cred = bobby_nym.accept(&alice_del_to_bobby);
-
-    eprintln!(
-        "Time to accept cred: {:?} (+{:?})",
-        start.elapsed(),
-        start.elapsed() - last
-    );
-    let last = start.elapsed();
-
-    // make an array of the first 5 elements of each entry in all_attributes
-    let selected_attrs: Vec<Entry> = all_attributes
-        .iter()
-        .map(|e| Entry::new(&e.iter().take(5).cloned().collect::<Vec<_>>()))
-        .collect();
-
-    // prepare a proof
-    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
-
-    eprintln!(
-        "Time to prove: {:?} (+{:?})",
-        start.elapsed(),
-        start.elapsed() - last
-    );
-    let last = start.elapsed();
-
-    assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
-
-    eprintln!(
-        "Time to verify : {:?} (+{:?})",
-        start.elapsed(),
-        start.elapsed() - last
+        "Time to verify {} out of {} attibutes: {:?}",
+        limit * length,
+        total,
+        start.elapsed()
     );
 
     Ok(())
