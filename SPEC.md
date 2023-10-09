@@ -59,9 +59,7 @@ When the bytes are encoded to Base64, the character length should be no more tha
 
 Although this is too big for a tweet, which is capped at 280 characters, it is still small enough to be used in a URL or a QR Code. An example QR code is:
 
-<div style="width: 50%; margin: auto;">
 ![Example QR Code](./public-params-qr-code.svg)
-</div>
 
 ## Proving a Credential
 
