@@ -12,7 +12,7 @@
 //! let create_attr = Attribute::from(some_test_attr); // using the from method
 //! let update_attr = Attribute::from(some_test_attr);
 //!
-//! // Try Attribute from cid. Fails if not SHA2-256 hash with length 32
+//! // Try Attribute from cid. Fails if not SHA2-256 hash with length 48
 //! let attr_from_cid = Attribute::try_from(read_attr.cid()).unwrap();
 //! assert_eq!(read_attr, attr_from_cid);
 //!

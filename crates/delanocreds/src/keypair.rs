@@ -8,9 +8,9 @@ use crate::ec::curve::pairing;
 use crate::ec::{G2Projective, Scalar};
 use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
-use crate::set_commits::Commitment;
 use crate::set_commits::CrossSetCommitment;
 use crate::set_commits::ParamSetCommitment;
+use crate::set_commits::{Commitment, ParamSetCommitmentB64};
 use crate::{
     zkp::PedersenOpen,
     zkp::Schnorr,
@@ -18,6 +18,7 @@ use crate::{
 };
 
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine as _};
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::{Curve, Group, GroupEncoding};
@@ -118,9 +119,44 @@ pub struct Issuer {
     sk: Secret<Vec<Scalar>>,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IssuerPublic {
     pub parameters: ParamSetCommitment,
     pub vk: Vec<VK>,
+}
+
+/// IssuerPublic Struct with all fields encoded as base64 URL no-pad
+/// This is to make serde_json straightforward and robust
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct IssuerPublicB64 {
+    pub parameters: ParamSetCommitmentB64,
+    pub verification_key: Vec<String>,
+}
+
+/// Converts from [IssuerPublic] to [IssuerPublicB64]
+impl From<&IssuerPublic> for IssuerPublicB64 {
+    fn from(item: &IssuerPublic) -> Self {
+        let vk_b64 = item
+            .vk
+            .iter()
+            .map(|vk| match vk {
+                VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+                VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+            })
+            .collect::<Vec<_>>();
+
+        Self {
+            verification_key: vk_b64,
+            parameters: item.parameters.clone().into(),
+        }
+    }
+}
+
+/// Convert IssuerPublic to IssuerPublicB64 which uses Base64 URL no-pad encoding of VK and the public parameters
+impl ToString for IssuerPublic {
+    fn to_string(&self) -> String {
+        serde_json::to_string(&IssuerPublicB64::from(self)).unwrap()
+    }
 }
 
 /// Default Issuer using MaxCardinality and
@@ -362,7 +398,6 @@ pub fn verify(
             let a = pairing(y_g1, g_2) == pairing(g_1, y_hat);
             let b = pairing(t, g_2) == pairing(y_g1, vk2) * pairing(pk_u, vk1);
             let c = pairing(z, y_hat) == pairing_op.iter().fold(Gt::IDENTITY, Gt::mul);
-            eprintln!("a: {}, b: {}, c: {}", a, b, c);
             a && b && c
         } else {
             panic!("Invalid verification key");
@@ -564,7 +599,6 @@ impl Nym {
 
         let mut cred_prime = cred_prime;
         if let Some(addl_attrs) = addl_attrs {
-            eprintln!("Changing Relation in offer");
             // Note: change_rel does NOT change Signature { t, ..}
             cred_prime = match spseq_uc::change_rel(
                 &self.public.parameters,
@@ -840,8 +874,6 @@ mod tests {
         if log::log_enabled!(log::Level::Debug) {
             log::error!("Debug logging enabled");
         }
-
-        eprintln!("Running tests message !!");
     }
 
     struct TestMessages {

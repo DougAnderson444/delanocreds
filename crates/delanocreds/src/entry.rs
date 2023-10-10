@@ -11,10 +11,10 @@
 //! thus opening and atrributes have a relationship with each other. The opening vector is held in the credential,
 //! ths the credential and the attributes have a relationship with each other.
 //!
+use crate::attributes::Attribute;
+use crate::config::DEFAULT_MAX_ENTRIES;
 use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::Scalar;
-
-use crate::attributes::Attribute;
 use std::ops::Deref;
 
 /// Entry is a vector of Attributes
@@ -44,12 +44,27 @@ impl IntoIterator for Entry {
     }
 }
 
-// implement `std::iter::FromIterator<attributes::Attribute>` for `entry::Entry`
 impl std::iter::FromIterator<Attribute> for Entry {
     fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
         Entry(iter.into_iter().collect())
     }
 }
+
+/// [Entry] from a vector of [Attribute]s
+impl From<Vec<Attribute>> for Entry {
+    fn from(item: Vec<Attribute>) -> Self {
+        Entry(item)
+    }
+}
+
+/// [Entry] from a slice of [Attribute]s
+impl From<&[Attribute]> for Entry {
+    fn from(item: &[Attribute]) -> Self {
+        Entry(item.to_vec())
+    }
+}
+
+// ensure we can convert `&std::vec::Vec<std::vec::Vec<delanocreds::Attribute>>` to `&[delanocreds::Entry]`
 
 /// Iterates through each Attribute in the Entry and converts it to a Scalar
 pub fn entry_to_scalar(input: &Entry) -> Vec<Scalar> {
@@ -59,6 +74,9 @@ pub fn entry_to_scalar(input: &Entry) -> Vec<Scalar> {
         .collect()
 }
 
+/// Max number of entries in a credential.
+///
+/// Defaults to [DEFAULT_MAX_ENTRIES] (6)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MaxEntries(pub usize);
 
@@ -96,7 +114,7 @@ impl Deref for MaxEntries {
 
 impl Default for MaxEntries {
     fn default() -> Self {
-        MaxEntries(crate::config::DEFAULT_MAX_ENTRIES)
+        MaxEntries(DEFAULT_MAX_ENTRIES)
     }
 }
 
