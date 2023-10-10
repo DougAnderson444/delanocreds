@@ -1,6 +1,6 @@
 # Delano
 
-The Delegateable Anonymous Credentials (DAC) system.
+The Delegateable Anonymous Credentials (DAC) system. A system for issuing and verifying anonymous credentials that can be delegated to other parties.
 
 <!-- Center div -->
 <div align="center">

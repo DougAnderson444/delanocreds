@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This library generally follows the DAC-from-EQS paper where possible.
+This library generally follows the [DAC-from-EQS](https://eprint.iacr.org/2022/680.pdf) paper where possible.
 
 ## Public Parameters
 
@@ -35,7 +35,7 @@ Base64URL encoded strings separated by a `.`:
 <Base64URL<vk_g1>>.<Base64URL<vk_g2>>.<Base64URL<ck_g1>>.<Base64URL<ck_g2>>
 ```
 
-Example of 48 bytes of G1, or 64 characters of Base64URL:
+Example of 48 bytes of `G1`, or 64 characters of Base64URL:
 
 ```md
 EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4
@@ -43,13 +43,13 @@ EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4
 1 2 3 4 5 6
 ```
 
-An example of 96 bytes of G2, or 128 characters of Base64URL:
+An example of 96 bytes of `G2`, or 128 characters of Base64URL:
 
 ```md
 EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4
 ```
 
-An example VKG1.VKG2.CKG1.CKG2 (384 characters):
+An example `VKG1`.`VKG2`.`CKG1`.`CKG2` (384 characters):
 
 ```md
 l*HTpzGX15QmlWOMT6msD8NojE-XdLkFoU46PxcbrFhsVeg*-Xoa7*s68ArbIsa7.k-ArYFJxn2B9rNOgiCdPZVlr0NCZILYatdphu9x_UEkzTPESE5RdV-WsfQVdBCt-AkqisvCPCpEmCAUnLcUQUcbketT6QDsCtFELZHrj0XcLrAMmqAW779SAVsjBIb24.kJlLZzDrtzXUxtZKqTXVmXGyzMk6lhKc3xyoJ3K5yphAMY1tcDjGvFL6wrA48X9G.pYMbI5MW2Ht-64mR9mGR4XqnMiJTGlguVTG1k0NN-NqnaMtsv81gNVlAE4GfHoDuB_17GwbtvfzXabcl2Cjgkn2QEfyFlm55GrXLoH5b-\_xKgj4vGuBV50b2p7Mf-2x*
