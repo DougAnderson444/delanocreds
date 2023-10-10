@@ -331,7 +331,6 @@ mod tests {
         // 1. Setup
         // 2. Prove
         // 3. Verify
-        eprintln!("Testing non-interactive");
         let secret_x = Secret::new(Scalar::random(ThreadRng::default()));
         let public_h = G2Projective::mul_by_generator(secret_x.expose_secret());
 
