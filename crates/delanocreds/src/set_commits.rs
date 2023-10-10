@@ -4,10 +4,11 @@ use crate::ec::{G1Projective, G2Projective, Scalar};
 use crate::entry::entry_to_scalar;
 use crate::entry::Entry;
 use crate::keypair::MaxCardinality;
+use base64::{engine::general_purpose, Engine as _};
 use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
-use bls12_381_plus::group::{Curve, Group};
+use bls12_381_plus::group::{Curve, Group, GroupEncoding};
 use rand::rngs::ThreadRng;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
@@ -17,9 +18,65 @@ use sha2::{Digest, Sha256};
 /// - `pp_commit_g1`: Root Issuer's public parameters commitment for G1
 /// - `pp_commit_g2`: Root Issuer's public parameter commitment for G2
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParamSetCommitment {
     pub pp_commit_g1: Vec<G1Projective>,
     pub pp_commit_g2: Vec<G2Projective>,
+}
+
+/// A base64 URL no pad version of the ParamSetCommitment
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ParamSetCommitmentB64 {
+    pub commit_g1: Vec<String>,
+    pub commit_g2: Vec<String>,
+}
+
+/// Coverts from [ParamSetCommitment] to [ParamSetCommitmentB64]
+impl From<ParamSetCommitment> for ParamSetCommitmentB64 {
+    fn from(param_sc: ParamSetCommitment) -> Self {
+        let pp_commit_g1_b64 = param_sc
+            .pp_commit_g1
+            .iter()
+            .map(|g1| general_purpose::URL_SAFE_NO_PAD.encode(g1.to_bytes()))
+            .collect::<Vec<String>>();
+
+        let pp_commit_g2_b64 = param_sc
+            .pp_commit_g2
+            .iter()
+            .map(|g2| general_purpose::URL_SAFE_NO_PAD.encode(g2.to_bytes()))
+            .collect::<Vec<String>>();
+
+        ParamSetCommitmentB64 {
+            commit_g1: pp_commit_g1_b64,
+            commit_g2: pp_commit_g2_b64,
+        }
+    }
+}
+
+/// Converts the PublicParameters to a Base64 encoded json string
+impl ToString for ParamSetCommitment {
+    fn to_string(&self) -> String {
+        let pp_commit_g1_b64 = self
+            .pp_commit_g1
+            .iter()
+            .map(|g1| general_purpose::URL_SAFE_NO_PAD.encode(g1.to_bytes()))
+            .collect::<Vec<String>>();
+
+        let pp_commit_g2_b64 = self
+            .pp_commit_g2
+            .iter()
+            .map(|g2| general_purpose::URL_SAFE_NO_PAD.encode(g2.to_bytes()))
+            .collect::<Vec<String>>();
+
+        let pp_commit_g1_b64_str = serde_json::to_string(&pp_commit_g1_b64).unwrap();
+        let pp_commit_g2_b64_str = serde_json::to_string(&pp_commit_g2_b64).unwrap();
+
+        format!(
+            "{{\"pp_commit_g1\":{},\"pp_commit_g2\":{}}}",
+            pp_commit_g1_b64_str, pp_commit_g2_b64_str
+        )
+    }
 }
 
 impl ParamSetCommitment {
@@ -87,12 +144,7 @@ pub trait Commitment {
     /// 4. Return the commitment and witness
     fn commit_set(param_sc: &ParamSetCommitment, mess_set_str: &Entry) -> (G1Projective, Scalar) {
         let mess_set: Vec<Scalar> = entry_to_scalar(mess_set_str);
-        eprintln!("mess_set length: {:?}", mess_set.len());
         let monypol_coeff = polynomial_from_roots(&mess_set);
-        eprintln!(
-            "monypol_coeff length: {:?}",
-            monypol_coeff.coefficients().len()
-        );
         let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
         let open_info = Scalar::random(ThreadRng::default());
@@ -408,7 +460,6 @@ pub fn generate_pre_commit(
         .map(|(g1, coeff)| g1 * coeff)
         .collect::<Vec<G1Projective>>();
 
-    eprintln!("coef_points length: {:?}", coef_points.len());
     //sum all the elements in coef_points as Scalars into a pre_commit
     coef_points
         .iter()
