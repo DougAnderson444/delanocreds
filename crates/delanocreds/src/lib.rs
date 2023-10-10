@@ -368,7 +368,7 @@ mod lib_api_tests {
         let another_entry = Entry::new(&[Attribute::new("another entry")]);
         let cred = issuer
             .credential()
-            .with_entry(root_entry)
+            .with_entry(root_entry.clone())
             .with_entry(another_entry)
             .issue_to(&nym.public)?;
 
@@ -376,6 +376,11 @@ mod lib_api_tests {
 
         // cred should have update_key is_none
         assert!(cred.update_key.is_none());
+
+        // nym should be able to prove the credential
+        let proof = nym.prove(&cred, &[root_entry.clone()], &[root_entry.clone()]);
+
+        assert!(keypair::verify_proof(&issuer.public.vk, &proof, &[root_entry]).unwrap());
 
         Ok(())
     }
