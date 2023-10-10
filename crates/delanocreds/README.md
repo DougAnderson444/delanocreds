@@ -39,7 +39,7 @@ able to assign the credential to a new public key for the attributes they _do_ h
 ### Root Issuer Summary of Choices/Options:
 
 - **Maxiumum Attribute Entries**: Maximum number of `Entry`s per `Credential`.
-- **Maximum Cardinality**: Maximum number of `Attribute` per `Entry`
+- **Maximum Cardinality**: Maximum selectable number of `Attributes` per `Proof` or `Entry`
 
 ### Attributes
 
