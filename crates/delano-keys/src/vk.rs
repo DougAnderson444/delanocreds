@@ -7,6 +7,7 @@ use bls12_381_plus::{G1Projective, G2Projective};
 /// This key has elements from both G1 and G2,
 /// so to make a Vector of [VK], we need to use enum
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum VK {
     G1(G1Projective),
     G2(G2Projective),
