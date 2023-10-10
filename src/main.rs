@@ -23,7 +23,7 @@ use delanocreds::{
 pub fn main() -> Result<()> {
     println!(" \nRunning a short basic test: \n");
     let _ = basic_bench();
-    println!(" \nCreating and proving 30 of 100 credentials: \n");
+    println!(" \nCreating and proving n of m credentials: \n");
     let _ = bench_96_attributes();
 
     Ok(())
