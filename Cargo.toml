@@ -8,6 +8,7 @@ delano-keys = { path = "crates/delano-keys" }
 blastkids = "0.1"
 bls12_381_plus = "0.8.5"
 secrecy = "0.8"
+base64 = "0.21.4"
 
 [package]
 edition = "2021"
@@ -17,7 +18,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.44"
-delanocreds = { workspace = true }
+delanocreds = { workspace = true, features = ["serde", "serde_json"] } 
 blastkids = { workspace = true }
 
 [dev-dependencies]
