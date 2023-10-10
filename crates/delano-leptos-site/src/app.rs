@@ -40,6 +40,7 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Router>
+        <div class="relative flex min-h-screen flex-col justify-center overflow-hidden">
             <nav>
                 <div class="my-0 mx-auto max-w-3xl text-center">
                     <h2 class="p-6 text-4xl font-bold">"Delanocreds."</h2>
@@ -52,6 +53,7 @@ pub fn App() -> impl IntoView {
                     <Route path="/*any" view=|| view! { <h1>"Not Found"</h1> }/>
                 </Routes>
             </div>
+        </div>
         </Router>
     }
 }
