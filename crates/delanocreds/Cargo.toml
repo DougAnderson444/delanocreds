@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 bls12_381_plus = { workspace = true }
-delano-keys = { workspace = true }
+delano-keys = { workspace = true, features = ["serde"] }
 anyhow = "1.0.70"
 cid = "0.10.1"
 multihash = "0.18.1"
@@ -19,9 +19,11 @@ rand = "0.8.5"
 rayon = "1.8.0"
 log = "0.4"
 env_logger = "0.10.0"
+base64 = { workspace = true }
 
 # optional dependencies
 serde = { version = "1.0", optional = true, features = ["derive"] }
+serde_json ={ version = "1.0.107", optional = true }
 
 # if building with wasm32 arch target, use getrandom with js feature
 [target.'cfg(target_arch = "wasm32")'.dependencies]
