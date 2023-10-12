@@ -23,6 +23,12 @@ seed-keeper-core = "0.3"
 delano-keys = { workspace = true, features = ["serde"] }
 delanocreds = { workspace = true, features = ["serde", "serde_json"] }
 console_error_panic_hook = { version = "0.1.7" }
- 
+qrcode = "0.12.0"
+wasm-bindgen-futures = "0.4.37"
+
+[dependencies.web-sys]
+version = "0.3"
+features = ["Clipboard", "Window", "Navigator", "Permissions"]
 # [patch.crates-io]
 # seed-keeper-core = { version = "0.3", git = "https://github.com/DougAnderson444/seed-keeper", branch = "master" }
+

@@ -10,20 +10,16 @@ There are a few notable difference or absences from the paper:
 
 - Public Parameter Generators: In the paper, the Group 1 and Group 2 Generators are kept in the state variables. In our implementation, we have decided to use the [convention](https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#generators) as constants.
 
-- Public Parameters commits in G1 and G2: In the paper, these are generated from a random base to the power of `0..t` where `t` is the Max Set Cardinality. However, this means that numerous commits must be included with the Verification Keys when referring to an `Issuer`. This can become long and cumbersome. However, if we use a key derivation function (`kdf`, like `blastkids` library) we can compress these commits to a single G1 and single G2, then expand these using the `kdf`.
-
-- Public Paramters Verification Key: Much like the commits, the Verification Key can become quite long (longer than a Tweet) if the credential has many Entries available to it. However, by using a `kdf` again, we can compress this down to a single G1 and G2 again.
+- Public Paramters Verification Key: The Verification Key can become quite long if the credential has many Entries available to it. However, by usinga key derivation function (`kdf`, like `blastkids` library), we can compress this down to a single G1 and G2. Delanocreds `IssuerPublic` has a `to_compact` function which will compact a VK to just these 2 Group points, making the JSON or QR Code smaller.
 
 In the end, this gives us four values to identify an `Issuer`:
 
-| Value                 | Size (bytes) | Base64 Size (chars) |
-| --------------------- | ------------ | ------------------- |
-| `G1` Commit           | 48           | 64                  |
-| `G2` Commit           | 96           | 128                 |
-| `G1` Verification Key | 48           | 64                  |
-| `G2` Verification Key | 96           | 128                 |
-| ===================== | ============ | =================== |
-| Total                 | 288          | 384                 |
+| Value                 | Each Size (bytes) | Number          |
+| --------------------- | ----------------- | --------------- |
+| `G1` Commits          | 48                | Cardinality + 1 |
+| `G2` Commits          | 96                | Cardinality + 1 |
+| `G1` Verification Key | 48                | MaxEntries      |
+| `G2` Verification Key | 96                | MaxEntries      |
 
 ## Encoding Public Parameters
 
@@ -57,7 +53,7 @@ l*HTpzGX15QmlWOMT6msD8NojE-XdLkFoU46PxcbrFhsVeg*-Xoa7*s68ArbIsa7.k-ArYFJxn2B9rNO
 
 When the bytes are encoded to Base64, the character length should be no more than a total of 384 characters, with 3 extra characters for the `.` separators, makes a total of 387 characters.
 
-Although this is too big for a tweet, which is capped at 280 characters, it is still small enough to be used in a URL or a QR Code. An example QR code is:
+Although this is too big for a tweet, which is capped at 280 characters, it is still small enough to be used in a URL or a QR Code (Max. 4,296 alphanumeric characters 7096). An example QR code is:
 
 ![Example QR Code](./public-params-qr-code.svg)
 

@@ -2,10 +2,10 @@
 //! If the hash doesn't exist, or hasn't been unlocked yet, redirect back to Home page.
 //! Otherwise, display the account page.
 
+use crate::app::components::copy_to_clipboard;
+use crate::app::components::qrcode::QrCode;
 use crate::app::constants::*;
 use crate::app::state::ManagerState;
-use base64::{engine::general_purpose, Engine as _};
-use delano_keys::kdf::GroupEncoding;
 use delanocreds::{Issuer, MaxCardinality, MaxEntries};
 use leptos::{leptos_dom::helpers::location_hash, *};
 use leptos_router::unescape;
@@ -16,8 +16,6 @@ pub(crate) fn Account() -> impl IntoView {
     // use the seed to derive a keypair for BLS12-381 use, using delano-keys, manager, from_seed
     // read account from Global State. If use_context::<ReadSignal<ManagerState>>() returns some
     // manager, use it and continue to view this page. If not, use_navigate to redirect to Home page
-    log::debug!("Account page");
-
     let maybe_manager = expect_context::<ReadSignal<ManagerState>>();
     let navigate = leptos_router::use_navigate();
     let hash = location_hash()
@@ -39,22 +37,32 @@ pub(crate) fn Account() -> impl IntoView {
 
         let account = m.account(1);
 
-        let expanded = account.expand_to(MaxEntries::default().into());
+        let expanded = account.expand_to(MaxEntries::new(8).into());
 
         // now use these secret keys in Issuer
-        let issuer = Issuer::new_with_secret(expanded, MaxCardinality::default());
+        let issuer = Issuer::new_with_secret(expanded, MaxCardinality::new(4));
 
-        let vk_g1_b64 = general_purpose::URL_SAFE_NO_PAD.encode(account.pk_g1.to_bytes());
-        let vk_g2_b64 = general_purpose::URL_SAFE_NO_PAD.encode(account.pk_g2.to_bytes());
-
+        // <!-- // value={issuer.public.to_string().into()} issuer.public.to_string().clone().into()-->
+        let qrvalue = issuer.public.to_compact().to_string();
         view! {
             <div class="mx-auto max-w-md">
                 <div class="">
                     "Let's Create some Credentials! Using account public info (G1, G2, Public Parameters):"
-                    <div class="mt-4 font-mono break-all">{vk_g1_b64.to_string()}.{vk_g2_b64}</div>
                 </div>
-                <div class="mt-4 font-semibold">"Your Public Parameters:"</div>
-                <div class="mt-4 font-mono break-all text-sm">{issuer.public.to_string()}</div>
+                <div class="mt-4 font-semibold">"Publish Your Public Parameters:"</div>
+                // Summary QR Code
+                <details class="mt-4">
+                    <summary class="font-semibold">"Social Media QR Code"</summary>
+                    // to copy to clipboard on click: onclick=|_| { copy_to_clipboard(&qrvalue); }
+                    <div class="mt-4 font-mono break-all text-sm" on:click=move |_| { copy_to_clipboard() } >
+                        <QrCode qrvalue=qrvalue.clone().to_owned().into()/>
+                    </div>
+                </details>
+                // Summary and details element
+                <details class="mt-4">
+                    <summary class="font-semibold">"Public Parameters"</summary>
+                    <div class="mt-4 font-mono break-all text-sm">{qrvalue}</div>
+                </details>
             </div>
         }
         .into_view()

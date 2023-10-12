@@ -125,12 +125,69 @@ pub struct IssuerPublic {
     pub vk: Vec<VK>,
 }
 
+impl IssuerPublic {
+    /// Compacts the [VK] then serilizes it to [IssuerPublicB64]
+    pub fn to_compact(&self) -> IssuerPublicB64 {
+        let vk_b64 = self
+            .vk
+            .clone()
+            .iter()
+            .take(2)
+            .map(|vk| match vk {
+                VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+                VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+            })
+            .collect::<Vec<_>>();
+
+        IssuerPublicB64 {
+            verification_key: vk_b64,
+            parameters: self.parameters.clone().into(),
+        }
+    }
+}
+
 /// IssuerPublic Struct with all fields encoded as base64 URL no-pad
 /// This is to make serde_json straightforward and robust
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IssuerPublicB64 {
     pub parameters: ParamSetCommitmentB64,
     pub verification_key: Vec<String>,
+}
+
+/// Converts from [IssuerPublic] to [IssuerPublicB64]
+/// Takes an optional `compact` boolean flag to indicate whether to compact the vk to just the
+/// first G1 an G2 elements, or to include all elements. If compact, the rest of the vk can be
+/// derived from the first two using [delano_keys] derive function
+impl IssuerPublicB64 {
+    pub fn new_from(item: &IssuerPublic, compact: Option<bool>) -> Self {
+        // if compact, only take the first 2 vk elements
+        // otherwise, take all vk elements
+        // compact means the rest of the vk can be derived from the first two using delano-keys
+        // derive function
+        let vk_b64 = if let Some(true) = compact {
+            item.vk
+                .iter()
+                .take(2)
+                .map(|vk| match vk {
+                    VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+                    VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+                })
+                .collect::<Vec<_>>()
+        } else {
+            item.vk
+                .iter()
+                .map(|vk| match vk {
+                    VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+                    VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+                })
+                .collect::<Vec<_>>()
+        };
+
+        Self {
+            verification_key: vk_b64,
+            parameters: item.parameters.clone().into(),
+        }
+    }
 }
 
 /// Converts from [IssuerPublic] to [IssuerPublicB64]
@@ -149,6 +206,12 @@ impl From<&IssuerPublic> for IssuerPublicB64 {
             verification_key: vk_b64,
             parameters: item.parameters.clone().into(),
         }
+    }
+}
+/// Convert IssuerPublic to IssuerPublicB64 which uses Base64 URL no-pad encoding of VK and the public parameters
+impl ToString for IssuerPublicB64 {
+    fn to_string(&self) -> String {
+        serde_json::to_string(&self).unwrap()
     }
 }
 
@@ -456,8 +519,11 @@ pub struct Nym {
 /// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
 #[derive(Clone)]
 pub struct NymPublic {
+    /// [NymProof] is used to generate the [NymProof]
     pub proof: NymProof,
+    /// [DamgardTransform] is used to generate the [NymProof], which containds the [crate::zkp::Pedersen] public key
     pub damgard: DamgardTransform,
+    /// [ParamSetCommitment] is used to generate the [NymProof]
     pub parameters: ParamSetCommitment,
 }
 
@@ -828,6 +894,8 @@ pub fn verify_proof(
     proof: &CredProof,
     selected_attrs: &[Entry],
 ) -> Result<bool, IssuerError> {
+    // TODO: assert that Issuer public parameters are the same as the ones included in the proof
+
     // Get the selected_attr indexes which are not `is_enpty()`,
     // use those indexes to select corresponding `commitment_vectors`
     // zip together `commitment_vector` where `selected_attr` is not empty

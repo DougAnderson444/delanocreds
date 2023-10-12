@@ -15,8 +15,8 @@ use bls12_381_plus::Scalar;
 pub use entry::Entry;
 pub use entry::MaxEntries;
 pub use keypair::{
-    spseq_uc::Credential, verify_proof, Issuer, IssuerError, IssuerPublic, MaxCardinality,
-    NymPublic, UserKey, VK,
+    spseq_uc::Credential, verify_proof, Issuer, IssuerError, IssuerPublic, IssuerPublicB64,
+    MaxCardinality, NymPublic, UserKey, VK,
 };
 
 // wasm32 tests
