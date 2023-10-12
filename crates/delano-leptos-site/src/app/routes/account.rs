@@ -44,6 +44,7 @@ pub(crate) fn Account() -> impl IntoView {
 
         // <!-- // value={issuer.public.to_string().into()} issuer.public.to_string().clone().into()-->
         let qrvalue = issuer.public.to_compact().to_string();
+        let value_copy = qrvalue.to_owned();
         view! {
             <div class="mx-auto max-w-md">
                 <div class="">
@@ -54,8 +55,11 @@ pub(crate) fn Account() -> impl IntoView {
                 <details class="mt-4">
                     <summary class="font-semibold">"Social Media QR Code"</summary>
                     // to copy to clipboard on click: onclick=|_| { copy_to_clipboard(&qrvalue); }
-                    <div class="mt-4 font-mono break-all text-sm" on:click=move |_| { copy_to_clipboard() } >
-                        <QrCode qrvalue=qrvalue.clone().to_owned().into()/>
+                    <div
+                        class="mt-4 font-mono break-all text-sm"
+                        on:click=move |_| { copy_to_clipboard(value_copy.to_string()) }
+                    >
+                        <QrCode qrvalue=qrvalue.to_owned().into()/>
                     </div>
                 </details>
                 // Summary and details element

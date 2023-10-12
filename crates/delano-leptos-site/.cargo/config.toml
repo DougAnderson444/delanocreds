@@ -3,6 +3,7 @@ BASE_PATH = "/delanocreds/" # Github pages base path, this does nothing -- needs
 
 [build]
 target = "wasm32-unknown-unknown"
+rustflags = ["--cfg=web_sys_unstable_apis"] # needed for web_sys::clipboard
 
 # If you’re using nightly Rust, you can rebuild the standard library with this same profile rather than the prebuilt standard library that’s distributed with the wasm32-unknown-unknown target.
 [unstable]
