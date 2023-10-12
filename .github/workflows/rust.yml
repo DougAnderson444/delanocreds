@@ -30,10 +30,8 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           targets: wasm32-unknown-unknown
-          toolchain: nightly, nightly-x86_64-unknown-linux-gnu
-          components: rust-src, nightly-x86_64-unknown-linux-gnu
-      - name: Rust add component toolchain nightly
-        run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+          toolchain: nightly-x86_64-unknown-linux-gnu
+          components: rust-src
       - name: Install Trunk
         run: cargo install trunk
       - name: Build and Deploy Leptos Directory
