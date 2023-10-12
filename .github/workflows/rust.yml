@@ -33,7 +33,7 @@ jobs:
           toolchain: nightly-x86_64-unknown-linux-gnu
           components: rust-src
       - name: Install Trunk
-        run: cargo install trunk
+        uses: mbround18/trunk-rs@v0.0.1
       - name: Build and Deploy Leptos Directory
         run: cd crates/ && cd delano-leptos-site/ && trunk build --release --all-features
       - name: Build with Jekyll
