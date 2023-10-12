@@ -30,13 +30,13 @@ jobs:
       # Build with trunk-rs
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@nightly
-      - name: Install Trunk
         with:
           targets: wasm32-unknown-unknown
           toolchain: nightly
+      - name: Install Trunk
         run: cargo install trunk
-      - name: Build and Deploy
-        run: trunk build --release --all-features
+      - name: Build and Deploy Leptos Directory
+        run: trunk build ./crates/delano-leptos-site --release --all-features
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
