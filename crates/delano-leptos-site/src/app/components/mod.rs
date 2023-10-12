@@ -19,7 +19,7 @@ cfg_if::cfg_if! {
                         match wasm_bindgen_futures::JsFuture::from(p)
                             .await {
                                 Ok(_) => {
-                                    log::debug!("copied to clipboard", value);
+                                    log::debug!("copied to clipboard");
                                         }
                                 Err(e) => {
                                     log::warn!("failed to copy to clipboard: {:?}", e);
