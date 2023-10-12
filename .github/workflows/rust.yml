@@ -31,6 +31,9 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@nightly
       - name: Install Trunk
+        with:
+          targets: wasm32-unknown-unknown
+          toolchain: nightly
         run: cargo install trunk
       - name: Build and Deploy
         run: trunk build --release --all-features
