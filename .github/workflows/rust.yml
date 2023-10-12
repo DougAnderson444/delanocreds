@@ -36,7 +36,7 @@ jobs:
       - name: Install Trunk
         run: cargo install trunk
       - name: Build and Deploy Leptos Directory
-        run: trunk build ./crates/delano-leptos-site --release --all-features
+        run: cd crates/ && cd delano-leptos-site/ && trunk build --release --all-features
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
