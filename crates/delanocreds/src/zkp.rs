@@ -221,7 +221,7 @@ impl ZKPSchnorr {
 }
 
 /// Damgard Transform containing a [Pedersen] commitment
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DamgardTransform {
     pub pedersen: Pedersen,
@@ -229,20 +229,22 @@ pub struct DamgardTransform {
 
 impl DamgardTransform {
     /// Create a Damgard Transform challenge announcement
-    pub fn announce(&self) -> (PedersenCommit, PedersenOpen) {
+    /// Takes an optional randomness (nonce) to use for the announcement
+    pub fn announce(&self, nonce: Option<impl AsRef<[u8]>>) -> (PedersenCommit, PedersenOpen) {
         let w_random = Scalar::random(ThreadRng::default());
         let w_element = G1Projective::mul_by_generator(&w_random).to_affine();
-        let (pedersen_commit, mut pedersen_open) = self.pedersen.commit(w_random);
+        let (pedersen_commit, mut pedersen_open) = self.pedersen.commit(nonce, w_random);
         pedersen_open.element(w_element);
         (pedersen_commit, pedersen_open)
     }
 
-    /// Verify the given [NymProof] against the [DamgardTransform]
-    pub fn verify(nym_proof: &NymProof, nym_damgard: &DamgardTransform) -> bool {
+    /// Verify the given [NymProof] is valid
+    pub fn verify(nym_proof: &NymProof) -> bool {
         let left_side = G1Projective::mul_by_generator(&nym_proof.response);
         let right_side = nym_proof.pedersen_open.announce_element.as_ref().unwrap()
             + nym_proof.challenge * nym_proof.public_key;
-        let decommit = nym_damgard
+        let decommit = nym_proof
+            .damgard
             .pedersen
             .decommit(&nym_proof.pedersen_open, &nym_proof.pedersen_commit);
 
@@ -267,11 +269,15 @@ pub struct Pedersen {
 }
 pub type PedersenCommit = G1Projective;
 
+/// Pedersen Open information: Randomness used to open the commitment, randomness used to announce the secret, and the announcement element
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PedersenOpen {
+    /// Randomness used to open the commitment
     pub open_randomness: Scalar,
+    /// Randomness used to announce the secret
     pub announce_randomness: Scalar,
+    /// Announcement element
     pub announce_element: Option<G1Affine>,
 }
 
@@ -294,14 +300,21 @@ impl Pedersen {
         Pedersen { h }
     }
 
-    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
-        let d = Scalar::from_be_bytes(bytes).expect("32 bytes");
-        let h = G1Projective::mul_by_generator(&d);
-        Pedersen { h }
-    }
-
-    pub fn commit(&self, msg: Scalar) -> (PedersenCommit, PedersenOpen) {
-        let r = Scalar::random(ThreadRng::default());
+    /// Create a Pedersen commit
+    /// Takes an optional randomness (nonce) to use for the announcement which can be used by the
+    /// verifier to prevent replay attacks
+    ///
+    /// The nonce can be compared against the Pedersen open randomness to verify that a replay
+    /// attach isn't reusing a previously generated proof
+    pub fn commit(
+        &self,
+        nonce: Option<impl AsRef<[u8]>>,
+        msg: Scalar,
+    ) -> (PedersenCommit, PedersenOpen) {
+        // convert Some nonce bytes to Scalar. If no nonce, make randomness ourselves and use it
+        let r: Scalar = nonce.map_or(Scalar::random(ThreadRng::default()), |n| {
+            bigint::U256::from_be_slice(n.as_ref()).into()
+        });
         let pedersen_commit = r * self.h + G1Projective::mul_by_generator(&msg);
         let pedersen_open = PedersenOpen {
             open_randomness: r,
@@ -324,6 +337,8 @@ impl Pedersen {
 mod tests {
     use super::*;
     use bls12_381_plus::group::Curve;
+
+    const NONCE: Option<&[u8]> = None;
 
     #[test]
     #[cfg(feature = "zkp")]
@@ -393,7 +408,7 @@ mod tests {
                                                                         // h
         let statement = G1Projective::mul_by_generator(secret.expose_secret()).to_affine();
 
-        let (pedersen_commit, pedersen_open) = damgard.announce();
+        let (pedersen_commit, pedersen_open) = damgard.announce(NONCE);
 
         let state = ChallengeState::new(vec![statement], &pedersen_commit.to_bytes());
 
@@ -412,8 +427,9 @@ mod tests {
             pedersen_commit,
             public_key: statement.into(),
             response,
+            damgard,
         };
 
-        assert!(DamgardTransform::verify(&proof_nym, &damgard));
+        assert!(DamgardTransform::verify(&proof_nym));
     }
 }

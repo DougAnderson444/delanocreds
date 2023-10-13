@@ -16,9 +16,10 @@
 
 use anyhow::Result;
 use delanocreds::{
-    verify_proof, Attribute, Credential, CredentialBuilder, Entry, Issuer, MaxCardinality,
-    MaxEntries, UserKey,
+    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, UserKey,
 };
+
+const NONCE: Option<&[u8]> = None;
 
 pub fn main() -> Result<()> {
     println!(" \nRunning a short basic test: \n");
@@ -77,7 +78,7 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.public)?;
+    let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
     eprintln!(
         "Time to issue cred: {:?} (+{:?})",
@@ -99,7 +100,8 @@ pub fn basic_bench() -> Result<()> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public)?;
+    let alice_del_to_bobby =
+        alice_nym.offer(&cred_restricted, &None, &bobby_nym.nym_proof(NONCE))?;
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -130,7 +132,7 @@ pub fn basic_bench() -> Result<()> {
     ];
 
     // prepare a proof
-    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
@@ -139,7 +141,12 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
+    assert!(verify_proof(
+        &signer.public.vk,
+        &proof,
+        &selected_attrs,
+        &signer.public.parameters
+    )?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -178,7 +185,7 @@ fn bench_96_attributes() -> Result<()> {
     for entry in &entrys {
         cred_buildr.with_entry(entry.clone());
     }
-    let cred = cred_buildr.issue_to(&nym.public)?;
+    let cred = cred_buildr.issue_to(&nym.nym_proof(NONCE))?;
 
     let mut all_entries = Vec::new();
     for entry in &entrys {
@@ -198,9 +205,15 @@ fn bench_96_attributes() -> Result<()> {
         selected_entries.push(Entry::new(&attrs));
     });
 
-    let proof = nym.prove(&cred, &all_entries, &selected_entries);
+    let proof = nym.prove(&cred, &all_entries, &selected_entries, NONCE);
 
-    assert!(verify_proof(&issuer.public.vk, &proof, &selected_entries).unwrap());
+    assert!(verify_proof(
+        &issuer.public.vk,
+        &proof,
+        &selected_entries,
+        &issuer.public.parameters
+    )
+    .unwrap());
 
     eprintln!(
         "Time to verify {} out of {} attibutes: {:?}",

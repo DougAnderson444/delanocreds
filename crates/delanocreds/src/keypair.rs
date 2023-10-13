@@ -297,17 +297,18 @@ impl Issuer {
         &self,
         attr_vector: &[Entry],
         k_prime: Option<usize>,
-        nym_public: &NymPublic,
+        nym_proof: &NymProof,
     ) -> Result<Credential, IssuerError> {
-        // check if proof of nym is correct
-        if !DamgardTransform::verify(&nym_public.proof, &nym_public.damgard) {
+        // check if proof of nym is correct using Damgard’s technique for obtaining malicious verifier
+        // interactive zero-knowledge proofs of knowledge
+        if !DamgardTransform::verify(&nym_proof) {
             return Err(IssuerError::InvalidNymProof);
         }
         // check if delegate keys is provided
-        let cred = self.sign(&nym_public.proof.public_key, attr_vector, k_prime)?;
+        let cred = self.sign(&nym_proof.public_key, attr_vector, k_prime)?;
         assert!(verify(
             &self.public.vk,
-            &nym_public.proof.public_key,
+            &nym_proof.public_key,
             &cred.commitment_vector,
             &cred.sigma
         ));
@@ -490,7 +491,7 @@ impl UserKey {
         }
     }
 
-    /// Generates a pseudonym for the user tuned to this Issuer's Pulic Parameters.
+    /// Generates a pseudonym for the user tuned to this [Issuer]'s [ParamSetCommitment]
     pub fn nym(&self, public_parameters: ParamSetCommitment) -> Nym {
         // pick randomness
         let psi = Scalar::random(ThreadRng::default());
@@ -519,28 +520,36 @@ pub struct Nym {
 /// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
 #[derive(Clone)]
 pub struct NymPublic {
-    /// [NymProof] is used to generate the [NymProof]
-    pub proof: NymProof,
-    /// [DamgardTransform] is used to generate the [NymProof], which containds the [crate::zkp::Pedersen] public key
-    pub damgard: DamgardTransform,
     /// [ParamSetCommitment] is used to generate the [NymProof]
     pub parameters: ParamSetCommitment,
+    /// [DamgardTransform] is used to generate the [NymProof]
+    pub damgard: DamgardTransform,
+    /// [G1Projective] Public key for this [Nym]
+    pub key: G1Projective,
 }
 
 /// NymProof
 /// - `challenge`: Challenge, challenge of the user
 /// - `pedersen_open`: PedersenOpen, opening information of the user
-/// - `pedersen_commit`: G1, commitment of the user
+/// - `pedersen_commit`: G1, commitment of the user th
 /// - `public_key`: RandomizedPubKey, public key of the Nym
 /// - `response`: Scalar, response of the user
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NymProof {
+    /// [Scalar] is used to generate the [NymProof]
     pub challenge: Scalar,
+    /// [PedersenOpen] is used to open the [NymProof] Pedersen Commitment
     pub pedersen_open: PedersenOpen,
+    /// The [G1Projective] Pedersen Commitment of the [NymProof]
     pub pedersen_commit: G1Projective,
+    /// [G1Projective] Public key for this [Nym]
     pub public_key: G1Projective,
+    /// [Scalar] response of the [NymProof]
     pub response: Scalar,
+    /// [DamgardTransform] is used to annouce the [crate::zkp::PedersenCommit] and [PedersenOpen],
+    /// all of which are needed to verify this proof
+    pub damgard: DamgardTransform,
 }
 
 impl Nym {
@@ -555,12 +564,29 @@ impl Nym {
         secret_wit: Secret<Scalar>,
         public_parameters: ParamSetCommitment,
     ) -> Nym {
-        // create a proof for nym
         let damgard = DamgardTransform::new();
-        let (pedersen_commit, pedersen_open) = damgard.announce();
+        Nym {
+            secret: secret_wit,
+            public: NymPublic {
+                damgard,
+                key: nym_public_key,
+                parameters: public_parameters,
+            },
+        }
+    }
+
+    /// Create a proof using Damgard's technique for obtaining malicious verifier interactive zero-knowledge proofs of knowledge
+    ///
+    /// This enables us to obtain malicious verifier interactive zero-knowledge proofs of
+    /// knowledge. Verifiers can optionally provide a nonce to the proof, which will be
+    /// used to generate the challenge. If no nonce is provided, a random nonce will be
+    /// generated. This nonce can be checked against the Pedersen open randomness to
+    /// ensure the proof is valid.
+    pub fn nym_proof(&self, nonce: Option<impl AsRef<[u8]>>) -> NymProof {
+        let (pedersen_commit, pedersen_open) = self.public.damgard.announce(nonce);
 
         let state = ChallengeState::new(
-            vec![damgard.pedersen.h.to_affine()],
+            vec![self.public.damgard.pedersen.h.to_affine()],
             &pedersen_commit.to_bytes(),
         );
 
@@ -570,25 +596,17 @@ impl Nym {
         let response = DamgardTransform::response(
             &challenge,
             &pedersen_open.announce_randomness,
-            &nym_public_key.into(),
-            &secret_wit,
+            &self.public.key.into(),
+            &self.secret,
         );
 
-        let proof_nym = NymProof {
+        NymProof {
             challenge,
             pedersen_open,
             pedersen_commit,
-            public_key: nym_public_key,
+            public_key: self.public.key,
             response,
-        };
-
-        Nym {
-            secret: secret_wit,
-            public: NymPublic {
-                proof: proof_nym,
-                damgard,
-                parameters: public_parameters,
-            },
+            damgard: self.public.damgard.clone(),
         }
     }
 
@@ -622,7 +640,8 @@ impl Nym {
         super::ProofBuilder::new(self, cred, entries)
     }
 
-    /// Creates an orphan [Offer] for a [Credential].
+    /// Creates an orphan [Offer] for a [Credential]. This function will also validate the given
+    /// [NymProof] is valid, but does not associate/link this offer with that [Nym] (see note below).
     ///
     /// Important Note: The orphan [Signature] created by this [Offer] can be used by
     /// any holder who also has possesion of the associated [crate::attributes::Attribute]s,
@@ -633,12 +652,14 @@ impl Nym {
         &self,
         cred: &Credential,
         addl_attrs: &Option<Entry>,
-        their_nym: &NymPublic,
+        their_proof: &NymProof,
     ) -> Result<Offer, anyhow::Error> {
-        assert!(DamgardTransform::verify(
-            &their_nym.proof,
-            &their_nym.damgard
-        ));
+        // Nyms are anaonymous and ephermal, and this offer is NOT tied to this nym key
+        // so this verify doesn't really add much confidence
+        // all it does is force the user to have a nym and verify that it's valid
+        // The user would have to correlate this nym out of band with their intended person to
+        // close the loop
+        assert!(DamgardTransform::verify(their_proof));
 
         // Before we offer the Credential, change the Representative so we stay anonymous
         // This differs slightly from the reference Python implementation which
@@ -646,14 +667,14 @@ impl Nym {
         // We make this change because we want to change the rep before we offer the credential to someone else
         // as opposed to changing it before we accept it for ourselves.
 
-        // `mu` has to be `Scalar::one()` here because it can only be randomized _once_,
+        // `mu` has to be `Scalar::ONE` here because it can only be randomized _once_,
         // which is during the prove() function
         let mu = Scalar::ONE;
         // pick randomness psi.
         let psi = Scalar::random(ThreadRng::default());
 
         let (nym_p_pk, cred_prime, chi) =
-            spseq_uc::change_rep(&self.public.proof.public_key, cred, &mu, &psi, true);
+            spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, true);
 
         // Get nym_p secret by updating with chi and psi
         let nym_p_secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
@@ -712,7 +733,7 @@ impl Nym {
         // verify the signature of the credential first
         assert!(verify(
             &offer.vk,
-            &self.public.proof.public_key,
+            &self.public.key,
             &offer.commitment_vector,
             &sigma_new
         ));
@@ -780,15 +801,16 @@ impl Nym {
         cred: &Credential,
         all_attributes: &[Entry],
         selected_attrs: &[Entry],
+        nonce: Option<impl AsRef<[u8]>>,
     ) -> CredProof {
-        let mu = Scalar::random(ThreadRng::default()); // mu can be random() since `prove` is the last step in the Cred process
+        // mu can be random here since `prove` is the last step in the Cred process.
+        let mu = Scalar::random(ThreadRng::default());
         let psi = Scalar::random(ThreadRng::default());
 
         // run change rep to randomize credential and user pk (i.e., create a new nym)
         // vk: &[VK], pk_u: &G1, orig_sig: &EqcSignature, mu: &Scalar, psi: &Scalar, b: bool
         // No need to update or reveal the update_key for a proof (only needed for delegation)
-        let (nym_p, cred_p, chi) =
-            spseq_uc::change_rep(&self.public.proof.public_key, cred, &mu, &psi, false);
+        let (nym_p, cred_p, chi) = spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, false);
 
         // update aux_r with chi and psi
         let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
@@ -821,7 +843,7 @@ impl Nym {
             sigma: cred_p.sigma,
             commitment_vector: cred_p.commitment_vector,
             witness_pi,
-            nym_public: nym.public,
+            nym_proof: nym.nym_proof(nonce),
         }
     }
 }
@@ -877,7 +899,7 @@ pub struct CredProof {
     sigma: Signature,
     commitment_vector: Vec<G1Projective>,
     witness_pi: G1Projective,
-    nym_public: NymPublic,
+    nym_proof: NymProof,
 }
 
 /// Verify a proof of a [Credential]
@@ -893,6 +915,7 @@ pub fn verify_proof(
     vk: &[VK],
     proof: &CredProof,
     selected_attrs: &[Entry],
+    params: &ParamSetCommitment,
 ) -> Result<bool, IssuerError> {
     // TODO: assert that Issuer public parameters are the same as the ones included in the proof
 
@@ -909,19 +932,18 @@ pub fn verify_proof(
 
     // check the proof is valid for each
     let check_verify_cross = CrossSetCommitment::verify_cross(
-        &proof.nym_public.parameters,
+        &params,
         &commitment_vectors,
         selected_attrs,
         &proof.witness_pi,
     );
 
-    let check_zkp_verify =
-        DamgardTransform::verify(&proof.nym_public.proof, &proof.nym_public.damgard);
+    let check_zkp_verify = DamgardTransform::verify(&proof.nym_proof);
 
     // signature is based on the original commitment vector. Unless we adapt it when the restriction is applied
     let verify_sig = verify(
         vk,
-        &proof.nym_public.proof.public_key,
+        &proof.nym_proof.public_key,
         &proof.commitment_vector,
         &proof.sigma,
     );
@@ -935,6 +957,8 @@ mod tests {
 
     use super::*;
     use crate::attributes::{attribute, Attribute};
+
+    const NONCE: Option<&[u8]> = None;
 
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -1173,8 +1197,7 @@ mod tests {
             Entry(messages_vectors.message1_str),
             Entry(messages_vectors.message2_str),
         ];
-        let signature_original =
-            issuer.sign(&nym.public.proof.public_key, messages_vector, Some(k_prime))?;
+        let signature_original = issuer.sign(&nym.public.key, messages_vector, Some(k_prime))?;
 
         // assrt that signature has update_key of length k_prime
         // how to convert a usize to integer:
@@ -1226,7 +1249,7 @@ mod tests {
         // assert!(sign_scheme.verify(&vk, &pk_u, &cred_chged.commitment_vector, &cred_chged.sigma));
         assert!(verify(
             &issuer.public.vk,
-            &nym.public.proof.public_key,
+            &nym.public.key,
             &signature_changed.commitment_vector,
             &signature_changed.sigma
         ));
@@ -1255,8 +1278,7 @@ mod tests {
             Entry(messages_vectors.message1_str),
             Entry(messages_vectors.message2_str),
         ];
-        let signature_original =
-            issuer.sign(&nym.public.proof.public_key, messages_vector, k_prime)?;
+        let signature_original = issuer.sign(&nym.public.key, messages_vector, k_prime)?;
 
         // run changerep function (with randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
@@ -1264,13 +1286,8 @@ mod tests {
         let mu = Scalar::random(ThreadRng::default());
         let psi = Scalar::random(ThreadRng::default());
 
-        let (rndmz_pk_u, signature_prime, _chi) = spseq_uc::change_rep(
-            &nym.public.proof.public_key,
-            &signature_original,
-            &mu,
-            &psi,
-            updatable,
-        );
+        let (rndmz_pk_u, signature_prime, _chi) =
+            spseq_uc::change_rep(&nym.public.key, &signature_original, &mu, &psi, updatable);
 
         // verify the signature_prime
         assert!(verify(
@@ -1318,14 +1335,14 @@ mod tests {
             Entry(messages_vectors.message1_str),
             Entry(messages_vectors.message2_str),
         ];
-        let cred = issuer.sign(&nym.public.proof.public_key, messages_vector, k_prime)?;
+        let cred = issuer.sign(&nym.public.key, messages_vector, k_prime)?;
 
         // run changerep function (with randomizing update_key) to
         // randomize the sign, pk_u and commitment vector
         let mu = Scalar::ONE;
         let psi = Scalar::random(ThreadRng::default());
         let (rndmz_pk_u, cred_r, _chi) =
-            spseq_uc::change_rep(&nym.public.proof.public_key, &cred, &mu, &psi, true);
+            spseq_uc::change_rep(&nym.public.key, &cred, &mu, &psi, true);
 
         // verify the signature_prime
         assert!(verify(
@@ -1382,7 +1399,7 @@ mod tests {
         ];
 
         let signature_original = issuer
-            .sign(&nym.public.proof.public_key, messages_vector, k_prime)
+            .sign(&nym.public.key, messages_vector, k_prime)
             .expect("valid tests");
 
         // 4. create second user_keygen pk_u_new, sk_new
@@ -1398,7 +1415,7 @@ mod tests {
         // 7. verify the signature using sigma_new
         assert!(verify(
             &issuer.public.vk,
-            &nym_new.public.proof.public_key,
+            &nym_new.public.key,
             &signature_original.commitment_vector,
             &sigma_new
         ));
@@ -1424,13 +1441,14 @@ mod tests {
         ];
 
         // Use `issue_cred` to issue a Credential to a Use's Nym
-        let cred = issuer.issue_cred(messages_vector, k_prime, &nym.public)?;
+        const NONCE: Option<&[u8]> = None;
+        let cred = issuer.issue_cred(messages_vector, k_prime, &nym.nym_proof(NONCE))?;
 
         // check the correctness of root credential
         // assert (spseq_uc.verify(pp_sign, vk_ca, nym_u, commitment_vector, sigma))
         assert!(verify(
             &issuer.public.vk,
-            &nym.public.proof.public_key,
+            &nym.public.key,
             &cred.commitment_vector,
             &cred.sigma
         ));
@@ -1455,7 +1473,7 @@ mod tests {
             Entry(messages_vectors.message2_str),
         ];
 
-        let cred = issuer.issue_cred(messages_vector, k_prime, &nym.public)?;
+        let cred = issuer.issue_cred(messages_vector, k_prime, &nym.nym_proof(NONCE))?;
 
         // User to whose Nym we will offer the credential
         let user_r = UserKey::new();
@@ -1465,12 +1483,12 @@ mod tests {
         messages_vector.push(addl_entry.clone());
 
         // Create the Offer
-        let offer = nym.offer(&cred, &Some(addl_entry), &nym_r.public)?;
+        let offer = nym.offer(&cred, &Some(addl_entry), &nym_r.nym_proof(NONCE))?;
 
         // verify change_rel
         assert!(verify(
             &issuer.public.vk,
-            &nym.public.proof.public_key,
+            &nym.public.key,
             &cred.commitment_vector,
             &cred.sigma
         ));
@@ -1481,16 +1499,21 @@ mod tests {
         // verify the signature
         assert!(verify(
             &cred_r.vk,
-            &nym_r.public.proof.public_key,
+            &nym_r.public.key,
             &cred_r.commitment_vector,
             &cred_r.sigma
         ));
 
         // prepare a proof for all entrys, including the additional entry
-        let proof = nym_r.prove(&cred_r, messages_vector, messages_vector);
+        let proof = nym_r.prove(&cred_r, messages_vector, messages_vector, NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public.vk, &proof, messages_vector)?);
+        assert!(verify_proof(
+            &issuer.public.vk,
+            &proof,
+            messages_vector,
+            &issuer.public.parameters
+        )?);
 
         Ok(())
     }
@@ -1522,7 +1545,7 @@ mod tests {
         let nym_p = user.nym(issuer.public.parameters.clone());
 
         let k_prime = Some(4);
-        let cred = issuer.issue_cred(&all_attributes, k_prime, &nym_p.public)?;
+        let cred = issuer.issue_cred(&all_attributes, k_prime, &nym_p.nym_proof(NONCE))?;
 
         // subset of each message set
         // iteratre through message1_str and return vector if element is either `age` or `name` Attribute
@@ -1537,10 +1560,15 @@ mod tests {
         let selected_attrs = vec![Entry(sub_list1_str), Entry(sub_list2_str)];
 
         // prepare a proof
-        let proof = nym_p.prove(&cred, &all_attributes, &selected_attrs);
+        let proof = nym_p.prove(&cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public.vk, &proof, &selected_attrs)?);
+        assert!(verify_proof(
+            &issuer.public.vk,
+            &proof,
+            &selected_attrs,
+            &issuer.public.parameters
+        )?);
 
         Ok(())
     }
@@ -1577,7 +1605,7 @@ mod tests {
         let index_l = all_attributes.len() + position;
         let k_prime = Some(std::cmp::min(index_l, l_message.into())); // k_prime must be: MIN(messages_vector.len()) < k_prime < MAX(l_message)
 
-        let cred = issuer.issue_cred(&all_attributes, k_prime, &alice_nym.public)?;
+        let cred = issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
         let robert = UserKey::new();
         let bobby_nym = robert.nym(issuer.public.parameters.clone());
@@ -1599,8 +1627,11 @@ mod tests {
         all_attributes.push(addl_entry.clone());
 
         // offer to bobby_nym
-        let alice_del_to_bobby =
-            alice_nym.offer(&cred_restricted, &Some(addl_entry), &bobby_nym.public)?;
+        let alice_del_to_bobby = alice_nym.offer(
+            &cred_restricted,
+            &Some(addl_entry),
+            &bobby_nym.nym_proof(NONCE),
+        )?;
 
         // bobby_nym accepts
         let bobby_cred = bobby_nym.accept(&alice_del_to_bobby);
@@ -1608,7 +1639,7 @@ mod tests {
         // verify signature
         assert!(verify(
             &issuer.public.vk,
-            &bobby_nym.public.proof.public_key,
+            &bobby_nym.public.key,
             &bobby_cred.commitment_vector,
             &bobby_cred.sigma
         ));
@@ -1625,10 +1656,15 @@ mod tests {
         ];
 
         // prepare a proof
-        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
+        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public.vk, &proof, &selected_attrs)?);
+        assert!(verify_proof(
+            &issuer.public.vk,
+            &proof,
+            &selected_attrs,
+            &issuer.public.parameters
+        )?);
 
         // if we try to prove Entry[0] or Entry[1] it should fail
         // age is from Entry[0]
@@ -1640,10 +1676,15 @@ mod tests {
         ];
 
         // prepare a proof
-        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
+        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof should fail
-        assert!(!verify_proof(&issuer.public.vk, &proof, &selected_attrs)?);
+        assert!(!verify_proof(
+            &issuer.public.vk,
+            &proof,
+            &selected_attrs,
+            &issuer.public.parameters
+        )?);
 
         Ok(())
     }
@@ -1683,13 +1724,14 @@ mod tests {
         let index_l = all_attributes.len() + position;
         let k_prime = Some(std::cmp::min(index_l, l_message.into())); // k_prime must be: MIN(messages_vector.len()) < k_prime < MAX(l_message)
 
-        let alice_cred = issuer.issue_cred(&all_attributes, k_prime, &alice_nym.public)?;
+        let alice_cred =
+            issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
         let robert = UserKey::new();
         let bobby_nym = robert.nym(issuer.public.parameters.clone());
 
         // offer to bobby_nym
-        let alice_offer = alice_nym.offer(&alice_cred, &None, &bobby_nym.public)?;
+        let alice_offer = alice_nym.offer(&alice_cred, &None, &bobby_nym.nym_proof(NONCE))?;
 
         // bobby_nym accepts
         let bobby_cred = bobby_nym.accept(&alice_offer);
@@ -1702,8 +1744,11 @@ mod tests {
         let additional_entry = Entry::new(&[handsome_attribute.clone()]);
         all_attributes.push(additional_entry.clone());
 
-        let bobby_offer =
-            bobby_nym.offer(&bobby_cred, &Some(additional_entry), &charlie_nym.public)?;
+        let bobby_offer = bobby_nym.offer(
+            &bobby_cred,
+            &Some(additional_entry),
+            &charlie_nym.nym_proof(NONCE),
+        )?;
 
         // bobby_offer commitment_vector should be 1 longer than bobby_cred
         assert_eq!(
@@ -1723,10 +1768,15 @@ mod tests {
         ];
 
         // prepare a proof
-        let proof = charlie_nym.prove(&charlie_cred, &all_attributes, &selected_attrs);
+        let proof = charlie_nym.prove(&charlie_cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public.vk, &proof, &selected_attrs)?);
+        assert!(verify_proof(
+            &issuer.public.vk,
+            &proof,
+            &selected_attrs,
+            &issuer.public.parameters
+        )?);
 
         Ok(())
     }

@@ -19,6 +19,8 @@ use delanocreds::{
     verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, UserKey,
 };
 
+const NONCE: Option<&[u8]> = None;
+
 pub fn main() -> Result<()> {
     println!(" \nRunning a short basic test: \n");
     let _ = basic_bench();
@@ -76,7 +78,7 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.public)?;
+    let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
     eprintln!(
         "Time to issue cred: {:?} (+{:?})",
@@ -98,7 +100,8 @@ pub fn basic_bench() -> Result<()> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public)?;
+    let alice_del_to_bobby =
+        alice_nym.offer(&cred_restricted, &None, &bobby_nym.nym_proof(NONCE))?;
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -129,7 +132,7 @@ pub fn basic_bench() -> Result<()> {
     ];
 
     // prepare a proof
-    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
@@ -138,7 +141,12 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
+    assert!(verify_proof(
+        &signer.public.vk,
+        &proof,
+        &selected_attrs,
+        &signer.public.parameters
+    )?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -207,7 +215,7 @@ fn bench_30_of_100() -> Result<()> {
     );
     let last = start.elapsed();
 
-    let cred = match signer.issue_cred(&all_attributes, k_prime, &alice_nym.public) {
+    let cred = match signer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE)) {
         Ok(cred) => cred,
         Err(e) => {
             eprintln!("Error issuing cred: {:?}", e);
@@ -235,7 +243,8 @@ fn bench_30_of_100() -> Result<()> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None, &bobby_nym.public)?;
+    let alice_del_to_bobby =
+        alice_nym.offer(&cred_restricted, &None, &bobby_nym.nym_proof(NONCE))?;
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -261,7 +270,7 @@ fn bench_30_of_100() -> Result<()> {
         .collect();
 
     // prepare a proof
-    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
@@ -270,7 +279,12 @@ fn bench_30_of_100() -> Result<()> {
     );
     let last = start.elapsed();
 
-    assert!(verify_proof(&signer.public.vk, &proof, &selected_attrs)?);
+    assert!(verify_proof(
+        &signer.public.vk,
+        &proof,
+        &selected_attrs,
+        &signer.public.parameters
+    )?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",

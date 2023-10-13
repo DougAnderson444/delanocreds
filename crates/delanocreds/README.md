@@ -114,19 +114,25 @@ fn main() -> Result<()> {
     // This Nym must use the public parameters of the Issuer
     let nym = alice.nym(issuer.public.parameters.clone());
 
+    // A verifier can demand the nym proof include a nonce to prevent replay attacks, or it can skip with with `None`
+    // The nonce can be compared against the Pedersen open randomness in the `NymProof` to verify that a replay
+    // attacker isn't reusing a previously generated proof
+    let nonce: Option<&[u8]> = None;
+
     let cred = issuer
         .credential() // CredentialBuilder for this Issuer
         .with_entry(root_entry.clone()) // adds a Root Entry
         .max_entries(&MaxEntries::default()) // set the Entry ceiling
-        .issue_to(&nym.public)?; // issues to a Nym
+        .issue_to(&nym.nym_proof(nonce))?; // issues to a Nym
 
     // Send the (powerful) Root Credential, Attributes, and Entrys to Alice
 
     // Alice can use the Credential to prove she is over 21
     let (proof, selected_attributes) = nym.proof_builder(&cred, &[root_entry.clone()])
         .select_attribute(over_21.clone())
-        .prove();
-    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes).unwrap());
+        .prove(nonce);
+
+    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes, &issuer.public.parameters).unwrap());
 
     // Alice can offer variations of the Credential to others
     let bob = UserKey::new();
@@ -136,7 +142,7 @@ fn main() -> Result<()> {
         .without_attribute(seniors_discount) // resticts the ability to prove attribute Entry (note: Removes the entire Entry, not just one Attribute)
         .additional_entry(Entry::new(&[Attribute::new("10% off")])) // adds a new Entry
         .max_entries(3) // restrict delegatees to only 3 entries total
-        .offer_to(&bobby_nym.public)?;
+        .open_offer(&bobby_nym.nym_proof(nonce))?;
 
     // Send to Bob so he can accept the Credential
     let bobby_cred = bobby_nym.accept(&offer);
@@ -144,9 +150,9 @@ fn main() -> Result<()> {
     // and prove all entries
     let (proof, selected_attributes) = bobby_nym.proof_builder(&bobby_cred, &provable_entries)
         .select_attribute(over_21)
-        .prove();
+        .prove(nonce);
 
-    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes).unwrap());
+    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes, &issuer.public.parameters).unwrap());
 
     Ok(())
 }
