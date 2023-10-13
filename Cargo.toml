@@ -19,7 +19,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.44"
 delanocreds = { workspace = true, features = ["serde", "serde_json"] } 
-blastkids = { workspace = true }
+blastkids = { workspace = true } 
 
 [dev-dependencies]
 blastkids = { workspace = true }

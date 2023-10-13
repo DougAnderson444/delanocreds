@@ -20,7 +20,8 @@ rayon = "1.8.0"
 log = "0.4"
 env_logger = "0.10.0"
 base64 = { workspace = true }
-
+blastkids = { workspace = true }
+ 
 # optional dependencies
 serde = { version = "1.0", optional = true, features = ["derive"] }
 serde_json ={ version = "1.0.107", optional = true }
