@@ -17,9 +17,13 @@ use routes::home::Home;
 use seed_keeper_core::Zeroizing;
 use state::*;
 
+use crate::app::components::nav::Nav;
+use crate::app::constants::TEST;
+use crate::app::routes::test::Test;
+
 /// The Label and Encrypted key params in the hash value
 ///
-/// `label` - A 6+ character string, usually a username, email, or phrase to identify the key
+/// `label` - A 8+ character string, usually a username, email, or phrase to identify the key
 /// `pin` - A 4+ digit pin to encrypt the key
 #[derive(Default, Clone, Debug)]
 pub(crate) struct LabelAndPin {
@@ -40,16 +44,15 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Router>
-            <div class="relative flex min-h-screen flex-col justify-center overflow-hidden">
+            <div class="relative flex min-h-screen flex-col justify-start overflow-hidden">
                 <nav>
-                    <div class="my-0 mx-auto max-w-3xl text-center">
-                        <h2 class="p-6 text-4xl font-bold">"Delanocreds."</h2>
-                    </div>
+                    <Nav/>
                 </nav>
                 <div class="p-2 my-0 mx-auto max-w-3xl">
                     <Routes>
                         <Route path=HOME view=Home/>
                         <Route path=ACCOUNT view=Account/>
+                        <Route path=TEST view=Test/>
                         <Route path="/*any" view=|| view! { <h1>"Not Found"</h1> }/>
                     </Routes>
                 </div>

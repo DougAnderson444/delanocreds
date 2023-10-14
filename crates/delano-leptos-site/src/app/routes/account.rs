@@ -39,17 +39,15 @@ pub(crate) fn Account() -> impl IntoView {
 
         let expanded = account.expand_to(MaxEntries::new(8).into());
 
-        // now use these secret keys in Issuer
-        let issuer = Issuer::new_with_secret(expanded, MaxCardinality::new(4));
+        // now use these secret keys in Issuer, 12 can fit into a QR code
+        let issuer = Issuer::new_with_secret(expanded, MaxCardinality::new(12));
 
         // <!-- // value={issuer.public.to_string().into()} issuer.public.to_string().clone().into()-->
         let qrvalue = issuer.public.to_compact().to_string();
         let value_copy = qrvalue.to_owned();
         view! {
-            <div class="mx-auto max-w-md">
-                <div class="">
-                    "Let's Create some Credentials! Using account public info (G1, G2, Public Parameters):"
-                </div>
+            <div class="mx-auto">
+                <div class="">"Let's Create some Credentials!"</div>
                 <div class="mt-4 font-semibold">"Publish Your Public Parameters:"</div>
                 // Summary QR Code
                 <details class="mt-4">

@@ -67,24 +67,30 @@ pub fn Splash() -> impl IntoView {
         <div class="my-0 mx-auto max-w-3xl text-center">
             <List>
                 <p>
-                    "Create & Publish your"
+                    "To gain street Creds, first you'll need a "
                     <code class="text-sm font-bold text-gray-900 bg-green-200 p-2 ml-1 rounded">
-                        "Verification Key"
+                        "Cryptographic Key"
                     </code>
                 </p>
                 <p>
-                    "Issue some"
+                    "Make it using a memorable "
                     <code class="text-sm font-bold text-gray-900 bg-green-200 p-2 ml-1 rounded">
-                        "Credentials"
+                        "Label"
                     </code>
                 </p>
                 <p>
-                    "Send them to your"
+                    "Secure it with a "
                     <code class="text-sm font-bold text-gray-900 bg-green-200 p-2 ml-1 rounded">
-                        "Contacts"
+                        "PIN Number"
                     </code>
                 </p>
             </List>
+            <h3 class="italic">
+                "This stays "
+                <span class="text-sm font-semibold text-gray-900 outline outline-sky-500 p-1 m-1 rounded">
+                    "in your browser"
+                </span> " so only you have access to it."
+            </h3>
             <div class="flex flex-col items-center justify-center p-2">
                 <PinPad/>
             </div>
@@ -130,8 +136,10 @@ pub fn PinPad() -> impl IntoView {
     };
 
     view! {
-        <div class="flex flex-col items-center justify-center">
-            <div class="text-2xl font-sans tracking-tight items-center justify-center">"Label"</div>
+        <div class="flex flex-row items-center justify-center space-x-2">
+            <div class="text-xl font-semibold tracking-tight items-center justify-center">
+                "Label:"
+            </div>
             <input
                 placeholder="My main wallet"
                 class="p-2 my-2 border rounded-lg w-full bg-gray-50"
