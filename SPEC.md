@@ -55,7 +55,7 @@ When the bytes are encoded to Base64, the character length should be no more tha
 
 Although this is too big for a tweet, which is capped at 280 characters, it is still small enough to be used in a URL or a QR Code (Max. 4,296 alphanumeric characters 7096). An example QR code is:
 
-![Example QR Code](./public-params-qr-code.svg)
+A MaxCardinality of 12 is the most Public Parameters that can be encoded in a standard QR Code with a compact VK.
 
 ## Proving a Credential
 
