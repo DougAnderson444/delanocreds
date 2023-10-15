@@ -1,11 +1,11 @@
 //! Reusable components for the site.
 
-/// Issue Credentials component.
-pub(crate) mod issue;
 /// The List component (bulleted list of items).
 pub(crate) mod list;
 /// Navigation Bar
 pub(crate) mod nav;
+/// Issue Credentials component.
+pub(crate) mod offer;
 /// The QR Code component.
 pub(crate) mod qrcode;
 
