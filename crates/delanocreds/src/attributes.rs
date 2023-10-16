@@ -1,5 +1,5 @@
 //! A crate for creating:
-//! - Individual [Attribute], a 32 byte Sha2-256 [CID](https://cid.ipfs.tech/) generated from bytes (likely from a string)
+//! - Individual [Attribute], a 32 byte Sha2-256 [cid::Cid] (<https://cid.ipfs.tech/>) generated from bytes (likely from a string, could be an image or doc)
 //! - [crate::entry::Entry] is a vector of [Attribute]s up to [crate::keypair::MaxCardinality]
 //!
 //! # Attributes API
@@ -23,10 +23,10 @@
 //!
 //!
 //! // attributes have a `digest()` method which returns a &[u8]
-//! attributes.push(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+//! `attributes.push(vec!["a".to_string(), "b".to_string(), "c".to_string()]);`
 //!
 //! // select from the attributes
-//! let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);
+//! `let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);`
 use crate::ec::Scalar;
 use bls12_381_plus::elliptic_curve::bigint;
 use cid::multibase;
@@ -38,7 +38,7 @@ const RAW: u64 = 0x55;
 const DIGEST_LEN: usize = 32;
 const SHA2_256: u64 = 0x12;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Attribute(cid::Cid);
 
 impl Attribute {
