@@ -3,6 +3,18 @@ use leptos::*;
 use qrcode_generator::QrCodeEcc;
 use web_sys::Blob;
 
+/// Reactive QR Code component that takes a reactive signal of bytes and displays a QR Code
+#[component]
+pub fn ReactiveQRCode(signal: ReadSignal<String>) -> impl IntoView {
+    move || {
+        let qrvalue = signal.get().as_bytes().to_vec();
+        view! {
+            <QrCode qrvalue=qrvalue/>
+        }
+    }
+}
+
+/// Static QRCOde Component that takes a Vec<u8> and displays a QR Code once.
 #[component]
 pub fn QrCode(qrvalue: Vec<u8>) -> impl IntoView {
     log::debug!("QrCode component data length: {:?}", qrvalue.len());
