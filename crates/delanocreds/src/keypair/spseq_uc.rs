@@ -2,6 +2,11 @@ use super::*;
 use crate::ec::curve::polynomial_from_roots;
 use crate::ec::{G1Projective, Scalar};
 use crate::keypair::Signature;
+use bls12_381_plus::group::GroupEncoding;
+use bls12_381_plus::G1Compressed;
+use serde_with::base64::{Base64, UrlSafe};
+use serde_with::formats::Unpadded;
+use serde_with::serde_as;
 
 /// Update Key alias
 pub type UpdateKey = Option<Vec<Vec<G1Projective>>>;
@@ -41,6 +46,200 @@ pub struct Credential {
     pub vk: Vec<VK>,
 }
 
+/// [CredentialCompressed] is a compressed version of [Credential]. Each element is compressed into their smallest byte equivalents and serializable as base64URL safe encoding.
+#[serde_as]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CredentialCompressed {
+    sigma: SignatureCompressed,
+    #[serde_as(as = "Option<Vec<Vec<Base64<UrlSafe, Unpadded>>>>")]
+    update_key: Option<Vec<Vec<G1Compressed>>>,
+    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
+    commitment_vector: Vec<G1Compressed>,
+    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
+    opening_vector: Vec<OpeningInfo>,
+    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
+    vk: Vec<VKCompressed>,
+}
+
+/// Try to convert from [CredentialCompressed] to [Credential]
+impl TryFrom<CredentialCompressed> for Credential {
+    type Error = String;
+    fn try_from(value: CredentialCompressed) -> std::result::Result<Self, Self::Error> {
+        let sigma = Signature::try_from(value.sigma)?;
+        let update_key = match value.update_key {
+            Some(usign) => {
+                let mut usign_decompressed = Vec::new();
+                usign_decompressed.resize(usign.len(), Vec::new());
+                for k in 0..usign.len() {
+                    usign_decompressed[k] = usign[k]
+                        .iter()
+                        .map(|item| {
+                            let g1_maybe = G1Projective::from_bytes(item);
+                            if g1_maybe.is_none().into() {
+                                return Err("Invalid G1 point".to_string());
+                            }
+                            Ok(g1_maybe.expect("it'll be fine, it passed the check"))
+                        })
+                        .map(|item| item.unwrap())
+                        .collect();
+                }
+                Some(usign_decompressed)
+            }
+            None => None,
+        };
+        let commitment_vector = value
+            .commitment_vector
+            .iter()
+            .map(|item| {
+                let g1_maybe = G1Projective::from_bytes(item);
+                if g1_maybe.is_none().into() {
+                    return Err("Invalid G1 point".to_string());
+                }
+                Ok(g1_maybe.expect("it'll be fine, it passed the check"))
+            })
+            // unwrap the Ok into inner for each
+            .map(|item| item.unwrap())
+            .collect::<Vec<G1Projective>>();
+        let opening_vector = value
+            .opening_vector
+            .into_iter()
+            .map(|item| item.into_scalar())
+            .collect::<Vec<Scalar>>();
+        let vk = value
+            .vk
+            .iter()
+            .map(|item| match item {
+                VKCompressed::G1(g1) => {
+                    let g1_maybe = G1Projective::from_bytes(g1);
+                    if g1_maybe.is_none().into() {
+                        return Err("Invalid G1 point".to_string());
+                    }
+                    Ok(VK::G1(
+                        g1_maybe.expect("it'll be fine, it passed the check"),
+                    ))
+                }
+                VKCompressed::G2(g2) => {
+                    let g2_maybe = G2Projective::from_bytes(g2);
+                    if g2_maybe.is_none().into() {
+                        return Err("Invalid G2 point".to_string());
+                    }
+                    Ok(VK::G2(
+                        g2_maybe.expect("it'll be fine, it passed the check"),
+                    ))
+                }
+            })
+            .map(|item| item.unwrap())
+            .collect::<Vec<VK>>();
+
+        Ok(Credential {
+            sigma,
+            update_key,
+            commitment_vector,
+            opening_vector,
+            vk,
+        })
+    }
+}
+
+/// Convert from [Credential] to [CredentialCompressed]
+impl From<Credential> for CredentialCompressed {
+    fn from(cred: Credential) -> Self {
+        let sigma = SignatureCompressed::from(cred.sigma);
+        let update_key = match cred.update_key {
+            Some(usign) => {
+                let mut usign_compressed = Vec::new();
+                usign_compressed.resize(usign.len(), Vec::new());
+                for k in 0..usign.len() {
+                    usign_compressed[k] = usign[k].iter().map(|item| item.to_bytes()).collect();
+                }
+                Some(usign_compressed)
+            }
+            None => None,
+        };
+        let commitment_vector = cred
+            .commitment_vector
+            .iter()
+            .map(|item| item.to_bytes())
+            .collect();
+        let opening_vector = cred
+            .opening_vector
+            .into_iter()
+            .map(OpeningInfo::new)
+            .collect::<Vec<OpeningInfo>>();
+
+        let vk = cred
+            .vk
+            .iter()
+            .map(|item| match item {
+                VK::G1(g1) => VKCompressed::G1(g1.to_bytes()),
+                VK::G2(g2) => VKCompressed::G2(g2.to_bytes()),
+            })
+            .collect();
+
+        CredentialCompressed {
+            sigma,
+            update_key,
+            commitment_vector,
+            opening_vector,
+            vk,
+        }
+    }
+}
+
+/// Newtype for Opening Vector of [Scalar].
+/// This exists so it can easily be converted to base64
+pub struct OpeningInfo {
+    inner: [u8; 32],
+}
+
+impl OpeningInfo {
+    pub fn new(inner: Scalar) -> Self {
+        OpeningInfo {
+            inner: inner.to_be_bytes(),
+        }
+    }
+
+    pub fn into_scalar(self) -> Scalar {
+        Scalar::from_be_bytes(&self.inner).unwrap()
+    }
+}
+
+/// Implements AsRef<[u8]> for OpeningVector, so it can be serde compatible
+impl AsRef<[u8]> for OpeningInfo {
+    fn as_ref(&self) -> &[u8] {
+        self.inner.as_ref()
+    }
+}
+
+/// From<Vec<u8>> for OpeningVector
+impl From<Vec<u8>> for OpeningInfo {
+    fn from(v: Vec<u8>) -> Self {
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&v[..]);
+        OpeningInfo { inner: bytes }
+    }
+}
+
+/// [Display] for [Credential] is converting its compressed elements, then to json string
+#[cfg(feature = "serde")]
+impl Display for Credential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let comp = CredentialCompressed::from(self.clone());
+        let comp_json = serde_json::to_string_pretty(&comp).unwrap();
+        write!(f, "{}", comp_json)
+    }
+}
+
+/// Takes compressed elements and deserializes json string to [Credential]
+#[cfg(feature = "serde")]
+impl FromStr for Credential {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let cred_compressed: CredentialCompressed = serde_json::from_str(s).unwrap();
+        cred_compressed.try_into()
+    }
+}
 /// Change the Representative of the signature message pair to a new commitment vector and user public key.
 /// This is used to update the signature message pair to a new user public key.
 /// The new commitment vector is computed using the old commitment vector and the new user public key.

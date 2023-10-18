@@ -3,14 +3,14 @@
 //! - Practical Delegatable Anonymous Credentials From Equivalence Class Signatures, PETS 2023.
 //!    [https://eprint.iacr.org/2022/680](https://eprint.iacr.org/2022/680)
 use super::CredentialBuilder;
-use crate::config;
 use crate::ec::curve::pairing;
-use crate::ec::{G2Projective, Scalar};
+use crate::ec::Scalar;
 use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
 use crate::set_commits::CrossSetCommitment;
 use crate::set_commits::ParamSetCommitment;
 use crate::set_commits::{Commitment, ParamSetCommitmentB64};
+use crate::{config, error};
 use crate::{
     zkp::PedersenOpen,
     zkp::Schnorr,
@@ -22,14 +22,19 @@ use base64::{engine::general_purpose, Engine as _};
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::{Curve, Group, GroupEncoding};
-use bls12_381_plus::{G1Projective, Gt};
-pub use delano_keys::vk::VK;
+use bls12_381_plus::{G1Compressed, G1Projective, G2Compressed, G2Projective, Gt};
+pub use delano_keys::vk::{VKCompressed, VK};
 use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
+use serde_with::base64::{Base64, UrlSafe};
+use serde_with::formats::Unpadded;
+use serde_with::serde_as;
 use spseq_uc::Credential;
 use spseq_uc::UpdateError;
+use std::fmt::Display;
 use std::ops::Mul;
 use std::ops::{Deref, Neg};
+use std::str::FromStr;
 
 pub mod spseq_uc;
 
@@ -301,7 +306,7 @@ impl Issuer {
     ) -> Result<Credential, IssuerError> {
         // check if proof of nym is correct using Damgard’s technique for obtaining malicious verifier
         // interactive zero-knowledge proofs of knowledge
-        if !DamgardTransform::verify(&nym_proof) {
+        if !DamgardTransform::verify(nym_proof) {
             return Err(IssuerError::InvalidNymProof);
         }
         // check if delegate keys is provided
@@ -388,8 +393,8 @@ impl Issuer {
         let mut update_key = None;
         if let Some(k_prime) = k_prime {
             if k_prime > messages_vector.len() {
-                // k_prime upper bounds: enusre k_prime is at most sk.len() - 2, which is l_message length from sign_keygen()
-                let k_prime = k_prime.min(self.public.vk.len() - 2);
+                // k_prime upper bounds: ensure k_prime is at most sk.len() - 2, which is l_message length from sign_keygen()
+                let k_prime = k_prime.min(self.sk.expose_secret().len() - 2);
 
                 let mut usign = Vec::new();
                 usign.resize(k_prime, Vec::new()); // update_key is k < k' < l, same length as l_message.length, which is same as sk
@@ -652,15 +657,7 @@ impl Nym {
         &self,
         cred: &Credential,
         addl_attrs: &Option<Entry>,
-        their_proof: &NymProof,
-    ) -> Result<Offer, anyhow::Error> {
-        // Nyms are anaonymous and ephermal, and this offer is NOT tied to this nym key
-        // so this verify doesn't really add much confidence
-        // all it does is force the user to have a nym and verify that it's valid
-        // The user would have to correlate this nym out of band with their intended person to
-        // close the loop
-        assert!(DamgardTransform::verify(their_proof));
-
+    ) -> Result<Offer, error::Error> {
         // Before we offer the Credential, change the Representative so we stay anonymous
         // This differs slightly from the reference Python implementation which
         // runs `change_rep` algorithm upon `accept()` protocol (they call it `delegatee()` function)
@@ -694,17 +691,26 @@ impl Nym {
                 &mu,
             ) {
                 Ok(cred_pushed) => cred_pushed,
-                Err(e) => return Err(anyhow::anyhow!("Change Rel Failed: {}", e)),
+                Err(e) => {
+                    return Err(error::Error::ChangeRelationsFailed(format!(
+                        "Change Relations Failed: {}",
+                        e
+                    )))
+                }
             };
         }
 
         // Credential Signature is now for the new Nym
-        assert!(verify(
+        if !verify(
             &cred_prime.vk,
             &nym_p_pk,
             &cred_prime.commitment_vector,
-            &cred_prime.sigma
-        ));
+            &cred_prime.sigma,
+        ) {
+            return Err(error::Error::InvalidSignature(
+                "Credential Signature is not valid for the new Nym".into(),
+            ));
+        }
 
         // negate Signature { t, ..} with nym.secret
         let orphan = nym.send_convert_sig(&cred_prime.vk, cred_prime.sigma.clone());
@@ -863,6 +869,78 @@ pub struct Signature {
     t: G1Projective,
 }
 
+/// [Display] for [Signature] is converting it to [SignatureCompressed] then to json string
+impl Display for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let sig_compressed = SignatureCompressed::from(self.clone());
+        let sig_json = serde_json::to_string(&sig_compressed).unwrap();
+        write!(f, "{}", sig_json)
+    }
+}
+
+/// Uses [SignatureCompressed] to deserialize json string to [Signature]
+impl FromStr for Signature {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let sig_compressed: SignatureCompressed = serde_json::from_str(s).unwrap();
+        Signature::try_from(sig_compressed)
+    }
+}
+
+/// [SignatureCompressed] is a compressed version of [Signature]
+#[serde_as]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SignatureCompressed {
+    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
+    z: G1Compressed,
+    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
+    y_g1: G1Compressed,
+    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
+    y_hat: G2Compressed,
+    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
+    t: G1Compressed,
+}
+
+/// To convert a [Signature] to a [SignatureCompressed]
+impl From<Signature> for SignatureCompressed {
+    fn from(sig: Signature) -> Self {
+        SignatureCompressed {
+            z: sig.z.to_bytes(),
+            y_g1: sig.y_g1.to_bytes(),
+            y_hat: sig.y_hat.to_bytes(),
+            t: sig.t.to_bytes(),
+        }
+    }
+}
+
+/// Impl TryFrom for SignatureCompressed to Signature
+impl TryFrom<SignatureCompressed> for Signature {
+    type Error = String;
+
+    fn try_from(sig: SignatureCompressed) -> Result<Self, Self::Error> {
+        let z = G1Projective::from_bytes(&sig.z);
+        let y_g1 = G1Projective::from_bytes(&sig.y_g1);
+        let y_hat = G2Projective::from_bytes(&sig.y_hat);
+        let t = G1Projective::from_bytes(&sig.t);
+
+        if z.is_none().into()
+            || y_g1.is_none().into()
+            || y_hat.is_none().into()
+            || t.is_none().into()
+        {
+            return Err("Invalid serialization bytes".into());
+        }
+
+        Ok(Signature {
+            z: z.unwrap(),
+            y_g1: y_g1.unwrap(),
+            y_hat: y_hat.unwrap(),
+            t: t.unwrap(),
+        })
+    }
+}
+
 /// Newtype wrapper for a [Credential] which has an orphan [Signature]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Offer(Credential);
@@ -932,7 +1010,7 @@ pub fn verify_proof(
 
     // check the proof is valid for each
     let check_verify_cross = CrossSetCommitment::verify_cross(
-        &params,
+        params,
         &commitment_vectors,
         selected_attrs,
         &proof.witness_pi,
@@ -1023,6 +1101,36 @@ mod tests {
             &cred.sigma
         ));
         Ok(())
+    }
+
+    #[test]
+    fn test_signature_roundtrip_convert_compressed() {
+        let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
+
+        // create a user key
+        let user = UserKey::new();
+
+        // get some test entries
+        let messages_vectors = setup_tests();
+
+        // create a signature
+        let cred = issuer
+            .sign(
+                &user.pk_u,
+                &[
+                    Entry(messages_vectors.message1_str),
+                    Entry(messages_vectors.message2_str),
+                ],
+                None,
+            )
+            .unwrap();
+
+        let sig_compressed = SignatureCompressed::from(cred.sigma.clone());
+        let sig_json = serde_json::to_string(&sig_compressed).unwrap();
+        let sig_compressed2: SignatureCompressed = serde_json::from_str(&sig_json).unwrap();
+        let sig2 = Signature::try_from(sig_compressed2).unwrap();
+
+        assert_eq!(cred.sigma, sig2);
     }
 
     #[test]
@@ -1483,7 +1591,7 @@ mod tests {
         messages_vector.push(addl_entry.clone());
 
         // Create the Offer
-        let offer = nym.offer(&cred, &Some(addl_entry), &nym_r.nym_proof(NONCE))?;
+        let offer = nym.offer(&cred, &Some(addl_entry))?;
 
         // verify change_rel
         assert!(verify(
@@ -1627,11 +1735,7 @@ mod tests {
         all_attributes.push(addl_entry.clone());
 
         // offer to bobby_nym
-        let alice_del_to_bobby = alice_nym.offer(
-            &cred_restricted,
-            &Some(addl_entry),
-            &bobby_nym.nym_proof(NONCE),
-        )?;
+        let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &Some(addl_entry))?;
 
         // bobby_nym accepts
         let bobby_cred = bobby_nym.accept(&alice_del_to_bobby);
@@ -1731,7 +1835,7 @@ mod tests {
         let bobby_nym = robert.nym(issuer.public.parameters.clone());
 
         // offer to bobby_nym
-        let alice_offer = alice_nym.offer(&alice_cred, &None, &bobby_nym.nym_proof(NONCE))?;
+        let alice_offer = alice_nym.offer(&alice_cred, &None)?;
 
         // bobby_nym accepts
         let bobby_cred = bobby_nym.accept(&alice_offer);
@@ -1744,11 +1848,7 @@ mod tests {
         let additional_entry = Entry::new(&[handsome_attribute.clone()]);
         all_attributes.push(additional_entry.clone());
 
-        let bobby_offer = bobby_nym.offer(
-            &bobby_cred,
-            &Some(additional_entry),
-            &charlie_nym.nym_proof(NONCE),
-        )?;
+        let bobby_offer = bobby_nym.offer(&bobby_cred, &Some(additional_entry))?;
 
         // bobby_offer commitment_vector should be 1 longer than bobby_cred
         assert_eq!(
@@ -1780,7 +1880,4 @@ mod tests {
 
         Ok(())
     }
-
-    #[test]
-    fn test_range() {}
 }
