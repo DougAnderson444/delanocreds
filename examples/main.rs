@@ -100,8 +100,7 @@ pub fn basic_bench() -> Result<()> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby =
-        alice_nym.offer(&cred_restricted, &None, &bobby_nym.nym_proof(NONCE))?;
+    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None)?;
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",
@@ -243,8 +242,7 @@ fn bench_30_of_100() -> Result<()> {
     };
 
     // offer to bobby_nym
-    let alice_del_to_bobby =
-        alice_nym.offer(&cred_restricted, &None, &bobby_nym.nym_proof(NONCE))?;
+    let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &None)?;
 
     eprintln!(
         "Time to offer cred: {:?} (+{:?})",

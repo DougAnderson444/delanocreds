@@ -4,7 +4,7 @@ mod attributes;
 mod config;
 mod ec;
 mod entry;
-mod error;
+pub mod error;
 mod keypair;
 mod set_commits;
 mod zkp;
@@ -17,7 +17,7 @@ pub use entry::MaxEntries;
 use keypair::NymProof;
 pub use keypair::{
     spseq_uc::Credential, verify_proof, Issuer, IssuerError, IssuerPublic, IssuerPublicB64,
-    MaxCardinality, NymPublic, UserKey, VK,
+    MaxCardinality, Nym, NymPublic, UserKey, VK,
 };
 
 // wasm32 tests
@@ -116,7 +116,7 @@ impl<'a> CredentialBuilder<'a> {
 ///
 /// let (offer, provable_entries) = nym
 ///     .offer_builder(&cred, &[root_entry])
-///     .open_offer(&bobby_nym.nym_proof(nonce))?;
+///     .open_offer()?;
 /// # Ok(())
 /// # }
 pub struct OfferBuilder<'a> {
@@ -174,7 +174,7 @@ impl<'a> OfferBuilder<'a> {
     }
 
     /// Build the Offer that can be accepted by any [crate::keypair::Nym] in possession of the associated [Attribute]s.
-    pub fn open_offer(&self, their_nym_proof: &NymProof) -> Result<(keypair::Offer, Vec<Entry>)> {
+    pub fn open_offer(&self) -> Result<(keypair::Offer, Vec<Entry>), error::Error> {
         let mut cred_redacted = self.credential.clone();
         let mut provable_entries = self.current_entries.clone();
 
@@ -222,11 +222,8 @@ impl<'a> OfferBuilder<'a> {
                     .collect::<Vec<_>>(),
             ),
         };
-        assert!(zkp::DamgardTransform::verify(their_nym_proof));
 
-        let offer = self
-            .our_nym
-            .offer(&cred_redacted, &self.additional_entry, their_nym_proof)?;
+        let offer = self.our_nym.offer(&cred_redacted, &self.additional_entry)?;
 
         Ok((offer, provable_entries))
     }
@@ -448,9 +445,8 @@ mod lib_api_tests {
         };
 
         // 1. Offer the unchanged Credential to Bob's Nym
-        let (offer, provable_entries) = alice_nym
-            .offer_builder(&cred, &[root_entry])
-            .open_offer(&bobby_nym.nym_proof(NONCE))?;
+        let (offer, provable_entries) =
+            alice_nym.offer_builder(&cred, &[root_entry]).open_offer()?;
 
         // Bob can accept
         let bobby_cred = bobby_nym.accept(&offer);
@@ -485,7 +481,7 @@ mod lib_api_tests {
         let (offer, provable_entries) = bobby_nym
             .offer_builder(&bobby_cred, &provable_entries)
             .additional_entry(additional_entry)
-            .open_offer(&charlie_nym.nym_proof(NONCE))?;
+            .open_offer()?;
 
         // Charlie can accept
         let charlie_cred = charlie_nym.accept(&offer);
@@ -507,7 +503,7 @@ mod lib_api_tests {
         let (offer, provable_entries) = charlie_nym
             .offer_builder(&charlie_cred, &provable_entries)
             .without_attribute(handsome_attribute.clone())
-            .open_offer(&doug_nym.nym_proof(NONCE))?;
+            .open_offer()?;
 
         assert_eq!(provable_entries.len(), 2); // Should be 2 Entry(s) in the provable_entries, but only 1 non-empty
         assert_eq!(provable_entries[0].len(), 2); // over_21, seniors_discount
@@ -534,7 +530,7 @@ mod lib_api_tests {
         let (offer, provable_entries) = doug_nym
             .offer_builder(&doug_cred, &provable_entries)
             .max_entries(3)
-            .open_offer(&evan_nym.nym_proof(NONCE))?;
+            .open_offer()?;
 
         // there are already 2 entries, so Even can add one more but not two more
         let evan_entry = Entry::new(&[Attribute::new("evan entry #1")]);
@@ -547,7 +543,7 @@ mod lib_api_tests {
         let (offer, provable_entries) = evan_nym
             .offer_builder(&evan_cred, &provable_entries)
             .additional_entry(evan_entry)
-            .open_offer(&even_nym_2.nym_proof(NONCE))?;
+            .open_offer()?;
 
         // Evan2 can accept
         let evan_2_cred = even_nym_2.accept(&offer);
@@ -566,12 +562,10 @@ mod lib_api_tests {
         .unwrap());
 
         // Adding beyond Max Entries of 3 should fail
-        let even_nym_3 = evan.nym(issuer.public.parameters);
-
         let res = even_nym_2
             .offer_builder(&evan_2_cred, &provable_entries)
             .additional_entry(Entry::new(&[Attribute::new("bigger than Max Entry")]))
-            .open_offer(&even_nym_3.nym_proof(NONCE));
+            .open_offer();
 
         assert!(res.is_err());
 

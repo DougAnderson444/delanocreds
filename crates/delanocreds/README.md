@@ -142,7 +142,7 @@ fn main() -> Result<()> {
         .without_attribute(seniors_discount) // resticts the ability to prove attribute Entry (note: Removes the entire Entry, not just one Attribute)
         .additional_entry(Entry::new(&[Attribute::new("10% off")])) // adds a new Entry
         .max_entries(3) // restrict delegatees to only 3 entries total
-        .open_offer(&bobby_nym.nym_proof(nonce))?;
+        .open_offer()?;
 
     // Send to Bob so he can accept the Credential
     let bobby_cred = bobby_nym.accept(&offer);
