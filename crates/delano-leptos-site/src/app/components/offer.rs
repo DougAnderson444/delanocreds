@@ -1,6 +1,35 @@
 //! Issue a credential.
-use delanocreds::MaxCardinality;
+use crate::app::components::qrcode::ReactiveQRCode;
+use delanocreds::{
+    error, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nym, UserKey,
+};
 use leptos::*;
+
+/// Takes Vec<Attribute> and returns a Credential Offer
+pub fn create_offer(
+    issuer: ReadSignal<Issuer>,
+    nym: &Nym,
+    attributes: Vec<Attribute>,
+) -> Result<(Credential, Vec<Entry>), error::Error> {
+    const NONCE: Option<&str> = None;
+
+    // Issue the (Powerful) Root Credential to Arbitary Nym
+    let cred = match issuer.with(|i| {
+        i.credential()
+            .with_entry(attributes.clone().into())
+            .max_entries(&MaxEntries::new(2))
+            .issue_to(&nym.nym_proof(NONCE))
+    }) {
+        Ok(cred) => cred,
+        Err(e) => panic!("Error issuing cred: {:?}", e),
+    };
+
+    // 1. Offer the unchanged Credential to Bob's Nym
+    let (offer, provable_entries) = nym
+        .offer_builder(&cred, &[attributes.into()])
+        .open_offer()?;
+    Ok((offer.into(), provable_entries))
+}
 
 /// Component to issue a credential.
 ///
@@ -12,6 +41,11 @@ pub fn OfferForm(
     #[prop(optional)]
     max_cardinality: MaxCardinality,
 ) -> impl IntoView {
+    // get issuer from context
+    let issuer = expect_context::<ReadSignal<Issuer>>();
+    let user = UserKey::new();
+    let nym = user.nym(issuer.with(|i| i.public.parameters.clone()));
+
     let initial_length: usize = 1;
 
     // `next_id` will let us generate unique IDs
@@ -30,6 +64,8 @@ pub fn OfferForm(
     // adding and removing attributes, and it will change reactively
     let (attributes, set_attributes) = create_signal(initial_attributes);
 
+    // let offer = create_memo(move |_| really_expensive_computation(value.get()));
+
     let add_item = move |_| {
         // create a signal for the new counter
         let sig = create_signal("".to_string());
@@ -43,19 +79,41 @@ pub fn OfferForm(
         next_id += 1;
     };
 
-    let max_card = *max_cardinality;
     // calculate a remaining Signal *max_cardinality - attributes.get().len()
     let remaining = move || *max_cardinality - attributes.get().len();
     // cloned because we need to move it into the closure below
     let remaining_c = remaining.clone();
-    let show_remaining = move || format!("{:?} of {:?} remaining", remaining_c(), max_card);
+    let show_remaining = move || format!("{:?} remaining", remaining_c());
     // disbale the "Add" button when none remaining
     let disabled = move || remaining() == 0;
+
+    // offer is a signal that displays the offer
+    let (offer, set_offer) = create_signal("".to_string());
+
+    // When offer buttom is clicked, run them through create_offer
+    // We need a derived signal that is reactive to the button click
+    let offer_clicked = move |_| {
+        let attributes = attributes.get();
+        // get just the second value from each tuple
+        let attributes = attributes
+            .iter()
+            .map(|(_, (attr, _))| Attribute::new(attr.get()))
+            .collect();
+
+        let offer = create_offer(issuer, &nym, attributes);
+        match offer {
+            Ok((cred, provable_entries)) => {
+                log::info!("Offer: {}\nProvable Entries: {:?}", cred, provable_entries);
+                set_offer.set(format!("{}\n{:?}", cred, provable_entries));
+            }
+            Err(e) => panic!("Error creating offer: {:?}", e),
+        };
+    };
 
     view! {
         <div>
             "Name a few public attributes, and consider adding a safety attribute that only they would know"
-            <div>
+            <div class="flex flex-col items-center">
                 // The <For/> component is central here
                 // This allows for efficient, key list rendering
                 <For
@@ -70,8 +128,26 @@ pub fn OfferForm(
                     key=|attr| attr.0
                     // `children` receives each item from your `each` iterator
                     // and returns a view
-                    children=move |(_id, (_read_attr, set_attr))| {
-                        view! { <AttributeInput setter=set_attr /> }
+                    children=move |(id, (_read_attr, set_attr))| {
+                        view! {
+                            <div class="flex flex-row items-center">
+                                <AttributeInput setter=set_attr/>
+                                <div class="flex-grow-0 mx-2">
+                                    <button
+                                        class="bg-red-500 hover:bg-red-700 text-xl text-white font-bold py-2 px-4 rounded shadow"
+                                        on:click=move |_| {
+                                            set_attributes
+                                                .update(|attribs| {
+                                                    attribs.retain(|(this_id, _)| this_id != &id)
+                                                });
+                                        }
+                                    >
+
+                                        "X"
+                                    </button>
+                                </div>
+                            </div>
+                        }
                     }
                 />
 
@@ -93,22 +169,39 @@ pub fn OfferForm(
                 </button>
                 <div class="text-neutral-800 text-sm m-2">{show_remaining}</div>
             </div> <div class="flex justify-end m-2 font-semibold text-lg">
-                <button class="
-                bg-blue-500
-                hover:bg-blue-700
-                text-white
-                font-bold
-                py-2
-                px-4
-                rounded ">"Create Offer"</button>
+                <button
+                    on:click=offer_clicked
+                    class="
+                    bg-blue-500
+                    hover:bg-blue-700
+                    text-white
+                    font-bold
+                    py-2
+                    px-4
+                    rounded "
+                >
+                    "Create Offer"
+                </button>
             </div>
             <div class="text-2xl">Summary</div>
             <ul class="text-lg">
                 <For
-                    each=attributes key=|attr| attr.0
-                    children=move |(_id, (attr, _set_attr))|
-                    view! { <li>{attr}</li> } />
+                    each=attributes
+                    key=|attr| attr.0
+                    children=move |(_id, (attr, _set_attr))| view! { <li>{attr}</li> }
+                />
             </ul>
+            <div class="text-2xl">Offer</div> <div class="text-xs break-all">
+                <pre class="whitespace-pre-wrap">
+                    <code>{offer}</code>
+                </pre>
+            </div>
+            <details class="mt-4">
+                <summary class="text-2xl">Offer QR Code</summary>
+                <div class="flex justify-center">
+                    <ReactiveQRCode signal=offer />
+                </div>
+            </details>
         </div>
     }
 }
@@ -130,18 +223,23 @@ pub fn AttributeInput(setter: WriteSignal<String>) -> impl IntoView {
     // let attribute = Attribute::new(attr_str());
 
     view! {
-        <form class="flex flex-col sm:flex-row py-1 justify-center animate-slideDown">
-            <input on:keyup=move |ev| set_key(event_target_value(&ev))
+        <form class="flex flex-col sm:flex-row py-1 animate-slideDown">
+            <input
+                on:keyup=move |ev| set_key(event_target_value(&ev))
                 type="text"
                 class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2"
                 placeholder="First Name"
             />
-            <select class="p-1 bg-blue-500 text-white font-semibold" on:change=move |ev| set_op(event_target_value(&ev)) >
+            <select
+                class="p-1 bg-blue-500 text-white font-semibold"
+                on:change=move |ev| set_op(event_target_value(&ev))
+            >
                 <option value="=">"="</option>
                 <option value="<">"<"</option>
                 <option value=">">">"</option>
             </select>
-            <input on:keyup=move |ev| set_value(event_target_value(&ev))
+            <input
+                on:keyup=move |ev| set_value(event_target_value(&ev))
                 type="text"
                 class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2"
                 placeholder="Doug"
