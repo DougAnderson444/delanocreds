@@ -64,8 +64,6 @@ impl From<&[Attribute]> for Entry {
     }
 }
 
-// ensure we can convert `&std::vec::Vec<std::vec::Vec<delanocreds::Attribute>>` to `&[delanocreds::Entry]`
-
 /// Iterates through each Attribute in the Entry and converts it to a Scalar
 pub fn entry_to_scalar(input: &Entry) -> Vec<Scalar> {
     input
