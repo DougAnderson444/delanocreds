@@ -7,8 +7,8 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-blastkids = { workspace = true }
-bls12_381_plus = { workspace = true }
+blastkids = { workspace = true } 
+bls12_381_plus = { workspace = true, features = ["alloc"] }
 secrecy = "0.8.0"
 serde = { version = "1.0.130", features = ["derive"], optional = true }
 getrandom = "0.2"
