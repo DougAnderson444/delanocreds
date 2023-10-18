@@ -239,6 +239,10 @@ impl DamgardTransform {
     }
 
     /// Verify the given [NymProof] is valid
+    ///
+    /// # Example:
+    ///
+    /// assert!(DamgardTransform::verify(their_proof)
     pub fn verify(nym_proof: &NymProof) -> bool {
         let left_side = G1Projective::mul_by_generator(&nym_proof.response);
         let right_side = nym_proof.pedersen_open.announce_element.as_ref().unwrap()
