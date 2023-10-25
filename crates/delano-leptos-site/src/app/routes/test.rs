@@ -14,6 +14,10 @@ pub fn Test() -> impl IntoView {
     ));
     provide_context(issuer);
 
+    let (nym, _set_nym) = create_signal(delanocreds::Nym::default());
+
+    // I can clone a Signal, but not the Nym itself
+    provide_context(nym);
     view! {
         <div class="mx-auto">
             // <div class="mt-4 font-semibold">"Test Components:"</div>
@@ -28,7 +32,7 @@ pub fn Test() -> impl IntoView {
             // </div>
             // </div>
             <div class="m-4 border-4 border-dashed p-4">
-                <offer::OfferForm max_cardinality></offer::OfferForm>
+                <offer::OfferForm max_cardinality nym></offer::OfferForm>
             </div>
         </div>
     }

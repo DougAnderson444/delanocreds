@@ -1,41 +1,50 @@
+use crate::app::components::encrypted_key::{EncryptedKey, ShowEncryptedKey};
 use crate::app::components::list::List;
 use crate::app::state::ManagerState;
 use crate::app::LabelAndPin;
+use gloo_storage::Storage;
 use leptos::ev::SubmitEvent;
-use leptos::{leptos_dom::helpers::location_hash, *};
-use leptos_router::unescape;
+use leptos::*;
+use leptos_router::*;
 use seed_keeper_core::seed::Seed;
-use seed_keeper_core::{derive_key, ExposeSecret};
+use seed_keeper_core::{derive_key, ExposeSecret, Zeroizing};
 
 // /// The Label and Encrypted key params in the hash value
 // #[derive(Params)]
 // struct SavedParams {
 //     pub label: String,
-//     pub encrypted_key: String,
+//  pub encrypted_key: String,
 // }
+
+#[derive(Params, Debug, Clone, PartialEq, Eq, Default)]
+struct HomeRedirects {
+    offer: String,
+}
 
 #[component]
 pub(crate) fn Home() -> impl IntoView {
     let (label_and_pin, set_label_n_pin) = create_signal(LabelAndPin::default());
 
+    let (encrypted_key, set_encrypted_key) = create_signal(EncryptedKey::default());
+
     // share the ability to set and read pin info to all children
     provide_context(set_label_n_pin);
-
-    let hash = location_hash().as_ref().map(|hash| unescape(hash));
+    provide_context(encrypted_key);
+    provide_context(set_encrypted_key);
 
     // To make this reactive based on LabelAndPin changes, we make it a closure
-    move || {
-        match hash.clone() {
-            Some(h) if !h.is_empty() => {
+    let active_view = move || {
+        match encrypted_key.get().0 {
+            encrypted_key if !encrypted_key.is_empty() => {
                 match label_and_pin.get() {
                     LabelAndPin { label, .. } if label.is_empty() => {
                         // No label, so show create screen
-                        log::info!("Hash: {:?} but no label yet", h);
+                        log::info!("encrypted_key: {:?} but no label yet", encrypted_key);
                         view! { <Splash/> }.into_view()
                     }
                     lap => {
                         // There is a label, so use it to create the key
-                        log::info!("Label {:?} and Hash: {:?}", lap.label, h);
+                        log::info!("Label {:?} and Hash: {:?}", lap.label, encrypted_key);
                         // view! { <CreateKey label_and_pin=lap/> }
                         authn(label_and_pin())
                     }
@@ -56,8 +65,12 @@ pub(crate) fn Home() -> impl IntoView {
                 }
             }
         }
+    };
+
+    view! {
+        <ShowEncryptedKey set_encrypted_key/>
+        {active_view}
     }
-    // move || active_view.get()
 }
 
 /// Wraps each child in an `<li>` and embeds them in a `<ul>`.
@@ -79,18 +92,18 @@ pub fn Splash() -> impl IntoView {
                     </code>
                 </p>
                 <p>
-                    "Secure it with a "
+                    "Lock it with a "
                     <code class="text-sm font-bold text-gray-900 bg-green-200 p-2 ml-1 rounded">
-                        "PIN Number"
+                        "Passphrase"
                     </code>
                 </p>
             </List>
-            <h3 class="italic">
-                "This stays "
-                <span class="text-sm font-semibold text-gray-900 outline outline-sky-500 p-1 m-1 rounded">
-                    "in your browser"
-                </span> " so only you have access to it."
-            </h3>
+            // <h3 class="italic">
+            // "This stays "
+            // <span class="text-sm font-semibold text-gray-900 outline outline-sky-500 p-1 m-1 rounded">
+            // "in your browser"
+            // </span> " so only you have access to it."
+            // </h3>
             <div class="flex flex-col items-center justify-center p-2">
                 <PinPad/>
             </div>
@@ -135,97 +148,36 @@ pub fn PinPad() -> impl IntoView {
         });
     };
 
+    let encrypted_key = expect_context::<ReadSignal<EncryptedKey>>();
+
     view! {
         <div class="flex flex-row items-center justify-center space-x-2">
-            <div class="text-xl font-semibold tracking-tight items-center justify-center">
-                "Label:"
-            </div>
-            <input
-                placeholder="My main wallet"
-                class="p-2 my-2 border rounded-lg w-full bg-gray-50"
-                type="text"
-                on:input=move |ev| {
-                    set_label(event_target_value(&ev));
-                }
-
-                // the `prop:` syntax lets you update a DOM property,
-                // rather than an attribute.
-                prop:value=label
-            />
-        </div>
-
-        // <!-- only show the last Number, all other leading numbers convert to * -->
-        <p>
-            "Pin "
-            {move || {
-                pin()
-                    .chars()
-                    .map(|c| if c == pin().chars().last().unwrap() { c } else { '*' })
-                    .collect::<String>()
-            }}
-
-        </p>
-        // note the on:click instead of on_click
-        // this is the same syntax as an HTML element event listener
-        <div class="flex flex-col items-center justify-center">
-            <div class="flex flex-row justify-between w-full space-x-2">
-                <PinButton
-                    label="1".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "1")
-                />
-                <PinButton
-                    label="2".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "2")
-                />
-                <PinButton
-                    label="3".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "3")
-                />
-            </div>
-            <div class="flex flex-row justify-between w-full space-x-2">
-                <PinButton
-                    label="4".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "4")
-                />
-                <PinButton
-                    label="5".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "5")
-                />
-                <PinButton
-                    label="6".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "6")
-                />
-            </div>
-            <div class="flex flex-row justify-between w-full space-x-2">
-                <PinButton
-                    label="7".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "7")
-                />
-                <PinButton
-                    label="8".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "8")
-                />
-                <PinButton
-                    label="9".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "9")
-                />
-            </div>
-            <div class="flex flex-row justify-between w-full space-x-2">
-                <div class="w-20"></div>
-                <PinButton
-                    label="0".to_string()
-                    on:click=move |_| set_pin.update(|value| *value = value.to_owned() + "0")
-                />
-                <div class="w-20"></div>
-            </div>
             <form on:submit=on_submit>
+                <div class="text-xl font-semibold tracking-tight items-center justify-center">
+                    // if encrypted_key.is_empty(), show "Create" , otherwise show "Unlock"
+                    {if encrypted_key.get().0.is_empty() { "Create" } else { "Unlock" }}
+
+                </div>
+                <input
+                    type="text"
+                    name="label"
+                    autocomplete="username"
+                    placeholder="My main wallet"
+                    class="p-2 my-2 border rounded-lg w-full bg-gray-50"
+                    on:input=move |ev| {
+                        set_label(event_target_value(&ev));
+                    }
+                />
                 <input
                     type="password"
                     name="pin"
-                    value=move || pin.get()
                     autocomplete="current-password"
+                    placeholder="********"
+                    class="p-2 my-2 border rounded-lg w-full bg-gray-50"
+                    on:input=move |ev| {
+                        set_pin(event_target_value(&ev));
+                    }
                 />
-                <input type="text" name="label" autocomplete="username" value=move || label.get()/>
                 <div class="flex flex-row justify-between w-full space-x-2">
                     <input
                         type="submit"
@@ -254,35 +206,63 @@ pub fn PinButton(label: String) -> impl IntoView {
 }
 
 fn authn(label_and_pin: LabelAndPin) -> View {
-    use crate::app::constants::ACCOUNT;
+    use crate::app::constants::{ACCOUNT, OFFER};
     use base64::{engine::general_purpose, Engine as _};
 
-    // get random 32 bytes using getrandom
-    let mut seed = Seed::new([0u8; 32].into());
-    if let Err(e) = getrandom::getrandom(&mut seed) {
-        log::error!("getrandom failed: {:?}", e);
-    }
-
-    log::debug!("Generating key...");
+    let encrypted_key = expect_context::<ReadSignal<EncryptedKey>>();
 
     let key = derive_key(&label_and_pin.pin, &label_and_pin.label).expect("Key to derive fine");
 
-    // log::debug!("Generated key: {:?}", key);
-    let encrypted = seed_keeper_core::wrap::encrypt(
-        (&key.expose_secret()[..])
-            .try_into()
-            .expect("seed to be 32 bytes"),
-        seed.as_ref(),
-    );
+    let (seed, hash) = match encrypted_key.get() {
+        EncryptedKey(e_key) if !e_key.is_empty() => {
+            // and we store encrypted key in the URL fragment for easy bookmarking
+            let hash = format!(
+                "#label={}&encrypted_key={}",
+                label_and_pin.label,
+                general_purpose::URL_SAFE_NO_PAD.encode(e_key.clone())
+            );
+            let seed = Zeroizing::new(seed_keeper_core::wrap::decrypt(
+                (&key.expose_secret()[..])
+                    .try_into()
+                    .expect("seed to be 32 bytes"),
+                e_key.as_ref(),
+            ));
+            (seed, hash)
+        }
+        _ => {
+            // get random 32 bytes using getrandom
+            let mut seed = Seed::new([0u8; 32].into());
+            if let Err(e) = getrandom::getrandom(&mut seed) {
+                log::error!("getrandom failed: {:?}", e);
+            }
 
-    log::debug!("Encrypted key: {:?}", encrypted);
+            log::debug!("Generating key...");
+            let encrypted = seed_keeper_core::wrap::encrypt(
+                (&key.expose_secret()[..])
+                    .try_into()
+                    .expect("seed to be 32 bytes"),
+                seed.as_ref(),
+            );
 
-    // and we store encrypted key in the URL fragment for easy bookmarking
-    let hash = format!(
-        "#label={}&encrypted_key={}",
-        label_and_pin.label,
-        general_purpose::URL_SAFE_NO_PAD.encode(encrypted)
-    );
+            log::debug!("Encrypted key: {:?}", encrypted);
+
+            let encrypted_key_b64 = general_purpose::URL_SAFE_NO_PAD.encode(encrypted);
+
+            // and we store encrypted key in the URL fragment for easy bookmarking
+            let hash = format!(
+                "#label={}&encrypted_key={}",
+                label_and_pin.label, encrypted_key_b64
+            );
+
+            // also store it in the browser's LOCAL_STORAGE using gloo-storage
+            let storage = gloo_storage::LocalStorage::raw();
+            match storage.set("encrypted_key", &encrypted_key_b64) {
+                Ok(_) => log::debug!("Saved encrypted_key to local storage"),
+                Err(e) => log::error!("Failed to save encrypted_key to local storage: {:?}", e),
+            };
+            (Zeroizing::new(seed.to_vec()), hash)
+        }
+    };
 
     let manager = delano_keys::kdf::Manager::from_seed(seed);
 
@@ -292,9 +272,26 @@ fn authn(label_and_pin: LabelAndPin) -> View {
     state.set(Some(manager));
 
     // Lastly, navigate to the account page
+    // Before we do, look at the query params to see if there is an offer we are claiming, ie `?offer=pWVzaWdtYa`
+    let query = use_query::<HomeRedirects>();
+    let offer_value = query.with(|q| q.clone().map(|q| q.offer).unwrap_or_default());
+
+    log::debug!("offer: {:?}", offer_value);
+
     let navigate = leptos_router::use_navigate();
 
-    let dest = format!("{ACCOUNT}/{hash}", ACCOUNT = ACCOUNT, hash = hash);
+    // if offer, append it to the destination
+    let dest = if offer_value.is_empty() {
+        log::debug!("No offer");
+        format!("{}{}", ACCOUNT, hash)
+    } else {
+        log::debug!("Offer found");
+        format!(
+            "{ACCOUNT}/{OFFER}/{offer_value}{hash}",
+            offer_value = offer_value,
+            hash = hash
+        )
+    };
     log::debug!("Navigating to: {:?}", dest);
     navigate(&dest, Default::default());
 

@@ -9,17 +9,17 @@ mod routes;
 /// Where Global State is structured
 mod state;
 
-use constants::{ACCOUNT, HOME};
-use leptos::*;
-use leptos_router::*;
-use routes::account::Account;
-use routes::home::Home;
-use seed_keeper_core::Zeroizing;
+use components::nav::Nav;
+use constants::{HOME, TEST};
 use state::*;
 
-use crate::app::components::nav::Nav;
-use crate::app::constants::TEST;
-use crate::app::routes::test::Test;
+use leptos::*;
+use leptos_router::*;
+use seed_keeper_core::Zeroizing;
+
+use routes::account::AccountRoutes;
+use routes::home::Home;
+use routes::test::Test;
 
 /// The Label and Encrypted key params in the hash value
 ///
@@ -51,7 +51,7 @@ pub fn App() -> impl IntoView {
                 <div class="p-2 my-0 mx-auto max-w-3xl">
                     <Routes>
                         <Route path=HOME view=Home/>
-                        <Route path=ACCOUNT view=Account/>
+                        <AccountRoutes/>
                         <Route path=TEST view=Test/>
                         <Route path="/*any" view=|| view! { <h1>"Not Found"</h1> }/>
                     </Routes>

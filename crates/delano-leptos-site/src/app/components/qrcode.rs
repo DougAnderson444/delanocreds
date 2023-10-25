@@ -8,9 +8,7 @@ use web_sys::Blob;
 pub fn ReactiveQRCode(signal: ReadSignal<String>) -> impl IntoView {
     move || {
         let qrvalue = signal.get().as_bytes().to_vec();
-        view! {
-            <QrCode qrvalue=qrvalue/>
-        }
+        view! { <QrCode qrvalue=qrvalue/> }
     }
 }
 

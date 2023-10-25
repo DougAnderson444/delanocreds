@@ -12,15 +12,15 @@ use seed_keeper_core::Zeroizing;
 /// For this reason, we will use a `Option<Manager>` to represent the state of the user's account.
 pub type ManagerState = Option<delano_keys::kdf::Manager>;
 
-/// The Label and Encrypted key params in the hash value
-///
-/// `label` - A 6+ character string, usually a username, email, or phrase to identify the key
-/// `pin` - A 4+ digit pin to encrypt the key
-#[derive(Default, Clone, Debug)]
-pub(crate) struct LabelAndPin {
-    pub label: Label,
-    pub(crate) pin: Zeroizing<String>,
-}
+// /// The Label and Encrypted key params in the hash value
+// ///
+// /// `label` - A 6+ character string, usually a username, email, or phrase to identify the key
+// /// `pin` - A 4+ digit pin to encrypt the key
+// #[derive(Default, Clone, Debug)]
+// pub(crate) struct LabelAndPin {
+//     pub label: Label,
+//     pub(crate) pin: Zeroizing<String>,
+// }
 
 #[derive(Default, Clone, Debug, PartialEq)]
 pub(crate) struct Label(pub(crate) Zeroizing<String>);

@@ -2,13 +2,27 @@
 //! If the hash doesn't exist, or hasn't been unlocked yet, redirect back to Home page.
 //! Otherwise, display the account page.
 
+use crate::app::components::accept::Accept;
 use crate::app::components::copy_to_clipboard;
+use crate::app::components::offer::Offer;
 use crate::app::components::qrcode::QrCode;
 use crate::app::constants::*;
 use crate::app::state::ManagerState;
-use delanocreds::{Issuer, MaxCardinality, MaxEntries};
+use delanocreds::{Issuer, MaxCardinality, MaxEntries, Nym};
 use leptos::{leptos_dom::helpers::location_hash, *};
-use leptos_router::unescape;
+use leptos_router::*;
+use seed_keeper_core::ExposeSecret;
+
+#[component(transparent)]
+pub fn AccountRoutes() -> impl IntoView {
+    view! {
+        <Route path=ACCOUNT view=Account>
+            <Route path="/offer/:id" view=Accept />
+            <Route path="/offer" view=Offer />
+            <Route path="/*any" view=Offer />
+        </Route>
+    }
+}
 
 /// Use Label and Pin to Create an encrypted key, and save it to the #hash part of the URL
 #[component]
@@ -40,31 +54,47 @@ pub(crate) fn Account() -> impl IntoView {
         let expanded = account.expand_to(MaxEntries::new(8).into());
 
         // now use these secret keys in Issuer, 12 can fit into a QR code
-        let issuer = Issuer::new_with_secret(expanded, MaxCardinality::new(12));
+        let max_cardinality = MaxCardinality::new(12);
+        let (issuer, _write) =
+            create_signal(Issuer::new_with_secret(expanded, max_cardinality.clone()));
+
+        provide_context(issuer);
+        provide_context(max_cardinality);
+
+        // For this account to accept a credential offer, we will also need a delanocreds::UseKey
+        let expanded = account.expand_to(MaxEntries::new(1).into());
+        let (nym, _set_nym) =
+            create_signal(Nym::from_secret(expanded.expose_secret().clone()[0].into()).randomize());
+
+        // I can clone a Signal, but not the Nym itself
+        provide_context(nym);
 
         // <!-- // value={issuer.public.to_string().into()} issuer.public.to_string().clone().into()-->
-        let qrvalue = issuer.public.to_compact().to_string();
+        let qrvalue = issuer.with(|iss| iss.public.to_compact().to_string());
         let value_copy = qrvalue.to_owned();
         view! {
             <div class="mx-auto">
-                <div class="">"Let's Create some Credentials!"</div>
-                <div class="mt-4 font-semibold">"Publish Your Public Parameters:"</div>
-                // Summary QR Code
-                <details class="mt-4">
-                    <summary class="font-semibold">"Social Media QR Code"</summary>
-                    // to copy to clipboard on click: onclick=|_| { copy_to_clipboard(&qrvalue); }
-                    <div
-                        class="mt-4 font-mono break-all text-sm"
-                        on:click=move |_| { copy_to_clipboard(value_copy.to_string()) }
-                    >
-                        <QrCode qrvalue=qrvalue.to_owned().into()/>
-                    </div>
+                <details class="mt-4 pl-2">
+                    <summary class="mt-4 font-semibold">"Your Public Parameters:"</summary>
+                    // Summary QR Code
+                    <details class="mt-4">
+                        <summary class="font-semibold">"Social Media QR Code"</summary>
+                        // to copy to clipboard on click: onclick=|_| { copy_to_clipboard(&qrvalue); }
+                        <div
+                            class="mt-4 font-mono break-all text-sm"
+                            on:click=move |_| { copy_to_clipboard(value_copy.to_string()) }
+                        >
+                            <QrCode qrvalue=qrvalue.to_owned().into()/>
+                        </div>
+                    </details>
+                    // Summary and details element
+                    <details class="mt-4">
+                        <summary class="font-semibold">"Public Parameters"</summary>
+                        <div class="mt-4 font-mono break-all text-sm">{qrvalue}</div>
+                    </details>
                 </details>
-                // Summary and details element
-                <details class="mt-4">
-                    <summary class="font-semibold">"Public Parameters"</summary>
-                    <div class="mt-4 font-mono break-all text-sm">{qrvalue}</div>
-                </details>
+                // For netsed Routing
+                <Outlet/>
             </div>
         }
         .into_view()
