@@ -731,7 +731,7 @@ impl<Stage> Nym<Stage> {
         // run change rep to randomize credential and user pk (i.e., create a new nym)
         // vk: &[VK], pk_u: &G1, orig_sig: &EqcSignature, mu: &Scalar, psi: &Scalar, b: bool
         // No need to update or reveal the update_key for a proof (only needed for delegation)
-        let (nym_p, cred_p, chi) = spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, false);
+        let (_nym_p, cred_p, chi) = spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, false);
 
         // update aux_r with chi and psi
         // let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
