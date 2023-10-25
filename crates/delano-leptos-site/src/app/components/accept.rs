@@ -7,7 +7,7 @@
 //! needed to prove.
 
 use crate::app::components::{attributes::AttributeEntry, error::Error};
-use delanocreds::{verify_proof, Credential, Entry, Initial, Nym, Offer};
+use delanocreds::{verify_proof, Credential, Entry, Initial, Nym, Offer, Randomized};
 use leptos::*;
 use leptos_router::use_params_map;
 
@@ -15,7 +15,7 @@ use leptos_router::use_params_map;
 /// Credential offer in order to accept it.
 #[component]
 pub fn Accept() -> impl IntoView {
-    let nym = use_context::<ReadSignal<Nym<Initial>>>();
+    let nym = use_context::<ReadSignal<Nym<Randomized>>>();
     match nym {
         Some(nym) => view! {
             <UserAccept nym />
@@ -29,7 +29,7 @@ pub fn Accept() -> impl IntoView {
 }
 
 #[component]
-fn UserAccept(nym: ReadSignal<Nym<Initial>>) -> impl IntoView {
+fn UserAccept(nym: ReadSignal<Nym<Randomized>>) -> impl IntoView {
     // we can access the :id param reactively with `use_params_map`
     let params = use_params_map();
     let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default());
