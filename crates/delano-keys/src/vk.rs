@@ -8,7 +8,7 @@ use bls12_381_plus::{G1Projective, G2Projective};
 /// Verification Key [VK]
 /// This key has elements from both [G1Projective] and [G2Projective],
 /// so to make a Vector of [VK], we need to use enum
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum VK {
     G1(G1Projective),
@@ -20,6 +20,62 @@ pub enum VK {
 pub enum VKCompressed {
     G1(G1Compressed),
     G2(G2Compressed),
+}
+
+/// From [VK] to [VKCompressed]
+impl From<VK> for VKCompressed {
+    fn from(vk: VK) -> Self {
+        match vk {
+            VK::G1(g1) => VKCompressed::G1(g1.to_bytes()),
+            VK::G2(g2) => VKCompressed::G2(g2.to_bytes()),
+        }
+    }
+}
+
+/// From &[VK] to [VKCompressed]
+impl From<&VK> for VKCompressed {
+    fn from(vk: &VK) -> Self {
+        match vk {
+            VK::G1(g1) => VKCompressed::G1(g1.to_bytes()),
+            VK::G2(g2) => VKCompressed::G2(g2.to_bytes()),
+        }
+    }
+}
+
+/// TryFrom [VKCompressed] to [VK]
+impl std::convert::TryFrom<VKCompressed> for VK {
+    type Error = String;
+
+    fn try_from(vk_compressed: VKCompressed) -> Result<Self, Self::Error> {
+        match vk_compressed {
+            VKCompressed::G1(g1) => {
+                let mut bytes = [0u8; 48];
+                bytes.copy_from_slice(g1.as_ref());
+                let g1_maybe = G1Affine::from_compressed(&bytes);
+
+                if g1_maybe.is_none().into() {
+                    return Err("Invalid G1 point".to_string());
+                }
+
+                Ok(VK::G1(
+                    g1_maybe.expect("it'll be fine, it passed the check").into(),
+                ))
+            }
+            VKCompressed::G2(g2) => {
+                let mut g2_bytes = [0u8; 96];
+                g2_bytes.copy_from_slice(g2.as_ref());
+                let g2 = G2Affine::from_compressed(&g2_bytes);
+
+                if g2.is_none().into() {
+                    return Err("Invalid G2 point".to_string());
+                }
+
+                Ok(VK::G2(
+                    g2.expect("it'll be fine, it passed the check").into(),
+                ))
+            }
+        }
+    }
 }
 
 /// Implement TryFrom<Vec<u8>> for Verification Key [VK]

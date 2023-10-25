@@ -2,6 +2,7 @@ use super::*;
 use crate::ec::curve::polynomial_from_roots;
 use crate::ec::{G1Projective, Scalar};
 use crate::keypair::Signature;
+use base64::{engine::general_purpose, Engine as _};
 use bls12_381_plus::group::GroupEncoding;
 use bls12_381_plus::G1Compressed;
 use serde_with::base64::{Base64, UrlSafe};
@@ -27,8 +28,8 @@ impl std::fmt::Display for UpdateError {
     }
 }
 
-/// A [Credential] is an EqcSignature signature returned by the sign function
-/// It contains the sigma, update key, commitment vector
+/// A [Credential] is an SP-SEQ sigma [Signature] returned by the sign function
+/// It contains the sigma, update key, commitment vector, and issuer public data
 /// - `sigma` [`Signature`] is the sigma value used in the signature
 /// - `commitment_vector` is the commitment vector used in the signature
 /// - `opening_vector` enables holder to generate proofs, if available
@@ -36,14 +37,34 @@ impl std::fmt::Display for UpdateError {
 /// for the next level in the delegation hierarchy. If no further delegations are allowed, then no
 /// update key is provided.
 /// - `vk` [`VK`] is the verification key used in the signature
-///
 #[derive(Clone, Debug, PartialEq)]
 pub struct Credential {
     pub sigma: Signature,
     pub update_key: UpdateKey, // Called DelegatableKey (dk for k prime) in the paper
     pub commitment_vector: Vec<G1Projective>,
     pub opening_vector: Vec<Scalar>,
-    pub vk: Vec<VK>,
+    pub issuer_public: IssuerPublic,
+}
+
+impl Credential {
+    /// Compress then Serialize the [Credential] into base64 encoded CBOR bytes,
+    pub fn to_url_safe(&self) -> String {
+        let mut bytes = Vec::new();
+        ciborium::into_writer(&CredentialCompressed::from(self), &mut bytes).unwrap();
+        // encode cbor bytes as base64URL safe
+        general_purpose::URL_SAFE_NO_PAD.encode(&bytes)
+    }
+
+    /// Deserialize the [Credential] from URL String CBOR Vec<u8> into a Credential
+    pub fn from_url_safe(s: &str) -> Result<Self, String> {
+        // decode base64URL safe to cbor bytes: general_purpose::URL_SAFE_NO_PAD.decode(s)
+        let bytes = general_purpose::URL_SAFE_NO_PAD
+            .decode(s)
+            .map_err(|e| e.to_string())?;
+        let compressed: CredentialCompressed =
+            ciborium::from_reader(&bytes[..]).map_err(|e| e.to_string())?;
+        compressed.try_into()
+    }
 }
 
 /// [CredentialCompressed] is a compressed version of [Credential]. Each element is compressed into their smallest byte equivalents and serializable as base64URL safe encoding.
@@ -57,8 +78,7 @@ pub struct CredentialCompressed {
     commitment_vector: Vec<G1Compressed>,
     #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
     opening_vector: Vec<OpeningInfo>,
-    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
-    vk: Vec<VKCompressed>,
+    issuer_public: IssuerPublicCompressed,
 }
 
 /// Try to convert from [CredentialCompressed] to [Credential]
@@ -105,47 +125,24 @@ impl TryFrom<CredentialCompressed> for Credential {
             .into_iter()
             .map(|item| item.into_scalar())
             .collect::<Vec<Scalar>>();
-        let vk = value
-            .vk
-            .iter()
-            .map(|item| match item {
-                VKCompressed::G1(g1) => {
-                    let g1_maybe = G1Projective::from_bytes(g1);
-                    if g1_maybe.is_none().into() {
-                        return Err("Invalid G1 point".to_string());
-                    }
-                    Ok(VK::G1(
-                        g1_maybe.expect("it'll be fine, it passed the check"),
-                    ))
-                }
-                VKCompressed::G2(g2) => {
-                    let g2_maybe = G2Projective::from_bytes(g2);
-                    if g2_maybe.is_none().into() {
-                        return Err("Invalid G2 point".to_string());
-                    }
-                    Ok(VK::G2(
-                        g2_maybe.expect("it'll be fine, it passed the check"),
-                    ))
-                }
-            })
-            .map(|item| item.unwrap())
-            .collect::<Vec<VK>>();
+
+        let issuer_public = IssuerPublic::try_from(value.issuer_public)?;
 
         Ok(Credential {
             sigma,
             update_key,
             commitment_vector,
             opening_vector,
-            vk,
+            issuer_public,
         })
     }
 }
 
-/// Convert from [Credential] to [CredentialCompressed]
-impl From<Credential> for CredentialCompressed {
-    fn from(cred: Credential) -> Self {
-        let sigma = SignatureCompressed::from(cred.sigma);
-        let update_key = match cred.update_key {
+/// Convert from &[Credential] to [CredentialCompressed]
+impl From<&Credential> for CredentialCompressed {
+    fn from(cred: &Credential) -> Self {
+        let sigma = SignatureCompressed::from(cred.sigma.clone());
+        let update_key = match &cred.update_key {
             Some(usign) => {
                 let mut usign_compressed = Vec::new();
                 usign_compressed.resize(usign.len(), Vec::new());
@@ -163,55 +160,51 @@ impl From<Credential> for CredentialCompressed {
             .collect();
         let opening_vector = cred
             .opening_vector
+            .clone()
             .into_iter()
             .map(OpeningInfo::new)
             .collect::<Vec<OpeningInfo>>();
 
-        let vk = cred
-            .vk
-            .iter()
-            .map(|item| match item {
-                VK::G1(g1) => VKCompressed::G1(g1.to_bytes()),
-                VK::G2(g2) => VKCompressed::G2(g2.to_bytes()),
-            })
-            .collect();
+        let issuer_public: IssuerPublicCompressed = cred.issuer_public.clone().into();
 
         CredentialCompressed {
             sigma,
             update_key,
             commitment_vector,
             opening_vector,
-            vk,
+            issuer_public,
         }
     }
 }
 
-/// Newtype for Opening Vector of [Scalar].
-/// This exists so it can easily be converted to base64
+/// Newtype for Opening Information which is [Scalar] bytes.
+/// This exists so it can easily be converted to base64 and back.
 pub struct OpeningInfo {
     inner: [u8; 32],
 }
 
 impl OpeningInfo {
+    /// Create a new OpeningInfo from a [Scalar]
     pub fn new(inner: Scalar) -> Self {
         OpeningInfo {
             inner: inner.to_be_bytes(),
         }
     }
 
+    /// Convert the inner bytes to a [Scalar]
     pub fn into_scalar(self) -> Scalar {
         Scalar::from_be_bytes(&self.inner).unwrap()
     }
 }
 
-/// Implements AsRef<[u8]> for OpeningVector, so it can be serde compatible
+/// Implements AsRef<[u8]> for [OpeningInfo], so it can be serde compatible
 impl AsRef<[u8]> for OpeningInfo {
     fn as_ref(&self) -> &[u8] {
         self.inner.as_ref()
     }
 }
 
-/// From<Vec<u8>> for OpeningVector
+/// From<Vec<u8>> for [OpeningInfo]
 impl From<Vec<u8>> for OpeningInfo {
     fn from(v: Vec<u8>) -> Self {
         let mut bytes = [0u8; 32];
@@ -221,17 +214,17 @@ impl From<Vec<u8>> for OpeningInfo {
 }
 
 /// [Display] for [Credential] is converting its compressed elements, then to json string
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde_json")]
 impl Display for Credential {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let comp = CredentialCompressed::from(self.clone());
+        let comp = CredentialCompressed::from(self);
         let comp_json = serde_json::to_string_pretty(&comp).unwrap();
         write!(f, "{}", comp_json)
     }
 }
 
 /// Takes compressed elements and deserializes json string to [Credential]
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde_json")]
 impl FromStr for Credential {
     type Err = String;
 
@@ -240,6 +233,7 @@ impl FromStr for Credential {
         cred_compressed.try_into()
     }
 }
+
 /// Change the Representative of the signature message pair to a new commitment vector and user public key.
 /// This is used to update the signature message pair to a new user public key.
 /// The new commitment vector is computed using the old commitment vector and the new user public key.
@@ -275,7 +269,7 @@ pub fn change_rep(
     // adapt the signature for the randomized commitment vector and PK_u_prime
     let Signature { z, y_g1, y_hat, t } = &cred.sigma;
 
-    if let VK::G1(vk0) = &cred.vk[0] {
+    if let VK::G1(vk0) = &cred.issuer_public.vk[0] {
         let sigma_prime = Signature {
             z: mu * psi.invert().unwrap() * z,
             y_g1: psi * y_g1,
@@ -306,7 +300,7 @@ pub fn change_rep(
                 update_key: fresh_update_key,
                 commitment_vector: rndmz_commit_vector,
                 opening_vector: rndmz_opening_vector,
-                vk: cred.vk.to_vec(),
+                issuer_public: cred.issuer_public.clone(),
             },
             chi,
         )
@@ -391,5 +385,41 @@ pub fn change_rel(
         _ => Err(UpdateError::Error(
             "No update key, cannot change relations".to_string(),
         )),
+    }
+}
+
+//TEsts
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn test_to_url_safe_roundtrip() {
+        let cred = Credential {
+            sigma: Signature {
+                z: G1Projective::random(&mut rand::thread_rng()),
+                y_g1: G1Projective::random(&mut rand::thread_rng()),
+                y_hat: G2Projective::random(&mut rand::thread_rng()),
+                t: G1Projective::random(&mut rand::thread_rng()),
+            },
+            update_key: Some(vec![vec![G1Projective::random(&mut rand::thread_rng())]]),
+            commitment_vector: vec![G1Projective::random(&mut rand::thread_rng())],
+            opening_vector: vec![Scalar::random(&mut rand::thread_rng())],
+            issuer_public: IssuerPublic {
+                vk: vec![VK::G1(G1Projective::random(&mut rand::thread_rng()))],
+                parameters: ParamSetCommitment {
+                    pp_commit_g1: vec![G1Projective::random(&mut rand::thread_rng())],
+                    pp_commit_g2: vec![G2Projective::random(&mut rand::thread_rng())],
+                },
+            },
+        };
+
+        let url_safe = cred.to_url_safe();
+
+        eprintln!("url_safe: {}", url_safe);
+
+        let cred2 = Credential::from_url_safe(&url_safe).unwrap();
+        assert_eq!(cred, cred2);
     }
 }

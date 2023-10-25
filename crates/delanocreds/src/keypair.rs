@@ -7,9 +7,8 @@ use crate::ec::curve::pairing;
 use crate::ec::Scalar;
 use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
-use crate::set_commits::CrossSetCommitment;
-use crate::set_commits::ParamSetCommitment;
-use crate::set_commits::{Commitment, ParamSetCommitmentB64};
+use crate::set_commits::{Commitment, CrossSetCommitment};
+use crate::set_commits::{ParamSetCommitment, ParamSetCommitmentCompressed};
 use crate::{config, error};
 use crate::{
     zkp::PedersenOpen,
@@ -18,11 +17,13 @@ use crate::{
 };
 
 use anyhow::Result;
-use base64::{engine::general_purpose, Engine as _};
+//
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::{Curve, Group, GroupEncoding};
-use bls12_381_plus::{G1Compressed, G1Projective, G2Compressed, G2Projective, Gt};
+use bls12_381_plus::{
+    G1Affine, G1Compressed, G1Projective, G2Affine, G2Compressed, G2Projective, Gt,
+};
 pub use delano_keys::vk::{VKCompressed, VK};
 use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
@@ -116,114 +117,112 @@ impl From<UpdateError> for IssuerError {
 }
 
 /// Root Issuer aka Certificate Authority
-/// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
-/// - `sk`: [`Secret`], secret keys of the user
-/// - `vk`: `Vec<VK>`, [VK] verification keys of the user
 pub struct Issuer {
     pub public: IssuerPublic,
     sk: Secret<Vec<Scalar>>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IssuerPublic {
     pub parameters: ParamSetCommitment,
     pub vk: Vec<VK>,
 }
 
+#[serde_as]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct IssuerPublicCompressed {
+    pub parameters: ParamSetCommitmentCompressed,
+    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
+    pub vk: Vec<VKCompressed>,
+}
+
+#[cfg(feature = "serde_json")]
+impl ToString for IssuerPublicCompressed {
+    fn to_string(&self) -> String {
+        serde_json::to_string(&self).unwrap()
+    }
+}
+
+/// From [IssuerPublic] to [IssuerPublicCompressed]
+impl From<IssuerPublic> for IssuerPublicCompressed {
+    fn from(item: IssuerPublic) -> Self {
+        Self {
+            parameters: item.parameters.into(),
+            vk: item.vk.iter().map(|vk| vk.into()).collect::<Vec<_>>(),
+        }
+    }
+}
+
+/// From &[IssuerPublic] to [IssuerPublicCompressed]
+impl From<&IssuerPublic> for IssuerPublicCompressed {
+    fn from(item: &IssuerPublic) -> Self {
+        Self {
+            parameters: item.parameters.clone().into(),
+            vk: item.vk.iter().map(|vk| vk.into()).collect::<Vec<_>>(),
+        }
+    }
+}
+
+/// TryFrom [IssuerPublicCompressed] to [IssuerPublic]
+impl TryFrom<IssuerPublicCompressed> for IssuerPublic {
+    type Error = String;
+
+    fn try_from(item: IssuerPublicCompressed) -> Result<Self, Self::Error> {
+        let vk = item
+            .vk
+            .iter()
+            .map(|vk| match vk {
+                VKCompressed::G1(vk) => {
+                    let g1_maybe = G1Affine::from_bytes(vk);
+
+                    if g1_maybe.is_none().into() {
+                        return Err("Invalid G1 point".to_string());
+                    }
+
+                    Ok(VK::G1(
+                        g1_maybe.expect("it'll be fine, it passed the check").into(),
+                    ))
+                }
+                VKCompressed::G2(vk) => {
+                    let g2 = G2Affine::from_bytes(vk);
+
+                    if g2.is_none().into() {
+                        return Err("Invalid G2 point".to_string());
+                    }
+
+                    Ok(VK::G2(
+                        g2.expect("it'll be fine, it passed the check").into(),
+                    ))
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            parameters: item.parameters.try_into()?,
+            vk,
+        })
+    }
+}
+
 impl IssuerPublic {
-    /// Compacts the [VK] then serilizes it to [IssuerPublicB64]
-    pub fn to_compact(&self) -> IssuerPublicB64 {
+    /// Compacts the [VK] to a single G1 and single G2, then serilizes them to [IssuerPublicCompressed]
+    pub fn to_compact(&self) -> IssuerPublicCompressed {
         let vk_b64 = self
             .vk
             .clone()
             .iter()
             .take(2)
             .map(|vk| match vk {
-                VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
-                VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
+                VK::G1(vk) => VKCompressed::G1(vk.to_bytes()),
+                VK::G2(vk) => VKCompressed::G2(vk.to_bytes()),
             })
             .collect::<Vec<_>>();
 
-        IssuerPublicB64 {
-            verification_key: vk_b64,
+        IssuerPublicCompressed {
+            vk: vk_b64,
             parameters: self.parameters.clone().into(),
         }
-    }
-}
-
-/// IssuerPublic Struct with all fields encoded as base64 URL no-pad
-/// This is to make serde_json straightforward and robust
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct IssuerPublicB64 {
-    pub parameters: ParamSetCommitmentB64,
-    pub verification_key: Vec<String>,
-}
-
-/// Converts from [IssuerPublic] to [IssuerPublicB64]
-/// Takes an optional `compact` boolean flag to indicate whether to compact the vk to just the
-/// first G1 an G2 elements, or to include all elements. If compact, the rest of the vk can be
-/// derived from the first two using [delano_keys] derive function
-impl IssuerPublicB64 {
-    pub fn new_from(item: &IssuerPublic, compact: Option<bool>) -> Self {
-        // if compact, only take the first 2 vk elements
-        // otherwise, take all vk elements
-        // compact means the rest of the vk can be derived from the first two using delano-keys
-        // derive function
-        let vk_b64 = if let Some(true) = compact {
-            item.vk
-                .iter()
-                .take(2)
-                .map(|vk| match vk {
-                    VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
-                    VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
-                })
-                .collect::<Vec<_>>()
-        } else {
-            item.vk
-                .iter()
-                .map(|vk| match vk {
-                    VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
-                    VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
-                })
-                .collect::<Vec<_>>()
-        };
-
-        Self {
-            verification_key: vk_b64,
-            parameters: item.parameters.clone().into(),
-        }
-    }
-}
-
-/// Converts from [IssuerPublic] to [IssuerPublicB64]
-impl From<&IssuerPublic> for IssuerPublicB64 {
-    fn from(item: &IssuerPublic) -> Self {
-        let vk_b64 = item
-            .vk
-            .iter()
-            .map(|vk| match vk {
-                VK::G1(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
-                VK::G2(vk) => general_purpose::URL_SAFE_NO_PAD.encode(vk.to_bytes()),
-            })
-            .collect::<Vec<_>>();
-
-        Self {
-            verification_key: vk_b64,
-            parameters: item.parameters.clone().into(),
-        }
-    }
-}
-/// Convert IssuerPublic to IssuerPublicB64 which uses Base64 URL no-pad encoding of VK and the public parameters
-impl ToString for IssuerPublicB64 {
-    fn to_string(&self) -> String {
-        serde_json::to_string(&self).unwrap()
-    }
-}
-
-/// Convert IssuerPublic to IssuerPublicB64 which uses Base64 URL no-pad encoding of VK and the public parameters
-impl ToString for IssuerPublic {
-    fn to_string(&self) -> String {
-        serde_json::to_string(&IssuerPublicB64::from(self)).unwrap()
     }
 }
 
@@ -291,13 +290,6 @@ impl Issuer {
     }
 
     /// Creates a root credential to a user's pseudonym ([NymPublic]).
-    /// # Arguments
-    /// - `vk`: Vector of [VK] verification keys of the set
-    /// - attr_vector: &Vec<[Entry]>, attributes of the user
-    /// - sk: &Vec<[Scalar]>, secret keys of the set
-    /// - nym: &[Nym], pseudonym of the user
-    /// - k_prime: Option<[usize]>, the number of attributes to be delegated. If None, no attributes are updatable.
-    /// - proof_nym_u: [NymProof], proof of the pseudonym
     pub fn issue_cred(
         &self,
         attr_vector: &[Entry],
@@ -417,7 +409,7 @@ impl Issuer {
                     update_key,
                     commitment_vector,
                     opening_vector,
-                    vk: self.public.vk.clone(),
+                    issuer_public: self.public.clone(),
                 });
             }
             // k_prime of equal or lesser value than current message length has no effect
@@ -429,7 +421,7 @@ impl Issuer {
             update_key,
             commitment_vector,
             opening_vector,
-            vk: self.public.vk.clone(),
+            issuer_public: self.public.clone(),
         })
     }
 }
@@ -476,47 +468,20 @@ pub fn verify(
     }
 }
 
-pub struct UserKey {
-    sk_u: Secret<Scalar>,
-    pk_u: G1Projective,
-}
+/// This struct allows the [Initial] [Nym] to be deterministic, in order to easily manage keys. For
+/// use of [Credential]s, [Nym]s are [Randomized] with the `randomize` function to ensure anonymity.
+pub struct Initial;
+/// This struct ensures that only (pseudo)[Nym]s which have been randomized can be used in `issue`
+/// credential, `offer` and `prove` functions.
+pub struct Randomized;
 
-impl Default for UserKey {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl UserKey {
-    pub fn new() -> UserKey {
-        let sk_u = Secret::new(Scalar::random(ThreadRng::default()));
-        UserKey {
-            pk_u: G1Projective::mul_by_generator(sk_u.expose_secret()),
-            sk_u,
-        }
-    }
-
-    /// Generates a pseudonym for the user tuned to this [Issuer]'s [ParamSetCommitment]
-    pub fn nym(&self, public_parameters: ParamSetCommitment) -> Nym {
-        // pick randomness
-        let psi = Scalar::random(ThreadRng::default());
-        let chi = Scalar::random(ThreadRng::default());
-
-        // pk_u: &G1, chi: &Scalar, psi: &Scalar, g_1: &G1
-        // let nym: RandomizedPubKey = spseq_uc::rndmz_pk(&self.pk_u, &chi, &psi, &g_1);
-        let nym_public_key = psi * (self.pk_u + G1Projective::mul_by_generator(&chi));
-        let secret_wit = Secret::new((self.sk_u.expose_secret() + chi) * psi);
-
-        Nym::new(nym_public_key, secret_wit, public_parameters)
-    }
-}
-
-/// Nym
-/// - `secret`: [`Secret`], secret witness of the user
+/// Nym which holds secret and public information about the user.
+/// - `secret`: [`Secret`]<[`Scalar`]>, secret witness of the user
 /// - pub `public`: [`NymPublic`], proof of the user
-pub struct Nym {
+pub struct Nym<Stage> {
     secret: Secret<Scalar>,
     pub public: NymPublic,
+    stage: std::marker::PhantomData<Stage>,
 }
 
 /// Pseudonym Public information
@@ -525,8 +490,6 @@ pub struct Nym {
 /// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
 #[derive(Clone)]
 pub struct NymPublic {
-    /// [ParamSetCommitment] is used to generate the [NymProof]
-    pub parameters: ParamSetCommitment,
     /// [DamgardTransform] is used to generate the [NymProof]
     pub damgard: DamgardTransform,
     /// [G1Projective] Public key for this [Nym]
@@ -557,26 +520,311 @@ pub struct NymProof {
     pub damgard: DamgardTransform,
 }
 
-impl Nym {
+impl<Stage> Nym<Stage> {
+    /// Create a new [Nym] with a random secret key and a public key
+    pub fn new() -> Self {
+        let secret = Secret::new(Scalar::random(ThreadRng::default()));
+        Nym::new_from_secret(secret)
+    }
+
     /// Create a new [Nym] associated to the Public Parameters ([ParamSetCommitment]) of the [Issuer]
     ///
     /// # Arguments
     /// - `nym_public_key`: [RandomizedPubKey], public key of the Nym
     /// - `secret_wit`: [`Secret`]<[Scalar]>, secret witness of the user
     /// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
-    pub fn new(
-        nym_public_key: G1Projective,
-        secret_wit: Secret<Scalar>,
-        public_parameters: ParamSetCommitment,
-    ) -> Nym {
-        let damgard = DamgardTransform::new();
-        Nym {
+    pub fn new_with_keypair(nym_public_key: G1Projective, secret_wit: Secret<Scalar>) -> Self {
+        Nym::<Stage> {
+            stage: std::marker::PhantomData::<Stage>,
             secret: secret_wit,
             public: NymPublic {
-                damgard,
+                damgard: DamgardTransform::new(),
                 key: nym_public_key,
-                parameters: public_parameters,
             },
+        }
+    }
+
+    /// Derive a [Nym] from a given secret that references a big endien 32 byte array which [Zeroize]s it's
+    /// memory after dropping
+    pub fn new_from_secret(secret_bytes: Secret<Scalar>) -> Self {
+        // let big =
+        //     bls12_381_plus::elliptic_curve::bigint::U256::from_be_bytes(*secret_bytes.as_ref());
+        // Nym {
+        //     public: G1Projective::mul_by_generator(secret_bytes.expose_secret()),
+        //     secret: secret_bytes,
+        // }
+        Nym::new_with_keypair(
+            G1Projective::mul_by_generator(secret_bytes.expose_secret()),
+            secret_bytes,
+        )
+    }
+
+    /// Generates a pseudonym for the user.
+    pub fn randomize(&self) -> Nym<Randomized> {
+        // pick randomness
+        let psi = Scalar::random(ThreadRng::default());
+        let chi = Scalar::random(ThreadRng::default());
+
+        // pk_u: &G1, chi: &Scalar, psi: &Scalar, g_1: &G1
+        // let nym: RandomizedPubKey = spseq_uc::rndmz_pk(&self.pk_u, &chi, &psi, &g_1);
+        let nym_public_key = psi * (self.public.key + G1Projective::mul_by_generator(&chi));
+        let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
+
+        Nym::new_with_keypair(nym_public_key, secret_wit)
+    }
+    /// Creates an [super::OfferBuilder] for a [Credential] using this [Nym]
+    ///
+    /// # Arguments
+    /// - `cred`: [Credential], credential being offered to the delegatee
+    /// - `entries`: &[Entry], vector of all attribute [Entry]s corresponding to the `cred`
+    ///
+    /// # Returns
+    /// [super::OfferBuilder]
+    pub fn offer_builder<'a>(
+        &'a self,
+        cred: &'a Credential,
+        entries: &[Entry],
+    ) -> super::OfferBuilder<Stage> {
+        super::OfferBuilder::new(self, cred, entries)
+    }
+
+    /// Create a [super::ProofBuilder] for a [Credential] and [Entry]s using this [Nym]
+    ///
+    /// # Arguments
+    ///
+    /// - `cred`: [Credential], credential being proven
+    /// - `entries`: &[Entry], vector of all attribute [Entry]s corresponding to the `cred`
+    pub fn proof_builder<'a>(
+        &'a self,
+        cred: &'a Credential,
+        entries: &'a [Entry],
+    ) -> super::ProofBuilder<Stage> {
+        super::ProofBuilder::new(self, cred, entries)
+    }
+
+    /// Creates an orphan [Offer] for a [Credential]. This function will also validate the given
+    /// [NymProof] is valid, but does not associate/link this offer with that [Nym] (see note below).
+    ///
+    /// Important Note: The orphan [Signature] created by this [Offer] can be used by
+    /// any holder who also has possesion of the associated [crate::attributes::Attribute]s,
+    /// so it is important to either keep [Offer]s confidential or disassociated
+    /// with the [crate::attributes::Attribute]s. In other words, do not make both pubically available and associated;
+    /// do not store them in the same place or object, unless it is with the intended Holder.
+    pub fn offer(
+        &self,
+        cred: &Credential,
+        addl_attrs: &Option<Entry>,
+    ) -> Result<Offer, error::Error> {
+        // Before we offer the Credential, change the Representative so we stay anonymous
+        // This differs slightly from the reference Python implementation which
+        // runs `change_rep` algorithm upon `accept()` protocol (they call it `delegatee()` function)
+        // We make this change because we want to change the rep before we offer the credential to someone else
+        // as opposed to changing it before we accept it for ourselves.
+
+        // `mu` has to be `Scalar::ONE` here because it can only be randomized _once_,
+        // which is during the prove() function
+        // mu randomizes the commitment vector. Setting it to ONE means the commitment vector is not randomized
+        let mu = Scalar::ONE;
+        // pick randomness psi.
+        let psi = Scalar::random(ThreadRng::default());
+
+        let (nym_p_pk, cred_prime, chi) =
+            spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, true);
+
+        // Get nym_p secret by updating with chi and psi
+        let nym_p_secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
+
+        // Since we changed the Nym Rep above, we need to use the new Nym (instead of self)
+        // to send the convert signal.
+        // So create new Nym with the new rep (`nym_p`) and the new nym_p secret_wit
+        let nym: Nym<Randomized> = Nym::new_with_keypair(nym_p_pk, nym_p_secret_wit);
+
+        let mut cred_prime = cred_prime;
+        if let Some(addl_attrs) = addl_attrs {
+            // Note: change_rel does NOT change Signature { t, ..}
+            cred_prime = match spseq_uc::change_rel(
+                &cred.issuer_public.parameters,
+                addl_attrs,
+                cred_prime.clone(),
+                &mu,
+            ) {
+                Ok(cred_pushed) => cred_pushed,
+                Err(e) => {
+                    return Err(error::Error::ChangeRelationsFailed(format!(
+                        "Change Relations Failed: {}",
+                        e
+                    )))
+                }
+            };
+        }
+
+        // Credential Signature is now for the new Nym
+        if !verify(
+            &cred_prime.issuer_public.vk,
+            &nym_p_pk,
+            &cred_prime.commitment_vector,
+            &cred_prime.sigma,
+        ) {
+            return Err(error::Error::InvalidSignature(
+                "Credential Signature is not valid for the new Nym".into(),
+            ));
+        }
+
+        // negate Signature { t, ..} with nym.secret
+        let orphan = nym.send_convert_sig(&cred_prime.issuer_public.vk, cred_prime.sigma.clone());
+
+        Ok(Offer(Credential {
+            sigma: orphan,
+            ..cred_prime
+        }))
+    }
+
+    /// Accept the credential and adapt [Signature] back to Self.
+    ///
+    /// Delegated User (delegatee) uses this function to assign to their pseudonym.
+    ///
+    /// # Arguments
+    /// - `offer`: [Offer], credential received from delegator
+    ///
+    /// # Returns
+    /// [Credential] with the new [Signature] for the our [Nym]'s public key
+    pub fn accept(
+        &self,
+        offer: &Offer, // credential got from delegator
+    ) -> Result<Credential, crate::error::Error> {
+        let sigma_new = self.receive_cred(&offer.issuer_public.vk, offer.sigma.clone())?;
+
+        // verify the signature of the credential first
+        if !verify(
+            &offer.issuer_public.vk,
+            &self.public.key,
+            &offer.commitment_vector,
+            &sigma_new,
+        ) {
+            return Err(error::Error::AcceptOfferFailed(String::from(
+                "Invalid Signature",
+            )));
+        }
+
+        Ok(Credential {
+            sigma: sigma_new,
+            ..offer.clone().into()
+        })
+    }
+
+    /// Receive Converted Signature
+    ///
+    /// On input a temporary (orphan) sigma [Signature] and returns a new signature for the new public key.
+    ///
+    /// # Arguments
+    ///
+    /// - `vk`: [VK] Verification Key
+    /// - `orphan`: [Signature] {Z, Y, Y_hat, t}
+    ///
+    /// # Returns
+    /// New [Signature] for the new public key
+    fn receive_cred(&self, vk: &[VK], mut orphan: Signature) -> Result<Signature, error::Error> {
+        match &vk[0] {
+            VK::G1(vk0) => {
+                orphan.t += vk0 * self.secret.expose_secret();
+                Ok(orphan)
+            }
+            _ => Err(error::Error::InvalidVerificationKey {
+                expected: String::from("G1"),
+                found: String::from("G2"),
+            }),
+        }
+    }
+
+    /// Prove selected [crate::attributes::Attribute]s for a [Credential], given all [Entry]s
+    ///
+    /// If a selected [Entry] is empty, it is skipped (not proven) and there is no need to provide any of the corresponding
+    /// full/complete [Entry] as `prove()` filters out any selected [Entry]s which are empty and excludes them from the proof.
+    ///
+    /// ## Arguments
+    /// - `cred`: &[Credential], credential of the user
+    /// - `all_attributes`: &[Entry], vector of complete attribute [Entry]s of the user corresponding to the selected attributes
+    /// - `selected_attrs`: &[Entry], vector of selected attribute [Entry]s to be disclosed
+    pub fn prove(
+        &self,
+        cred: &Credential,
+        all_attributes: &[Entry],
+        selected_attrs: &[Entry],
+        nonce: Option<impl AsRef<[u8]>>,
+    ) -> CredProof {
+        // mu can be random here since `prove` is the last step in the Cred process.
+        let mu = Scalar::random(ThreadRng::default());
+        let psi = Scalar::random(ThreadRng::default());
+
+        // run change rep to randomize credential and user pk (i.e., create a new nym)
+        // vk: &[VK], pk_u: &G1, orig_sig: &EqcSignature, mu: &Scalar, psi: &Scalar, b: bool
+        // No need to update or reveal the update_key for a proof (only needed for delegation)
+        let (nym_p, cred_p, chi) = spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, false);
+
+        // update aux_r with chi and psi
+        let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
+        let nym: Nym<Randomized> = Nym::new_with_keypair(nym_p, secret_wit);
+
+        let (witness_vector, commit_vector) = selected_attrs
+            .iter()
+            .enumerate()
+            .filter(|(_, selected_attr)| !selected_attr.is_empty()) // filter out selected_attrs which is_empty()
+            .fold(
+                (Vec::new(), Vec::new()),
+                |(mut witness, mut commitment_vectors), (i, selected_attr)| {
+                    if let Some(opened) = CrossSetCommitment::open_subset(
+                        &cred.issuer_public.parameters,
+                        &all_attributes[i],
+                        &cred_p.opening_vector[i],
+                        selected_attr,
+                    ) {
+                        witness.push(opened); //can only have as many witnesses as there are openable selected attributes
+                        commitment_vectors.push(cred_p.commitment_vector[i]);
+                        // needs to be the same length as the witness vector
+                    }
+                    (witness, commitment_vectors)
+                },
+            );
+
+        let witness_pi = CrossSetCommitment::aggregate_cross(&witness_vector, &commit_vector);
+
+        CredProof {
+            sigma: cred_p.sigma,
+            commitment_vector: cred_p.commitment_vector,
+            witness_pi,
+            nym_proof: nym.nym_proof(nonce),
+        }
+    }
+}
+
+impl<Stage> Default for Nym<Stage> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Nym<Randomized> {
+    /// Delegate by Converting a Signature.
+    /// It is an algorithm run by a user who wants to delegate a
+    /// signature σ. It takes as input the public verification key vk, a secret key sku and the signature.
+    /// It outputs an orphan signature σ. Creates a temporary (orphan) signature
+    /// used by the delegatee to finish converting the signature.
+    ///
+    /// # Arguments
+    /// - `vk`: [VK] Verification Key
+    /// - `sigma`:  [Signature] Sigma {Z, Y, Y_hat, t}
+    ///
+    /// # Returns
+    /// Temporary orphan signature
+    fn send_convert_sig(&self, vk: &[VK], mut sigma: Signature) -> Signature {
+        // let Signature { z, y_g1, y_hat, t } = sigma;
+
+        // update component t of signature to remove the old key
+        if let VK::G1(vk0) = &vk[0] {
+            sigma.t += (vk0 * self.secret.expose_secret()).neg();
+            sigma
+        } else {
+            panic!("Invalid verification key"); // TODO: Remove panics, switch to Result
         }
     }
 
@@ -614,253 +862,13 @@ impl Nym {
             damgard: self.public.damgard.clone(),
         }
     }
-
-    /// Creates an [super::OfferBuilder] for a [Credential] using this [Nym]
-    ///
-    /// # Arguments
-    /// - `cred`: [Credential], credential being offered to the delegatee
-    /// - `entries`: &[Entry], vector of all attribute [Entry]s corresponding to the `cred`
-    ///
-    /// # Returns
-    /// [super::OfferBuilder]
-    pub fn offer_builder<'a>(
-        &'a self,
-        cred: &'a Credential,
-        entries: &[Entry],
-    ) -> super::OfferBuilder {
-        super::OfferBuilder::new(self, cred, entries)
-    }
-
-    /// Create a [super::ProofBuilder] for a [Credential] and [Entry]s using this [Nym]
-    ///
-    /// # Arguments
-    ///
-    /// - `cred`: [Credential], credential being proven
-    /// - `entries`: &[Entry], vector of all attribute [Entry]s corresponding to the `cred`
-    pub fn proof_builder<'a>(
-        &'a self,
-        cred: &'a Credential,
-        entries: &'a [Entry],
-    ) -> super::ProofBuilder {
-        super::ProofBuilder::new(self, cred, entries)
-    }
-
-    /// Creates an orphan [Offer] for a [Credential]. This function will also validate the given
-    /// [NymProof] is valid, but does not associate/link this offer with that [Nym] (see note below).
-    ///
-    /// Important Note: The orphan [Signature] created by this [Offer] can be used by
-    /// any holder who also has possesion of the associated [crate::attributes::Attribute]s,
-    /// so it is important to either keep [Offer]s confidential or disassociated
-    /// with the [crate::attributes::Attribute]s. In other words, do not make both pubically available and associated;
-    /// do not store them in the same place or object, unless it is with the intended Holder.
-    pub fn offer(
-        &self,
-        cred: &Credential,
-        addl_attrs: &Option<Entry>,
-    ) -> Result<Offer, error::Error> {
-        // Before we offer the Credential, change the Representative so we stay anonymous
-        // This differs slightly from the reference Python implementation which
-        // runs `change_rep` algorithm upon `accept()` protocol (they call it `delegatee()` function)
-        // We make this change because we want to change the rep before we offer the credential to someone else
-        // as opposed to changing it before we accept it for ourselves.
-
-        // `mu` has to be `Scalar::ONE` here because it can only be randomized _once_,
-        // which is during the prove() function
-        let mu = Scalar::ONE;
-        // pick randomness psi.
-        let psi = Scalar::random(ThreadRng::default());
-
-        let (nym_p_pk, cred_prime, chi) =
-            spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, true);
-
-        // Get nym_p secret by updating with chi and psi
-        let nym_p_secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
-
-        // Since we changed the Nym Rep above, we need to use the new Nym (instead of self)
-        // to send the convert signal.
-        // So create new Nym with the new rep (`nym_p`) and the new nym_p secret_wit
-        let nym = Nym::new(nym_p_pk, nym_p_secret_wit, self.public.parameters.clone());
-
-        let mut cred_prime = cred_prime;
-        if let Some(addl_attrs) = addl_attrs {
-            // Note: change_rel does NOT change Signature { t, ..}
-            cred_prime = match spseq_uc::change_rel(
-                &self.public.parameters,
-                addl_attrs,
-                cred_prime.clone(),
-                &mu,
-            ) {
-                Ok(cred_pushed) => cred_pushed,
-                Err(e) => {
-                    return Err(error::Error::ChangeRelationsFailed(format!(
-                        "Change Relations Failed: {}",
-                        e
-                    )))
-                }
-            };
-        }
-
-        // Credential Signature is now for the new Nym
-        if !verify(
-            &cred_prime.vk,
-            &nym_p_pk,
-            &cred_prime.commitment_vector,
-            &cred_prime.sigma,
-        ) {
-            return Err(error::Error::InvalidSignature(
-                "Credential Signature is not valid for the new Nym".into(),
-            ));
-        }
-
-        // negate Signature { t, ..} with nym.secret
-        let orphan = nym.send_convert_sig(&cred_prime.vk, cred_prime.sigma.clone());
-
-        Ok(Offer(Credential {
-            sigma: orphan,
-            ..cred_prime
-        }))
-    }
-
-    /// Accept the credential and adapt [Signature] back to Self.
-    ///
-    /// Delegated User (delegatee) uses this function to assign to their pseudonym.
-    ///
-    /// # Arguments
-    /// - `offer`: [Offer], credential received from delegator
-    ///
-    /// # Returns
-    /// [Credential] with the new [Signature] for the our [Nym]'s public key
-    pub fn accept(
-        &self,
-        offer: &Offer, // credential got from delegator
-    ) -> Credential {
-        let sigma_new = self.receive_cred(&offer.vk, offer.sigma.clone());
-
-        // verify the signature of the credential first
-        assert!(verify(
-            &offer.vk,
-            &self.public.key,
-            &offer.commitment_vector,
-            &sigma_new
-        ));
-
-        Credential {
-            sigma: sigma_new,
-            ..offer.clone().into()
-        }
-    }
-
-    /// Delegate by Converting a Signature.
-    /// It is an algorithm run by a user who wants to delegate a
-    /// signature σ. It takes as input the public verification key vk, a secret key sku and the signature.
-    /// It outputs an orphan signature σ. Creates a temporary (orphan) signature
-    /// used by the delegatee to finish converting the signature.
-    ///
-    /// # Arguments
-    /// - `vk`: [VK] Verification Key
-    /// - `sigma`:  [Signature] Sigma {Z, Y, Y_hat, t}
-    ///
-    /// # Returns
-    /// Temporary orphan signature
-    fn send_convert_sig(&self, vk: &[VK], mut sigma: Signature) -> Signature {
-        // let Signature { z, y_g1, y_hat, t } = sigma;
-
-        // update component t of signature to remove the old key
-        if let VK::G1(vk0) = &vk[0] {
-            sigma.t += (vk0 * self.secret.expose_secret()).neg();
-            sigma
-        } else {
-            panic!("Invalid verification key");
-        }
-    }
-    /// Receive Converted Signature
-    ///
-    /// On input a temporary (orphan) sigma [Signature] and returns a new signature for the new public key.
-    ///
-    /// # Arguments
-    ///
-    /// - `vk`: [VK] Verification Key
-    /// - `orphan`: [Signature] {Z, Y, Y_hat, t}
-    ///
-    /// # Returns
-    /// New [Signature] for the new public key
-    fn receive_cred(&self, vk: &[VK], mut orphan: Signature) -> Signature {
-        if let VK::G1(vk0) = &vk[0] {
-            orphan.t += vk0 * self.secret.expose_secret();
-            orphan
-        } else {
-            panic!("Invalid verification key");
-        }
-    }
-
-    /// Prove selected [crate::attributes::Attribute]s for a [Credential], given all [Entry]s
-    ///
-    /// If a selected [Entry] is empty, it is skipped (not proven) and there is no need to provide any of the corresponding
-    /// full/complete [Entry] as `prove()` filters out any selected [Entry]s which are empty and excludes them from the proof.
-    ///
-    /// ## Arguments
-    /// - `cred`: &[Credential], credential of the user
-    /// - `all_attributes`: &[Entry], vector of complete attribute [Entry]s of the user corresponding to the selected attributes
-    /// - `selected_attrs`: &[Entry], vector of selected attribute [Entry]s to be disclosed
-    pub fn prove(
-        &self,
-        cred: &Credential,
-        all_attributes: &[Entry],
-        selected_attrs: &[Entry],
-        nonce: Option<impl AsRef<[u8]>>,
-    ) -> CredProof {
-        // mu can be random here since `prove` is the last step in the Cred process.
-        let mu = Scalar::random(ThreadRng::default());
-        let psi = Scalar::random(ThreadRng::default());
-
-        // run change rep to randomize credential and user pk (i.e., create a new nym)
-        // vk: &[VK], pk_u: &G1, orig_sig: &EqcSignature, mu: &Scalar, psi: &Scalar, b: bool
-        // No need to update or reveal the update_key for a proof (only needed for delegation)
-        let (nym_p, cred_p, chi) = spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, false);
-
-        // update aux_r with chi and psi
-        let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
-        let nym = Nym::new(nym_p, secret_wit, self.public.parameters.clone());
-
-        let (witness_vector, commit_vector) = selected_attrs
-            .iter()
-            .enumerate()
-            .filter(|(_, selected_attr)| !selected_attr.is_empty()) // filter out selected_attrs which is_empty()
-            .fold(
-                (Vec::new(), Vec::new()),
-                |(mut witness, mut commitment_vectors), (i, selected_attr)| {
-                    if let Some(opened) = CrossSetCommitment::open_subset(
-                        &nym.public.parameters,
-                        &all_attributes[i],
-                        &cred_p.opening_vector[i],
-                        selected_attr,
-                    ) {
-                        witness.push(opened); //can only have as many witnesses as there are openable selected attributes
-                        commitment_vectors.push(cred_p.commitment_vector[i]);
-                        // needs to be the same length as the witness vector
-                    }
-                    (witness, commitment_vectors)
-                },
-            );
-
-        let witness_pi = CrossSetCommitment::aggregate_cross(&witness_vector, &commit_vector);
-
-        CredProof {
-            sigma: cred_p.sigma,
-            commitment_vector: cred_p.commitment_vector,
-            witness_pi,
-            nym_proof: nym.nym_proof(nonce),
-        }
-    }
 }
 
-impl AsRef<Nym> for Nym {
-    fn as_ref(&self) -> &Nym {
-        self
-    }
-}
-
-/// [Signature] of a [Credential]
+/// SPSEQ-UC sigma [Signature] of a [Credential]
+/// - `z`: The inverse of the sum of all the commitments in the commitment vector
+/// - `y_g1`: The public key of the user
+/// - `y_hat`: The public key of the user
+/// - `t`: The signature of the user
 #[derive(Clone, Debug, PartialEq)]
 pub struct Signature {
     z: G1Projective,
@@ -942,7 +950,7 @@ impl TryFrom<SignatureCompressed> for Signature {
 }
 
 /// Newtype wrapper for a [Credential] which has an orphan [Signature]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Offer(Credential);
 
 impl Deref for Offer {
@@ -980,23 +988,12 @@ pub struct CredProof {
     nym_proof: NymProof,
 }
 
-/// Verify a proof of a [Credential]
-///
-/// # Arguments
-/// - `vk`: &[VK], [VK] verification keys of the [Issuer]
-/// - `proof`: &[CredProof], proof of the Nym
-/// - `selected_attrs`: &[Entry], selected attributes of the user
-///
-/// # Returns
-/// `Result<[bool], [IssuerError]>`
+/// Verify a proof of a [CredProof] against [IssuerPublic] and selected [Entry]s
 pub fn verify_proof(
-    vk: &[VK],
+    issuer_public: &IssuerPublic,
     proof: &CredProof,
     selected_attrs: &[Entry],
-    params: &ParamSetCommitment,
 ) -> Result<bool, IssuerError> {
-    // TODO: assert that Issuer public parameters are the same as the ones included in the proof
-
     // Get the selected_attr indexes which are not `is_enpty()`,
     // use those indexes to select corresponding `commitment_vectors`
     // zip together `commitment_vector` where `selected_attr` is not empty
@@ -1010,7 +1007,7 @@ pub fn verify_proof(
 
     // check the proof is valid for each
     let check_verify_cross = CrossSetCommitment::verify_cross(
-        params,
+        &issuer_public.parameters,
         &commitment_vectors,
         selected_attrs,
         &proof.witness_pi,
@@ -1020,7 +1017,7 @@ pub fn verify_proof(
 
     // signature is based on the original commitment vector. Unless we adapt it when the restriction is applied
     let verify_sig = verify(
-        vk,
+        &issuer_public.vk,
         &proof.nym_proof.public_key,
         &proof.commitment_vector,
         &proof.sigma,
@@ -1079,14 +1076,14 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
+        let user = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
 
         // create a signature
         let cred = issuer.sign(
-            &user.pk_u,
+            &user.public.key,
             &[
                 Entry(messages_vectors.message1_str),
                 Entry(messages_vectors.message2_str),
@@ -1096,7 +1093,7 @@ mod tests {
 
         assert!(verify(
             &issuer.public.vk,
-            &user.pk_u,
+            &user.public.key,
             &cred.commitment_vector,
             &cred.sigma
         ));
@@ -1108,7 +1105,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
+        let user = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1116,7 +1113,7 @@ mod tests {
         // create a signature
         let cred = issuer
             .sign(
-                &user.pk_u,
+                &user.public.key,
                 &[
                     Entry(messages_vectors.message1_str),
                     Entry(messages_vectors.message2_str),
@@ -1138,14 +1135,14 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(1), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
+        let user = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
 
         // create a signature
         let cred = issuer.sign(
-            &user.pk_u,
+            &user.public.key,
             &[
                 Entry(messages_vectors.message1_str),
                 Entry(messages_vectors.message2_str),
@@ -1162,14 +1159,14 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(2));
 
         // create a user key
-        let user = UserKey::new();
+        let user = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
 
         // create a Entry vector 1 larger than allowed
         let cred = issuer.sign(
-            &user.pk_u,
+            &user.public.key,
             &[
                 Entry(messages_vectors.message1_str),
                 Entry(messages_vectors.message2_str),
@@ -1187,10 +1184,10 @@ mod tests {
         let issuer = Issuer::default();
 
         // create a user key
-        let user = UserKey::new();
+        let user = Nym::<Initial>::new();
 
         // create a signature
-        let cred = issuer.sign(&user.pk_u, &[], None);
+        let cred = issuer.sign(&user.public.key, &[], None);
 
         assert!(cred.is_ok());
     }
@@ -1202,7 +1199,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
+        let user = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1210,7 +1207,7 @@ mod tests {
         // create a signature
         let k_prime = Some(4);
         let signature_original = issuer.sign(
-            &user.pk_u,
+            &user.public.key,
             &[
                 Entry(messages_vectors.message1_str),
                 Entry(messages_vectors.message2_str),
@@ -1225,7 +1222,7 @@ mod tests {
         let psi = Scalar::random(ThreadRng::default());
 
         let (rndmz_pk_u, signature, _chi) =
-            spseq_uc::change_rep(&user.pk_u, &signature_original, &mu, &psi, updatable);
+            spseq_uc::change_rep(&user.public.key, &signature_original, &mu, &psi, updatable);
 
         assert!(verify(
             &issuer.public.vk,
@@ -1246,7 +1243,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
+        let user = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1254,7 +1251,7 @@ mod tests {
         // create a signature
         let k_prime = Some(4);
         let signature_original = issuer.sign(
-            &user.pk_u,
+            &user.public.key,
             &[
                 Entry(messages_vectors.message1_str),
                 Entry(messages_vectors.message2_str),
@@ -1269,7 +1266,7 @@ mod tests {
         let psi = Scalar::random(ThreadRng::default());
 
         let (rndmz_pk_u, signature, _chi) =
-            spseq_uc::change_rep(&user.pk_u, &signature_original, &mu, &psi, updatable);
+            spseq_uc::change_rep(&user.public.key, &signature_original, &mu, &psi, updatable);
 
         assert!(verify(
             &issuer.public.vk,
@@ -1291,10 +1288,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
-
-        // create a nym for this user and Issuer
-        let nym = user.nym(issuer.public.parameters.clone());
+        let nym = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1372,10 +1366,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
-
-        // create a nym for this user and Issuer
-        let nym = user.nym(issuer.public.parameters.clone());
+        let nym = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1428,10 +1419,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = UserKey::new();
-
-        // create a nym for this user and Issuer
-        let nym = user.nym(issuer.public.parameters.clone());
+        let nym = Nym::<Initial>::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1454,7 +1442,7 @@ mod tests {
 
         // verify the signature_prime
         assert!(verify(
-            &cred_r.vk,
+            &cred_r.issuer_public.vk,
             &rndmz_pk_u,
             &cred_r.commitment_vector,
             &cred_r.sigma
@@ -1467,7 +1455,7 @@ mod tests {
 
         // verify the signature_prime
         assert!(verify(
-            &cred_r.vk,
+            &cred_r.issuer_public.vk,
             &rndmz_pk_u,
             &cred_r.commitment_vector,
             &cred_r.sigma
@@ -1479,7 +1467,7 @@ mod tests {
 
         // verify the signature
         assert!(verify(
-            &cred_rel.vk,
+            &cred_rel.issuer_public.vk,
             &rndmz_pk_u,
             &cred_rel.commitment_vector,
             &cred_rel.sigma
@@ -1490,13 +1478,12 @@ mod tests {
 
     /// run convert protocol (send_convert_sig, receive_convert_sig) to switch a pk_u to new pk_u and verify it
     #[test]
-    fn test_convert() -> Result<(), IssuerError> {
+    fn test_convert() -> Result<(), error::Error> {
         // 1. sign_keygen
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // 2. user_keygen and nym
-        let user = UserKey::new();
-        let nym = user.nym(issuer.public.parameters.clone());
+        let nym = Nym::<Initial>::new().randomize();
 
         // 3. sign
         let messages_vectors = setup_tests();
@@ -1511,14 +1498,13 @@ mod tests {
             .expect("valid tests");
 
         // 4. create second user_keygen pk_u_new, sk_new
-        let user_new = UserKey::new();
-        let nym_new = user_new.nym(issuer.public.parameters.clone());
+        let nym_new = Nym::<Initial>::new();
 
         // 5. send_convert_sig to create sig orphan
         let orphan = nym.send_convert_sig(&issuer.public.vk, signature_original.sigma);
 
         // 6. receive_convert_sig takes sig orphan to create sk_new and sig orphan
-        let sigma_new = nym_new.receive_cred(&issuer.public.vk, orphan);
+        let sigma_new = nym_new.receive_cred(&issuer.public.vk, orphan)?;
 
         // 7. verify the signature using sigma_new
         assert!(verify(
@@ -1537,8 +1523,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // 2. user_keygen and nym
-        let user = UserKey::new();
-        let nym = user.nym(issuer.public.parameters.clone());
+        let nym = Nym::<Initial>::new().randomize();
 
         // 3. sign
         let messages_vectors = setup_tests();
@@ -1571,8 +1556,7 @@ mod tests {
         // 4. verify proof
 
         let issuer = Issuer::default();
-        let user = UserKey::new();
-        let nym = user.nym(issuer.public.parameters.clone());
+        let nym = Nym::<Initial>::new().randomize();
 
         let messages_vectors = setup_tests();
         let k_prime = Some(5);
@@ -1584,8 +1568,7 @@ mod tests {
         let cred = issuer.issue_cred(messages_vector, k_prime, &nym.nym_proof(NONCE))?;
 
         // User to whose Nym we will offer the credential
-        let user_r = UserKey::new();
-        let nym_r = user_r.nym(issuer.public.parameters.clone());
+        let nym_r = Nym::<Initial>::new();
 
         let addl_entry = Entry::new(&[attribute("age > 21")]);
         messages_vector.push(addl_entry.clone());
@@ -1602,11 +1585,11 @@ mod tests {
         ));
 
         // nym_r accepts
-        let cred_r = nym_r.accept(&offer);
+        let cred_r = nym_r.accept(&offer)?;
 
         // verify the signature
         assert!(verify(
-            &cred_r.vk,
+            &cred_r.issuer_public.vk,
             &nym_r.public.key,
             &cred_r.commitment_vector,
             &cred_r.sigma
@@ -1616,12 +1599,7 @@ mod tests {
         let proof = nym_r.prove(&cred_r, messages_vector, messages_vector, NONCE);
 
         // verify_proof
-        assert!(verify_proof(
-            &issuer.public.vk,
-            &proof,
-            messages_vector,
-            &issuer.public.parameters
-        )?);
+        assert!(verify_proof(&issuer.public, &proof, messages_vector,)?);
 
         Ok(())
     }
@@ -1649,8 +1627,7 @@ mod tests {
         ];
 
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
-        let user = UserKey::new();
-        let nym_p = user.nym(issuer.public.parameters.clone());
+        let nym_p = Nym::<Initial>::new().randomize();
 
         let k_prime = Some(4);
         let cred = issuer.issue_cred(&all_attributes, k_prime, &nym_p.nym_proof(NONCE))?;
@@ -1671,12 +1648,7 @@ mod tests {
         let proof = nym_p.prove(&cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof
-        assert!(verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &selected_attrs,
-            &issuer.public.parameters
-        )?);
+        assert!(verify_proof(&issuer.public, &proof, &selected_attrs,)?);
 
         Ok(())
     }
@@ -1706,8 +1678,7 @@ mod tests {
 
         let l_message = MaxEntries::new(10);
         let issuer = Issuer::new(MaxCardinality::new(8), l_message);
-        let alice = UserKey::new();
-        let alice_nym = alice.nym(issuer.public.parameters.clone());
+        let alice_nym = Nym::<Initial>::new().randomize();
 
         let position = 5; // index of the update key to be used for the added element
         let index_l = all_attributes.len() + position;
@@ -1715,8 +1686,7 @@ mod tests {
 
         let cred = issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
-        let robert = UserKey::new();
-        let bobby_nym = robert.nym(issuer.public.parameters.clone());
+        let bobby_nym = Nym::<Initial>::new();
 
         // We can retrict proving a credential by zerioizing the opening vector of the Entry
         let mut opening_vector_restricted = cred.opening_vector.clone();
@@ -1738,7 +1708,7 @@ mod tests {
         let alice_del_to_bobby = alice_nym.offer(&cred_restricted, &Some(addl_entry))?;
 
         // bobby_nym accepts
-        let bobby_cred = bobby_nym.accept(&alice_del_to_bobby);
+        let bobby_cred = bobby_nym.accept(&alice_del_to_bobby)?;
 
         // verify signature
         assert!(verify(
@@ -1763,12 +1733,7 @@ mod tests {
         let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof
-        assert!(verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &selected_attrs,
-            &issuer.public.parameters
-        )?);
+        assert!(verify_proof(&issuer.public, &proof, &selected_attrs,)?);
 
         // if we try to prove Entry[0] or Entry[1] it should fail
         // age is from Entry[0]
@@ -1783,12 +1748,7 @@ mod tests {
         let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof should fail
-        assert!(!verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &selected_attrs,
-            &issuer.public.parameters
-        )?);
+        assert!(!verify_proof(&issuer.public, &proof, &selected_attrs,)?);
 
         Ok(())
     }
@@ -1821,8 +1781,7 @@ mod tests {
 
         let l_message = MaxEntries::new(10);
         let issuer = Issuer::new(MaxCardinality::new(8), l_message);
-        let alice = UserKey::new();
-        let alice_nym = alice.nym(issuer.public.parameters.clone());
+        let alice_nym = Nym::<Initial>::new().randomize();
 
         let position = 5; // index of the update key to be used for the added element
         let index_l = all_attributes.len() + position;
@@ -1831,18 +1790,16 @@ mod tests {
         let alice_cred =
             issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
-        let robert = UserKey::new();
-        let bobby_nym = robert.nym(issuer.public.parameters.clone());
+        let bobby_nym = Nym::<Initial>::new();
 
         // offer to bobby_nym
         let alice_offer = alice_nym.offer(&alice_cred, &None)?;
 
         // bobby_nym accepts
-        let bobby_cred = bobby_nym.accept(&alice_offer);
+        let bobby_cred = bobby_nym.accept(&alice_offer)?;
 
         // bobby offers to Charlie
-        let charlie = UserKey::new();
-        let charlie_nym = charlie.nym(issuer.public.parameters.clone());
+        let charlie_nym = Nym::<Initial>::new();
 
         let handsome_attribute = Attribute::new("also handsome");
         let additional_entry = Entry::new(&[handsome_attribute.clone()]);
@@ -1857,7 +1814,7 @@ mod tests {
         );
 
         // charlie accepts (FAILING HERE)
-        let charlie_cred = charlie_nym.accept(&bobby_offer);
+        let charlie_cred = charlie_nym.accept(&bobby_offer)?;
 
         // charlie makes a proof of insurance
         let selected_attrs = vec![
@@ -1871,12 +1828,7 @@ mod tests {
         let proof = charlie_nym.prove(&charlie_cred, &all_attributes, &selected_attrs, NONCE);
 
         // verify_proof
-        assert!(verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &selected_attrs,
-            &issuer.public.parameters
-        )?);
+        assert!(verify_proof(&issuer.public, &proof, &selected_attrs)?);
 
         Ok(())
     }
