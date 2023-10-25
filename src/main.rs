@@ -16,7 +16,7 @@
 
 use anyhow::Result;
 use delanocreds::{
-    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, UserKey,
+    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nym,
 };
 
 const NONCE: Option<&[u8]> = None;
@@ -61,11 +61,9 @@ pub fn basic_bench() -> Result<()> {
     let l_message = MaxEntries::new(10);
     let signer = Issuer::new(MaxCardinality::new(8), l_message);
 
-    let alice = UserKey::new();
-    let alice_nym = alice.nym(signer.public.parameters.clone());
+    let alice_nym = Nym::new();
 
-    let robert = UserKey::new();
-    let bobby_nym = robert.nym(signer.public.parameters.clone());
+    let bobby_nym = Nym::new();
 
     let position = 5; // index of the update key to be used for the added element
     let index_l = all_attributes.len() + position;
@@ -96,7 +94,7 @@ pub fn basic_bench() -> Result<()> {
         // restrict opening to read only
         opening_vector: opening_vector_restricted,
         update_key: cred.update_key,
-        vk: cred.vk,
+        issuer_public: cred.issuer_public,
     };
 
     // offer to bobby_nym
@@ -110,7 +108,7 @@ pub fn basic_bench() -> Result<()> {
     let last = start.elapsed();
 
     // bobby_nym accepts
-    let bobby_cred = bobby_nym.accept(&alice_del_to_bobby);
+    let bobby_cred = bobby_nym.accept(&alice_del_to_bobby)?;
 
     eprintln!(
         "Time to accept cred: {:?} (+{:?})",
@@ -140,12 +138,7 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    assert!(verify_proof(
-        &signer.public.vk,
-        &proof,
-        &selected_attrs,
-        &signer.public.parameters
-    )?);
+    assert!(verify_proof(&signer.public, &proof, &selected_attrs)?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -168,8 +161,7 @@ fn bench_96_attributes() -> Result<()> {
 
     // create an Issuer, a User, and issue a cred to a Nym
     let issuer = Issuer::new(MaxCardinality::new(cardinality), MaxEntries::new(length));
-    let alice = UserKey::new();
-    let nym = alice.nym(issuer.public.parameters.clone());
+    let nym = Nym::new();
 
     let mut entrys = Vec::new();
     for i in 0..length {
@@ -206,13 +198,7 @@ fn bench_96_attributes() -> Result<()> {
 
     let proof = nym.prove(&cred, &all_entries, &selected_entries, NONCE);
 
-    assert!(verify_proof(
-        &issuer.public.vk,
-        &proof,
-        &selected_entries,
-        &issuer.public.parameters
-    )
-    .unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
 
     eprintln!(
         "Time to verify {} out of {} attibutes: {:?}",

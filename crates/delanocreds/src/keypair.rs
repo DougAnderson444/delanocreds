@@ -521,56 +521,31 @@ pub struct NymProof {
 }
 
 impl<Stage> Nym<Stage> {
-    /// Create a new [Nym] with a random secret key and a public key
-    pub fn new() -> Self {
-        let secret = Secret::new(Scalar::random(ThreadRng::default()));
-        Nym::new_from_secret(secret)
-    }
-
-    /// Create a new [Nym] associated to the Public Parameters ([ParamSetCommitment]) of the [Issuer]
-    ///
-    /// # Arguments
-    /// - `nym_public_key`: [RandomizedPubKey], public key of the Nym
-    /// - `secret_wit`: [`Secret`]<[Scalar]>, secret witness of the user
-    /// - `public_parameters`: [`ParamSetCommitment`], public parameters of the user
-    pub fn new_with_keypair(nym_public_key: G1Projective, secret_wit: Secret<Scalar>) -> Self {
+    /// Derive a [Nym] from a given secret that references a big endien 32 byte array which [Zeroize]s it's
+    /// memory after dropping
+    fn new_from_secret(secret_bytes: Secret<Scalar>) -> Nym<Stage> {
+        let key = G1Projective::mul_by_generator(secret_bytes.expose_secret());
         Nym::<Stage> {
-            stage: std::marker::PhantomData::<Stage>,
-            secret: secret_wit,
+            stage: std::marker::PhantomData,
+            secret: secret_bytes,
             public: NymPublic {
                 damgard: DamgardTransform::new(),
-                key: nym_public_key,
+                key,
             },
         }
     }
 
-    /// Derive a [Nym] from a given secret that references a big endien 32 byte array which [Zeroize]s it's
-    /// memory after dropping
-    pub fn new_from_secret(secret_bytes: Secret<Scalar>) -> Self {
-        // let big =
-        //     bls12_381_plus::elliptic_curve::bigint::U256::from_be_bytes(*secret_bytes.as_ref());
-        // Nym {
-        //     public: G1Projective::mul_by_generator(secret_bytes.expose_secret()),
-        //     secret: secret_bytes,
-        // }
-        Nym::new_with_keypair(
-            G1Projective::mul_by_generator(secret_bytes.expose_secret()),
-            secret_bytes,
-        )
-    }
-
     /// Generates a pseudonym for the user.
+    /// RndmzPK(pku, ψ, χ) → pk_u from the paper.
     pub fn randomize(&self) -> Nym<Randomized> {
-        // pick randomness
+        // pick randomness, ψ
         let psi = Scalar::random(ThreadRng::default());
+        // pick randomness, χ
         let chi = Scalar::random(ThreadRng::default());
 
-        // pk_u: &G1, chi: &Scalar, psi: &Scalar, g_1: &G1
-        // let nym: RandomizedPubKey = spseq_uc::rndmz_pk(&self.pk_u, &chi, &psi, &g_1);
-        let nym_public_key = psi * (self.public.key + G1Projective::mul_by_generator(&chi));
         let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
 
-        Nym::new_with_keypair(nym_public_key, secret_wit)
+        Nym::new_from_secret(secret_wit)
     }
     /// Creates an [super::OfferBuilder] for a [Credential] using this [Nym]
     ///
@@ -631,13 +606,10 @@ impl<Stage> Nym<Stage> {
         let (nym_p_pk, cred_prime, chi) =
             spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, true);
 
-        // Get nym_p secret by updating with chi and psi
-        let nym_p_secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
-
         // Since we changed the Nym Rep above, we need to use the new Nym (instead of self)
         // to send the convert signal.
         // So create new Nym with the new rep (`nym_p`) and the new nym_p secret_wit
-        let nym: Nym<Randomized> = Nym::new_with_keypair(nym_p_pk, nym_p_secret_wit);
+        let nym = Nym::from_components(&self.secret, Chi(chi), Psi(psi));
 
         let mut cred_prime = cred_prime;
         if let Some(addl_attrs) = addl_attrs {
@@ -762,8 +734,8 @@ impl<Stage> Nym<Stage> {
         let (nym_p, cred_p, chi) = spseq_uc::change_rep(&self.public.key, cred, &mu, &psi, false);
 
         // update aux_r with chi and psi
-        let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
-        let nym: Nym<Randomized> = Nym::new_with_keypair(nym_p, secret_wit);
+        // let secret_wit = Secret::new((self.secret.expose_secret() + chi) * psi);
+        let nym: Nym<Randomized> = Nym::from_components(&self.secret, Chi(chi), Psi(psi));
 
         let (witness_vector, commit_vector) = selected_attrs
             .iter()
@@ -797,13 +769,56 @@ impl<Stage> Nym<Stage> {
     }
 }
 
-impl<Stage> Default for Nym<Stage> {
+impl Default for Nym<Randomized> {
     fn default() -> Self {
         Self::new()
     }
 }
 
+/// Chi Scalar newtype wrapper to disambiguate between scalars
+struct Chi(Scalar);
+
+impl Deref for Chi {
+    type Target = Scalar;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Psi Scalar newtype wrapper to disambiguate between scalars
+struct Psi(Scalar);
+
+impl Deref for Psi {
+    type Target = Scalar;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Deterministic [Nym]s are only [Initial] nyms that can `accept` a [Credential] but are [Randomized] before `offer` or `prove` a Credential Claim
+impl Nym<Initial> {
+    /// New from secret can be public for [Initial] Nym
+    pub fn from_secret(secret_bytes: Secret<Scalar>) -> Self {
+        Nym::new_from_secret(secret_bytes)
+    }
+}
+
+/// Convert signals and proofs should only ever be generated by a [Randomized] [Nym] to keep identity anonymous.
 impl Nym<Randomized> {
+    /// Create a new [Nym] with a random secret key and a public key
+    pub fn new() -> Self {
+        let secret = Secret::new(Scalar::random(ThreadRng::default()));
+        Nym::new_from_secret(secret)
+    }
+
+    /// Internal function used to build a Randomized Nym from a Initial Nym
+    fn from_components(secret: &Secret<Scalar>, chi: Chi, psi: Psi) -> Self {
+        let secret_wit = Secret::new((secret.expose_secret() + (*chi)) * (*psi));
+        Nym::new_from_secret(secret_wit)
+    }
+
     /// Delegate by Converting a Signature.
     /// It is an algorithm run by a user who wants to delegate a
     /// signature σ. It takes as input the public verification key vk, a secret key sku and the signature.
@@ -1076,7 +1091,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = Nym::<Initial>::new();
+        let user = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1105,7 +1120,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = Nym::<Initial>::new();
+        let user = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1135,7 +1150,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(1), MaxEntries::new(10));
 
         // create a user key
-        let user = Nym::<Initial>::new();
+        let user = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1159,7 +1174,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(2));
 
         // create a user key
-        let user = Nym::<Initial>::new();
+        let user = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1184,7 +1199,7 @@ mod tests {
         let issuer = Issuer::default();
 
         // create a user key
-        let user = Nym::<Initial>::new();
+        let user = Nym::new();
 
         // create a signature
         let cred = issuer.sign(&user.public.key, &[], None);
@@ -1199,7 +1214,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = Nym::<Initial>::new();
+        let user = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1243,7 +1258,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let user = Nym::<Initial>::new();
+        let user = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1288,7 +1303,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let nym = Nym::<Initial>::new();
+        let nym = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1366,7 +1381,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let nym = Nym::<Initial>::new();
+        let nym = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1419,7 +1434,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // create a user key
-        let nym = Nym::<Initial>::new();
+        let nym = Nym::new();
 
         // get some test entries
         let messages_vectors = setup_tests();
@@ -1483,7 +1498,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // 2. user_keygen and nym
-        let nym = Nym::<Initial>::new().randomize();
+        let nym = Nym::new().randomize();
 
         // 3. sign
         let messages_vectors = setup_tests();
@@ -1498,7 +1513,7 @@ mod tests {
             .expect("valid tests");
 
         // 4. create second user_keygen pk_u_new, sk_new
-        let nym_new = Nym::<Initial>::new();
+        let nym_new = Nym::new();
 
         // 5. send_convert_sig to create sig orphan
         let orphan = nym.send_convert_sig(&issuer.public.vk, signature_original.sigma);
@@ -1523,7 +1538,7 @@ mod tests {
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
 
         // 2. user_keygen and nym
-        let nym = Nym::<Initial>::new().randomize();
+        let nym = Nym::new().randomize();
 
         // 3. sign
         let messages_vectors = setup_tests();
@@ -1556,7 +1571,7 @@ mod tests {
         // 4. verify proof
 
         let issuer = Issuer::default();
-        let nym = Nym::<Initial>::new().randomize();
+        let nym = Nym::new().randomize();
 
         let messages_vectors = setup_tests();
         let k_prime = Some(5);
@@ -1568,7 +1583,7 @@ mod tests {
         let cred = issuer.issue_cred(messages_vector, k_prime, &nym.nym_proof(NONCE))?;
 
         // User to whose Nym we will offer the credential
-        let nym_r = Nym::<Initial>::new();
+        let nym_r = Nym::new();
 
         let addl_entry = Entry::new(&[attribute("age > 21")]);
         messages_vector.push(addl_entry.clone());
@@ -1627,7 +1642,7 @@ mod tests {
         ];
 
         let issuer = Issuer::new(MaxCardinality::new(5), MaxEntries::new(10));
-        let nym_p = Nym::<Initial>::new().randomize();
+        let nym_p = Nym::new().randomize();
 
         let k_prime = Some(4);
         let cred = issuer.issue_cred(&all_attributes, k_prime, &nym_p.nym_proof(NONCE))?;
@@ -1678,7 +1693,7 @@ mod tests {
 
         let l_message = MaxEntries::new(10);
         let issuer = Issuer::new(MaxCardinality::new(8), l_message);
-        let alice_nym = Nym::<Initial>::new().randomize();
+        let alice_nym = Nym::new().randomize();
 
         let position = 5; // index of the update key to be used for the added element
         let index_l = all_attributes.len() + position;
@@ -1686,7 +1701,7 @@ mod tests {
 
         let cred = issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
-        let bobby_nym = Nym::<Initial>::new();
+        let bobby_nym = Nym::new();
 
         // We can retrict proving a credential by zerioizing the opening vector of the Entry
         let mut opening_vector_restricted = cred.opening_vector.clone();
@@ -1781,7 +1796,7 @@ mod tests {
 
         let l_message = MaxEntries::new(10);
         let issuer = Issuer::new(MaxCardinality::new(8), l_message);
-        let alice_nym = Nym::<Initial>::new().randomize();
+        let alice_nym = Nym::new().randomize();
 
         let position = 5; // index of the update key to be used for the added element
         let index_l = all_attributes.len() + position;
@@ -1790,7 +1805,7 @@ mod tests {
         let alice_cred =
             issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
 
-        let bobby_nym = Nym::<Initial>::new();
+        let bobby_nym = Nym::new();
 
         // offer to bobby_nym
         let alice_offer = alice_nym.offer(&alice_cred, &None)?;
@@ -1799,7 +1814,7 @@ mod tests {
         let bobby_cred = bobby_nym.accept(&alice_offer)?;
 
         // bobby offers to Charlie
-        let charlie_nym = Nym::<Initial>::new();
+        let charlie_nym = Nym::new();
 
         let handsome_attribute = Attribute::new("also handsome");
         let additional_entry = Entry::new(&[handsome_attribute.clone()]);

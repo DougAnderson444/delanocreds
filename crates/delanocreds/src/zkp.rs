@@ -221,7 +221,7 @@ impl ZKPSchnorr {
 }
 
 /// Damgard Transform containing a [Pedersen] commitment
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DamgardTransform {
     pub pedersen: Pedersen,

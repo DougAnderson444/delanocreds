@@ -97,7 +97,7 @@ Current full API is available by looking at the `src/lib.rs` tests. Below is a s
 use anyhow::Result;
 use delanocreds::{Entry, MaxEntries};
 use delanocreds::Attribute;
-use delanocreds::{Issuer, UserKey, verify_proof};
+use delanocreds::{Issuer, Nym, verify_proof};
 
 fn main() -> Result<()> {
     // Build a RootIssuer with ./config.rs default sizes
@@ -108,11 +108,12 @@ fn main() -> Result<()> {
     let seniors_discount = Attribute::new("age > 65");
     let root_entry = Entry::new(&[over_21.clone(), seniors_discount.clone()]);
 
-    // Along comes Alice
-    let alice = UserKey::new();
-    // Alice creates an anonymous pseudonym of her keys
-    // This Nym must use the public parameters of the Issuer
-    let nym = alice.nym(issuer.public.parameters.clone());
+    // Along comes Alice's (pseudo)nym
+    let alice_nym = Nym::new();
+
+    // In order for Alice to be issued a Root Credential from the Issuer, the Nym must be randomized to keep her anonymous
+    // as non-randomized Nym's are used only to accept Credentials.
+    let alice_nym = alice_nym.randomize();
 
     // A verifier can demand the nym proof include a nonce to prevent replay attacks, or it can skip with with `None`
     // The nonce can be compared against the Pedersen open randomness in the `NymProof` to verify that a replay
@@ -123,36 +124,35 @@ fn main() -> Result<()> {
         .credential() // CredentialBuilder for this Issuer
         .with_entry(root_entry.clone()) // adds a Root Entry
         .max_entries(&MaxEntries::default()) // set the Entry ceiling
-        .issue_to(&nym.nym_proof(nonce))?; // issues to a Nym
+        .issue_to(&alice_nym.nym_proof(nonce))?; // issues to a Nym
 
     // Send the (powerful) Root Credential, Attributes, and Entrys to Alice
 
     // Alice can use the Credential to prove she is over 21
-    let (proof, selected_attributes) = nym.proof_builder(&cred, &[root_entry.clone()])
+    let (proof, selected_attributes) = alice_nym.proof_builder(&cred, &[root_entry.clone()])
         .select_attribute(over_21.clone())
         .prove(nonce);
 
-    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes, &issuer.public.parameters).unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_attributes).unwrap());
 
     // Alice can offer variations of the Credential to others
-    let bob = UserKey::new();
-    let bobby_nym = bob.nym(issuer.public.parameters.clone());
+    let bobby_nym = Nym::new();
 
-    let (offer, provable_entries) = nym.offer_builder(&cred, &[root_entry])
+    let (offer, provable_entries) = alice_nym.offer_builder(&cred, &[root_entry])
         .without_attribute(seniors_discount) // resticts the ability to prove attribute Entry (note: Removes the entire Entry, not just one Attribute)
         .additional_entry(Entry::new(&[Attribute::new("10% off")])) // adds a new Entry
         .max_entries(3) // restrict delegatees to only 3 entries total
         .open_offer()?;
 
     // Send to Bob so he can accept the Credential
-    let bobby_cred = bobby_nym.accept(&offer);
+    let bobby_cred = bobby_nym.accept(&offer)?;
 
     // and prove all entries
     let (proof, selected_attributes) = bobby_nym.proof_builder(&bobby_cred, &provable_entries)
         .select_attribute(over_21)
         .prove(nonce);
 
-    assert!(verify_proof(&issuer.public.vk, &proof, &selected_attributes, &issuer.public.parameters).unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_attributes).unwrap());
 
     Ok(())
 }

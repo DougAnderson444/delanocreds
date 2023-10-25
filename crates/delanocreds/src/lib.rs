@@ -16,8 +16,8 @@ pub use entry::Entry;
 pub use entry::MaxEntries;
 use keypair::NymProof;
 pub use keypair::{
-    spseq_uc::Credential, verify_proof, Issuer, IssuerError, IssuerPublic, IssuerPublicB64,
-    MaxCardinality, Nym, NymPublic, UserKey, VK,
+    spseq_uc::Credential, verify_proof, CredProof, Initial, Issuer, IssuerError, IssuerPublic,
+    MaxCardinality, Nym, NymPublic, Offer, Randomized, VK,
 };
 
 // wasm32 tests
@@ -33,11 +33,10 @@ pub struct ReadmeDoctests;
 /// # Example
 ///
 /// ```
-/// use delanocreds::{Issuer, UserKey, Entry, Attribute, CredentialBuilder, MaxEntries};
+/// use delanocreds::{Issuer, Nym, Initial, Entry, Attribute, CredentialBuilder, MaxEntries};
 ///
 /// let issuer = Issuer::default();
-/// let alice = UserKey::new();
-/// let nym = alice.nym(issuer.public.parameters.clone());
+/// let nym = Nym::new();
 /// let root_entry = Entry::new(&[Attribute::new("age > 21")]);
 /// let nonce: Option<&[u8]> = None; // Issuers can demand a nym proof use their nonce to prevent replay attacks
 /// let cred = issuer
@@ -74,7 +73,7 @@ impl<'a> CredentialBuilder<'a> {
         self
     }
 
-    /// Finish building the Credetials, and Issue the Credential to a Nym
+    /// Finish building the Credetials, and Issue the Credential to a [Randomized] (anonymous) Nym
     pub fn issue_to(&self, nym_proof: &NymProof) -> Result<Credential, IssuerError> {
         // if self.extendable > 0, set to Some(self.extendable), else None
         let k_prime = self.extendable.checked_sub(0);
@@ -98,11 +97,10 @@ impl<'a> CredentialBuilder<'a> {
 /// # Example
 ///
 /// ```
-/// use delanocreds::{Issuer, Entry, Attribute, UserKey, CredentialBuilder, MaxEntries};
+/// use delanocreds::{Issuer, Entry, Attribute, Nym, Initial, CredentialBuilder, MaxEntries};
 /// # fn main() -> anyhow::Result<()> {
 /// let issuer = Issuer::default();
-/// let alice = UserKey::new();
-/// let nym = alice.nym(issuer.public.parameters.clone());
+/// let nym = Nym::new();
 /// let root_entry = Entry::new(&[Attribute::new("age > 21")]);
 /// let nonce: Option<&[u8]> = None; // Issuers can demand a nym proof use their nonce to prevent replay attacks
 /// let cred = CredentialBuilder::new(&issuer)
@@ -111,16 +109,15 @@ impl<'a> CredentialBuilder<'a> {
 ///     .issue_to(&nym.nym_proof(nonce))?; // issues to a Nym
 ///
 /// // 1. Offer the unchanged Credential to Bob's Nym
-/// let bob = UserKey::new();
-/// let bobby_nym = bob.nym(issuer.public.parameters.clone());
+/// let bobby_nym = Nym::new();
 ///
 /// let (offer, provable_entries) = nym
 ///     .offer_builder(&cred, &[root_entry])
 ///     .open_offer()?;
 /// # Ok(())
 /// # }
-pub struct OfferBuilder<'a> {
-    our_nym: &'a keypair::Nym,
+pub struct OfferBuilder<'a, Stage> {
+    our_nym: &'a keypair::Nym<Stage>,
     credential: &'a Credential,
     unprovable_attributes: Vec<Attribute>,
     current_entries: Vec<Entry>,
@@ -128,9 +125,9 @@ pub struct OfferBuilder<'a> {
     max_entries: usize,
 }
 
-impl<'a> OfferBuilder<'a> {
+impl<'a, Stage> OfferBuilder<'a, Stage> {
     pub fn new(
-        our_nym: &'a keypair::Nym,
+        our_nym: &'a keypair::Nym<Stage>,
         credential: &'a Credential,
         current_entries: &[Entry],
     ) -> Self {
@@ -235,11 +232,10 @@ impl<'a> OfferBuilder<'a> {
 /// # Example
 ///
 /// ```
-/// use delanocreds::{Issuer, UserKey, Entry, Attribute, CredentialBuilder, MaxEntries, verify_proof};
+/// use delanocreds::{Issuer, Nym, Initial, Entry, Attribute, CredentialBuilder, MaxEntries, verify_proof};
 /// # fn main() -> anyhow::Result<()> {
 /// let issuer = Issuer::default();
-/// let alice = UserKey::new();
-/// let nym = alice.nym(issuer.public.parameters.clone());
+/// let nym = Nym::new();
 /// let over_21 = Attribute::new("age > 21");
 /// let root_entry = Entry::new(&[over_21.clone()]);
 ///
@@ -257,7 +253,7 @@ impl<'a> OfferBuilder<'a> {
 ///     .prove(nonce);
 ///
 /// // Nym can verify the proof
-/// assert!(verify_proof(&issuer.public.vk, &proof, &selected_entries, &issuer.public.parameters).unwrap());
+/// assert!(verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
 ///
 /// // Confirm that over_21 is not contained within the selected_entries
 /// let contains_over_21 = selected_entries
@@ -267,16 +263,20 @@ impl<'a> OfferBuilder<'a> {
 ///
 /// # Ok(())
 /// # }
-pub struct ProofBuilder<'a> {
-    nym: &'a keypair::Nym,
+pub struct ProofBuilder<'a, Stage> {
+    nym: &'a keypair::Nym<Stage>,
     cred: &'a Credential,
     all_attributes: Vec<Entry>,
     selected_attributes: Vec<Attribute>,
 }
 
-impl<'a> ProofBuilder<'a> {
+impl<'a, Stage> ProofBuilder<'a, Stage> {
     /// Create a new ProofBuilder
-    pub fn new(nym: &'a keypair::Nym, cred: &'a Credential, all_attributes: &[Entry]) -> Self {
+    pub fn new(
+        nym: &'a keypair::Nym<Stage>,
+        cred: &'a Credential,
+        all_attributes: &[Entry],
+    ) -> Self {
         Self {
             nym,
             cred,
@@ -325,7 +325,7 @@ mod lib_api_tests {
     use crate::{
         attributes::Attribute,
         entry::{Entry, MaxEntries},
-        keypair::UserKey,
+        keypair::Nym,
     };
 
     const NONCE: Option<&[u8]> = None;
@@ -334,8 +334,7 @@ mod lib_api_tests {
     fn test_credential_building() -> Result<()> {
         // create an Issuer, a User, and issue a cred to a Nym
         let issuer = Issuer::default();
-        let alice = UserKey::new();
-        let nym = alice.nym(issuer.public.parameters.clone());
+        let nym = Nym::new();
 
         let over_21 = Attribute::new("age > 21");
         let seniors_discount = Attribute::new("age > 65");
@@ -386,13 +385,7 @@ mod lib_api_tests {
         // nym should be able to prove the credential
         let proof = nym.prove(&cred, &[root_entry.clone()], &[root_entry.clone()], NONCE);
 
-        assert!(keypair::verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &[root_entry],
-            &issuer.public.parameters
-        )
-        .unwrap());
+        assert!(keypair::verify_proof(&issuer.public, &proof, &[root_entry],).unwrap());
 
         Ok(())
     }
@@ -410,24 +403,19 @@ mod lib_api_tests {
         let issuer = Issuer::default();
 
         // Alice
-        let alice = UserKey::new();
-        let alice_nym = alice.nym(issuer.public.parameters.clone());
+        let alice_nym = Nym::new();
 
         // Bob
-        let bob = UserKey::new();
-        let bobby_nym = bob.nym(issuer.public.parameters.clone());
+        let bobby_nym = Nym::new();
 
         // Charlie
-        let charlie = UserKey::new();
-        let charlie_nym = charlie.nym(issuer.public.parameters.clone());
+        let charlie_nym = Nym::new();
 
         // Douglas
-        let douglas = UserKey::new();
-        let doug_nym = douglas.nym(issuer.public.parameters.clone());
+        let doug_nym = Nym::new();
 
         // Evan
-        let evan = UserKey::new();
-        let evan_nym = evan.nym(issuer.public.parameters.clone());
+        let evan_nym = Nym::new();
 
         let over_21 = Attribute::new("age > 21");
         let seniors_discount = Attribute::new("age > 65");
@@ -449,30 +437,18 @@ mod lib_api_tests {
             alice_nym.offer_builder(&cred, &[root_entry]).open_offer()?;
 
         // Bob can accept
-        let bobby_cred = bobby_nym.accept(&offer);
+        let bobby_cred = bobby_nym.accept(&offer)?;
 
         // and prove all entries
         let proof = bobby_nym.prove(&bobby_cred, &provable_entries, &provable_entries, NONCE);
-        assert!(keypair::verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &provable_entries,
-            &issuer.public.parameters
-        )
-        .unwrap());
+        assert!(keypair::verify_proof(&issuer.public, &proof, &provable_entries).unwrap());
 
         // or Bob can prove just the selected attribute `over_21` using ProofBuilder
         let (proof, selected_entries) = bobby_nym
             .proof_builder(&bobby_cred, &provable_entries)
             .select_attribute(over_21)
             .prove(NONCE);
-        assert!(keypair::verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &selected_entries,
-            &issuer.public.parameters
-        )
-        .unwrap());
+        assert!(keypair::verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
 
         // 2. Offer with additional Attributes, using OfferBuilder
         let handsome_attribute = Attribute::new("also handsome");
@@ -484,20 +460,14 @@ mod lib_api_tests {
             .open_offer()?;
 
         // Charlie can accept
-        let charlie_cred = charlie_nym.accept(&offer);
+        let charlie_cred = charlie_nym.accept(&offer)?;
 
         // and Charlie's Nym can prove additional selected attribute using ProofBuilder
         let (proof, selected_entries) = charlie_nym
             .proof_builder(&charlie_cred, &provable_entries)
             .select_attribute(handsome_attribute.clone())
             .prove(NONCE);
-        assert!(keypair::verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &selected_entries,
-            &issuer.public.parameters
-        )
-        .unwrap());
+        assert!(keypair::verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
 
         // 3. Charlie can Offer a redacted version of the Entry(s) to Doug
         let (offer, provable_entries) = charlie_nym
@@ -510,7 +480,7 @@ mod lib_api_tests {
         assert_eq!(provable_entries[1].len(), 0); // empty, redacted entry with the handsome attribute
 
         // Doug can accept
-        let doug_cred = doug_nym.accept(&offer);
+        let doug_cred = doug_nym.accept(&offer)?;
 
         // and Doug's proof excludes the handsome_attribute
         let (_proof, selected_entries) = doug_nym
@@ -536,30 +506,24 @@ mod lib_api_tests {
         let evan_entry = Entry::new(&[Attribute::new("evan entry #1")]);
 
         // Evan can accept
-        let evan_cred = evan_nym.accept(&offer);
+        let evan_cred = evan_nym.accept(&offer)?;
 
         // Evan can adds an entry
-        let even_nym_2 = evan.nym(issuer.public.parameters.clone());
+        let even_nym_2 = Nym::new();
         let (offer, provable_entries) = evan_nym
             .offer_builder(&evan_cred, &provable_entries)
             .additional_entry(evan_entry)
             .open_offer()?;
 
         // Evan2 can accept
-        let evan_2_cred = even_nym_2.accept(&offer);
+        let evan_2_cred = even_nym_2.accept(&offer)?;
 
         // Evan2 can prove added entry attributes
         let (proof, selected_entries) = even_nym_2
             .proof_builder(&evan_2_cred, &provable_entries)
             .select_attribute(Attribute::new("evan entry #1"))
             .prove(NONCE);
-        assert!(keypair::verify_proof(
-            &issuer.public.vk,
-            &proof,
-            &selected_entries,
-            &issuer.public.parameters
-        )
-        .unwrap());
+        assert!(keypair::verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
 
         // Adding beyond Max Entries of 3 should fail
         let res = even_nym_2

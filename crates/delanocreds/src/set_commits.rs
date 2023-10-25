@@ -4,78 +4,110 @@ use crate::ec::{G1Projective, G2Projective, Scalar};
 use crate::entry::entry_to_scalar;
 use crate::entry::Entry;
 use crate::keypair::MaxCardinality;
-use base64::{engine::general_purpose, Engine as _};
 use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::{Curve, Group, GroupEncoding};
+use bls12_381_plus::{G1Compressed, G2Compressed};
 use rand::rngs::ThreadRng;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
+use serde_with::base64::{Base64, UrlSafe};
+use serde_with::formats::Unpadded;
+use serde_with::serde_as;
 use sha2::{Digest, Sha256};
 
 /// Public Parameters of the Set Commitment
 /// - `pp_commit_g1`: Root Issuer's public parameters commitment for G1
 /// - `pp_commit_g2`: Root Issuer's public parameter commitment for G2
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParamSetCommitment {
     pub pp_commit_g1: Vec<G1Projective>,
     pub pp_commit_g2: Vec<G2Projective>,
 }
 
-/// A base64 URL no pad version of the ParamSetCommitment
-#[derive(Clone, Debug)]
+#[serde_as]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ParamSetCommitmentB64 {
-    pub commit_g1: Vec<String>,
-    pub commit_g2: Vec<String>,
+pub struct ParamSetCommitmentCompressed {
+    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
+    pub pp_commit_g1: Vec<G1Compressed>,
+    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
+    pub pp_commit_g2: Vec<G2Compressed>,
 }
 
-/// Coverts from [ParamSetCommitment] to [ParamSetCommitmentB64]
-impl From<ParamSetCommitment> for ParamSetCommitmentB64 {
+/// From [ParamSetCommitment] to [ParamSetCommitmentCompressed]
+impl From<ParamSetCommitment> for ParamSetCommitmentCompressed {
     fn from(param_sc: ParamSetCommitment) -> Self {
-        let pp_commit_g1_b64 = param_sc
+        let pp_commit_g1_compressed = param_sc
             .pp_commit_g1
             .iter()
-            .map(|g1| general_purpose::URL_SAFE_NO_PAD.encode(g1.to_bytes()))
-            .collect::<Vec<String>>();
+            .map(|g1| g1.to_bytes())
+            .collect::<Vec<G1Compressed>>();
 
-        let pp_commit_g2_b64 = param_sc
+        let pp_commit_g2_compressed = param_sc
             .pp_commit_g2
             .iter()
-            .map(|g2| general_purpose::URL_SAFE_NO_PAD.encode(g2.to_bytes()))
-            .collect::<Vec<String>>();
+            .map(|g2| g2.to_bytes())
+            .collect::<Vec<G2Compressed>>();
 
-        ParamSetCommitmentB64 {
-            commit_g1: pp_commit_g1_b64,
-            commit_g2: pp_commit_g2_b64,
+        ParamSetCommitmentCompressed {
+            pp_commit_g1: pp_commit_g1_compressed,
+            pp_commit_g2: pp_commit_g2_compressed,
         }
+    }
+}
+
+/// TryFrom [ParamSetCommitmentCompressed] to [ParamSetCommitment]
+impl std::convert::TryFrom<ParamSetCommitmentCompressed> for ParamSetCommitment {
+    type Error = String;
+
+    fn try_from(param_sc: ParamSetCommitmentCompressed) -> Result<Self, Self::Error> {
+        let pp_commit_g1 = param_sc
+            .pp_commit_g1
+            .iter()
+            .map(|g1| {
+                let g1_maybe = G1Projective::from_bytes(g1);
+
+                if g1_maybe.is_none().into() {
+                    return Err("Invalid G1 point".to_string());
+                }
+                Ok(g1_maybe.expect("it'll be fine, it passed the check"))
+            })
+            .collect::<Result<Vec<G1Projective>, String>>()?;
+
+        let pp_commit_g2 = param_sc
+            .pp_commit_g2
+            .iter()
+            .map(|g2| {
+                let g2_maybe = G2Projective::from_bytes(g2);
+
+                if g2_maybe.is_none().into() {
+                    return Err("Invalid G2 point".to_string());
+                }
+                Ok(g2_maybe.expect("it'll be fine, it passed the check"))
+            })
+            .collect::<Result<Vec<G2Projective>, String>>()?;
+
+        Ok(ParamSetCommitment {
+            pp_commit_g1,
+            pp_commit_g2,
+        })
+    }
+}
+
+/// ToString for ParamSetCommitmentCompressed
+#[cfg(feature = "serde_json")]
+impl ToString for ParamSetCommitmentCompressed {
+    fn to_string(&self) -> String {
+        serde_json::to_string(self).expect("compressed should be well formed")
     }
 }
 
 /// Converts the PublicParameters to a Base64 encoded json string
 impl ToString for ParamSetCommitment {
     fn to_string(&self) -> String {
-        let pp_commit_g1_b64 = self
-            .pp_commit_g1
-            .iter()
-            .map(|g1| general_purpose::URL_SAFE_NO_PAD.encode(g1.to_bytes()))
-            .collect::<Vec<String>>();
-
-        let pp_commit_g2_b64 = self
-            .pp_commit_g2
-            .iter()
-            .map(|g2| general_purpose::URL_SAFE_NO_PAD.encode(g2.to_bytes()))
-            .collect::<Vec<String>>();
-
-        let pp_commit_g1_b64_str = serde_json::to_string(&pp_commit_g1_b64).unwrap();
-        let pp_commit_g2_b64_str = serde_json::to_string(&pp_commit_g2_b64).unwrap();
-
-        format!(
-            "{{\"pp_commit_g1\":{},\"pp_commit_g2\":{}}}",
-            pp_commit_g1_b64_str, pp_commit_g2_b64_str
-        )
+        ParamSetCommitmentCompressed::from(self.clone()).to_string()
     }
 }
 
@@ -147,6 +179,7 @@ pub trait Commitment {
         let monypol_coeff = polynomial_from_roots(&mess_set);
         let pre_commit = generate_pre_commit(monypol_coeff, param_sc);
 
+        // randomness Rho (ρ)
         let open_info = Scalar::random(ThreadRng::default());
 
         // multiply pre_commit by rho (open_info = rho). Rho is a random element in Zp. Zp is the set of integers modulo p.

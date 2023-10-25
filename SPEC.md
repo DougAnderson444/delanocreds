@@ -21,41 +21,17 @@ In the end, this gives us four values to identify an `Issuer`:
 | `G1` Verification Key | 48                | MaxEntries      |
 | `G2` Verification Key | 96                | MaxEntries      |
 
-## Encoding Public Parameters
+## Encoding Bytes
 
-There is no standard for encoding these values. However, we have decided to use the following format:
+This is new technology, so there is no standard for encoding these values. So far, this is the only library offering a practical usabel solution. We have decided to use the following formats until we need to standardize:
 
-Base64URL encoded strings separated by a `.`:
+- When a credential is passed to a Nym for acceptance/use, it must be serialized and transmitted somehow. Possibly using a QR Code, URL Link, SMS Text message, email, chat, or anything else.
 
-```text
-<Base64URL<vk_g1>>.<Base64URL<vk_g2>>.<Base64URL<ck_g1>>.<Base64URL<ck_g2>>
-```
+- When the value is serialized to JSON, the values are Base64URL encoded in the JSON object (mostly for debugging / prettyprint display).
 
-Example of 48 bytes of `G1`, or 64 characters of Base64URL:
+- When the value is serialized to bytes, the values are CBOR bytes of the Object (for passing Credentials around).
 
-```md
-EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4
-1234567890123456789012345678901234567890123456789012345678901234
-1 2 3 4 5 6
-```
-
-An example of 96 bytes of `G2`, or 128 characters of Base64URL:
-
-```md
-EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4EjRWeBI0VngSNFZ4
-```
-
-An example `VKG1`.`VKG2`.`CKG1`.`CKG2` (384 characters):
-
-```md
-l*HTpzGX15QmlWOMT6msD8NojE-XdLkFoU46PxcbrFhsVeg*-Xoa7*s68ArbIsa7.k-ArYFJxn2B9rNOgiCdPZVlr0NCZILYatdphu9x_UEkzTPESE5RdV-WsfQVdBCt-AkqisvCPCpEmCAUnLcUQUcbketT6QDsCtFELZHrj0XcLrAMmqAW779SAVsjBIb24.kJlLZzDrtzXUxtZKqTXVmXGyzMk6lhKc3xyoJ3K5yphAMY1tcDjGvFL6wrA48X9G.pYMbI5MW2Ht-64mR9mGR4XqnMiJTGlguVTG1k0NN-NqnaMtsv81gNVlAE4GfHoDuB_17GwbtvfzXabcl2Cjgkn2QEfyFlm55GrXLoH5b-\_xKgj4vGuBV50b2p7Mf-2x*
-```
-
-When the bytes are encoded to Base64, the character length should be no more than a total of 384 characters, with 3 extra characters for the `.` separators, makes a total of 387 characters.
-
-Although this is too big for a tweet, which is capped at 280 characters, it is still small enough to be used in a URL or a QR Code (Max. 4,296 alphanumeric characters 7096). An example QR code is:
-
-A MaxCardinality of 12 is the most Public Parameters that can be encoded in a standard QR Code with a compact VK.
+This should allow users to import/export the bytes in a reasonably short and convenient manner.
 
 ## Proving a Credential
 
