@@ -10,9 +10,9 @@ Holders can also selectively prove attributes and remove the ability for delegat
 
 [![Example Explainer](https://github.com/hyperledger/aries-rfcs/raw/main/concepts/0104-chained-credentials/use-case.png)](https://github.com/hyperledger/aries-rfcs/blob/main/concepts/0104-chained-credentials/README.md)
 
-## Project Status
+## Project Status / Roadmap
 
-⚠️ New project, somewhat work in progress. API is not stable yet.
+API works and is stabilizing, but may change in the future.
 
 Roadmap:
 
@@ -24,24 +24,38 @@ Roadmap:
 
 ## Delegation
 
-What can be delegated is the ability to add a number of additional attribute Entries (zero to MaxEntries), but only if the credential is marked as _extendable_ and the available Entry slots have not all been used.
+There are a few ways the delegation can be used:
+
+### Deleagte adding Entries
+
+We can delegate the ability to add Entries (up to `MaxEntries`), but only if the credential is marked as `extendable` and the available Entry slots have not all been used by previous delegatees.
 
 Even if there is no ability for a credential holder to add additional attributes, the following always holds true:
 
 - Credentials holders can always assign their credential to a new public key
 - Attributes are always able to be selectively shown or hidden by a holder
 
-It is important to note that the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.
+It is important to note that whether the current holder can add Entries or not, the Credential can always be assigned to a new public key, that is what makes this scheme anonymizable.
 
 Therefore, while holders may restrict the ability of delegatees to _add_ attributes, they will always be
 able to assign the credential to a new public key for the attributes they _do_ have.
 
-### Root Issuer Summary of Choices/Options:
+### Issuer Delegation
+
+This is where things get really powerful. The Root Issuer can delegate a blank credential to a server's Public Key, enabling the server to Issue credentials on it's behalf without ever giving up the root secret!
+
+Example: You want to set up an email campaign to email contacts a Credential that allows them to prove they own that email address. Of course you want a bot to process the form for you instead of doing it by hand. You issue a delegatable credential to the Server's Public Key. Now only that Public Key can issue credentials on that empty Root credential, and if the keys are exposed because of a server hack you don't expose your root secret keys. Additional protocols can be layered on top such as adding an expiry date to the original credential, invalidating any credential that was issued after this date with a stolen key.
+
+### Prover Delegation
+
+Not online all the time to generate proofs? No problem! Users can actually even delegate proving of a credential to another (say, a server) who can generate the proof on their behalf, again without having to expose any of their secret keys. The User can disable additonal entries, or even redact entries, restricting the abilities of the server to change entry attributes or prove certain entries. Because the Attributes are all Sha2-256 hashed, the server does not even know the attribute values! In the event of stolen keys, all the theif would be able to do is make more proofs on our behalf (thank you for the free services).
+
+## Root Issuer Summary of Choices/Options:
 
 - **Maxiumum Attribute Entries**: Maximum number of `Entry`s per `Credential`.
 - **Maximum Cardinality**: Maximum selectable number of `Attributes` per `Proof` or `Entry`
 
-### Attributes
+## Attributes
 
 `Attribute`s can be created from any bytes, such as `age > 21` or even a `.jpg` file. These bytes are hashed usin Sha2-256, which means they are also content addressable! Once an `Attribute` is created, it can be referenced by it's [`Content Identifier` (`CID`)](https://cid.ipfs.tech/) instead of the value itself. This means we can also refer to attributes by their `CID`, and not have to worry about revealing the actual content of the attribute or re-hashing the content when it needs to be referenced.
 
@@ -63,7 +77,11 @@ let attr_from_cid = Attribute::from_cid(&read_attr).expect("a Sha2-256 hash type
 assert_eq!(read_attr, attr_from_cid);
 ```
 
-### Entries
+If an Attribute is public, then you could store it to a content addressed storage like IPFS. If the Attribute is sensitive, then the Attribute can just be referred to by it's hash.
+
+Note that if someone has both a `Credential` `Offer` and the `Attributes` or even their hashes, they will be able to claim the `Credential`, so you want to keep `Offer`s and their associated `Attributes` separate (or securely transported if together).
+
+## Entries
 
 A `Credential` is comprised of one or more `Entry`s. Each `Entry` contains one or more `Attribute`s. Entries are used to group `Attribute`s together.
 
@@ -75,7 +93,7 @@ Attribute Entries:
 ==> Additonal Entry? Only if 3 < Extendable < MaxEntries
 ```
 
-### Redact
+## Redact
 
 Holders of a `Credential` can redact any `Entry` from the `Credential`, which will remove the ability to create proofs on any `Attribute`s in that `Entry`. This is useful if you want to remove the ability for a delegatee to prove a specific attribute, but still allow them to prove other attributes. It is important to note that if the ability to `prove` an Attribute is removed before delegating a `Credential`, then the entire Entry is removed -- not just the single `Attribute`. If you want to still allow a delegtee to use the other Attributes, you must create a new Entry with the other Attributes and delegate the extended `Credential`.
 
@@ -160,7 +178,7 @@ fn main() -> Result<()> {
 
 ## Features
 
-## Advantages
+### Advantages
 
 This DAC scheme has the following advantages over other anonymous credential schemes:
 
@@ -192,7 +210,7 @@ It also allows an adversarial CA but no delegators’s keys leaks.
 
 ## Hashing
 
-[RFC9380](https://datatracker.ietf.org/doc/rfc9380/) recommends expanded message digest (XMD) for BLS12-381 curves when hashing to curve (as opposed to extendable-output function (XOF) for Sha3 SHAKE). At a later time this library might support both XOF and XMD. Libraries that support XMD are [blst](https://github.com/supranational/blst/blob/78fee18b25e16975e27b2d0314f6a323a23e6e83/bindings/rust/src/lib.rs#L264) and [pairing_plus](https://docs.rs/pairing-plus/latest/pairing_plus/hash_to_field/struct.ExpandMsgXmd.html).
+[RFC9380](https://datatracker.ietf.org/doc/rfc9380/) recommends expanded message digest (XMD) for BLS12-381 curves when hashing to curve (as opposed to extendable-output function (XOF) for Sha3 SHAKE). Libraries that support XMD are [blst](https://github.com/supranational/blst/blob/78fee18b25e16975e27b2d0314f6a323a23e6e83/bindings/rust/src/lib.rs#L264) and [pairing_plus](https://docs.rs/pairing-plus/latest/pairing_plus/hash_to_field/struct.ExpandMsgXmd.html).
 
 # Tests
 
@@ -212,7 +230,7 @@ This library can generate, issue, delegate, prove and verify 30 selected credent
 
 That's fast enough for time-critical applications like public transportation, ticketing, etc.
 
-# Quick Bench
+## Quick Bench
 
 It's fast. Selecting 30 attributes out of 96 total, the following benchmarks were observed for each step:
 
@@ -244,7 +262,7 @@ Assumption:
 
 - each time a credential is delegated, an attribute is added
 
-# Docs
+## Docs
 
 `cargo doc --workspace --no-deps --open`
 
