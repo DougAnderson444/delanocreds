@@ -30,6 +30,7 @@
 use crate::ec::Scalar;
 use bls12_381_plus::elliptic_curve::bigint;
 use cid::multibase;
+use cid::multihash;
 use cid::multihash::{Code, MultihashDigest};
 use cid::Cid;
 use std::{fmt::Display, ops::Deref};
