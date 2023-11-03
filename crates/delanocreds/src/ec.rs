@@ -8,7 +8,6 @@ pub mod curve {
     use super::*;
 
     pub use bls12_381_plus::Gt;
-    pub use univarpoly::ScalarVector;
 
     use bls12_381_plus::group::Curve;
 
@@ -21,8 +20,4 @@ pub mod curve {
     pub fn polynomial_from_roots(roots: &[Scalar]) -> UnivarPolynomial {
         UnivarPolynomial::new_with_roots(roots)
     }
-}
-
-pub mod traits {
-    pub use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 }
