@@ -9,6 +9,7 @@ use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
 use crate::set_commits::{Commitment, CrossSetCommitment};
 use crate::set_commits::{ParamSetCommitment, ParamSetCommitmentCompressed};
+use crate::zkp::Nonce;
 use crate::{config, error};
 use crate::{
     zkp::PedersenOpen,
@@ -17,7 +18,6 @@ use crate::{
 };
 
 use anyhow::Result;
-//
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::{Curve, Group, GroupEncoding};
@@ -295,10 +295,11 @@ impl Issuer {
         attr_vector: &[Entry],
         k_prime: Option<usize>,
         nym_proof: &NymProof,
+        nonce: Option<&Nonce>,
     ) -> Result<Credential, IssuerError> {
         // check if proof of nym is correct using Damgard’s technique for obtaining malicious verifier
         // interactive zero-knowledge proofs of knowledge
-        if !DamgardTransform::verify(nym_proof) {
+        if !DamgardTransform::verify(nym_proof, nonce) {
             return Err(IssuerError::InvalidNymProof);
         }
         // check if delegate keys is provided
@@ -722,7 +723,7 @@ impl<Stage> Nym<Stage> {
         cred: &Credential,
         all_attributes: &[Entry],
         selected_attrs: &[Entry],
-        nonce: Option<impl AsRef<[u8]>>,
+        nonce: &Nonce,
     ) -> CredProof {
         // mu can be random here since `prove` is the last step in the Cred process.
         let mu = Scalar::random(ThreadRng::default());
@@ -850,7 +851,7 @@ impl Nym<Randomized> {
     /// used to generate the challenge. If no nonce is provided, a random nonce will be
     /// generated. This nonce can be checked against the Pedersen open randomness to
     /// ensure the proof is valid.
-    pub fn nym_proof(&self, nonce: Option<impl AsRef<[u8]>>) -> NymProof {
+    pub fn nym_proof(&self, nonce: &Nonce) -> NymProof {
         let (pedersen_commit, pedersen_open) = self.public.damgard.announce(nonce);
 
         let state = ChallengeState::new(
@@ -1008,6 +1009,7 @@ pub fn verify_proof(
     issuer_public: &IssuerPublic,
     proof: &CredProof,
     selected_attrs: &[Entry],
+    nonce: Option<&Nonce>,
 ) -> Result<bool, IssuerError> {
     // Get the selected_attr indexes which are not `is_enpty()`,
     // use those indexes to select corresponding `commitment_vectors`
@@ -1028,7 +1030,7 @@ pub fn verify_proof(
         &proof.witness_pi,
     );
 
-    let check_zkp_verify = DamgardTransform::verify(&proof.nym_proof);
+    let check_zkp_verify = DamgardTransform::verify(&proof.nym_proof, nonce);
 
     // signature is based on the original commitment vector. Unless we adapt it when the restriction is applied
     let verify_sig = verify(
@@ -1048,7 +1050,9 @@ mod tests {
     use super::*;
     use crate::attributes::{attribute, Attribute};
 
-    const NONCE: Option<&[u8]> = None;
+    lazy_static::lazy_static! {
+        static ref NONCE: Nonce = Nonce::default();
+    }
 
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -1549,8 +1553,12 @@ mod tests {
         ];
 
         // Use `issue_cred` to issue a Credential to a Use's Nym
-        const NONCE: Option<&[u8]> = None;
-        let cred = issuer.issue_cred(messages_vector, k_prime, &nym.nym_proof(NONCE))?;
+        let cred = issuer.issue_cred(
+            messages_vector,
+            k_prime,
+            &nym.nym_proof(&NONCE),
+            Some(&NONCE),
+        )?;
 
         // check the correctness of root credential
         // assert (spseq_uc.verify(pp_sign, vk_ca, nym_u, commitment_vector, sigma))
@@ -1580,7 +1588,12 @@ mod tests {
             Entry(messages_vectors.message2_str),
         ];
 
-        let cred = issuer.issue_cred(messages_vector, k_prime, &nym.nym_proof(NONCE))?;
+        let cred = issuer.issue_cred(
+            messages_vector,
+            k_prime,
+            &nym.nym_proof(&NONCE),
+            Some(&NONCE),
+        )?;
 
         // User to whose Nym we will offer the credential
         let nym_r = Nym::new();
@@ -1611,10 +1624,15 @@ mod tests {
         ));
 
         // prepare a proof for all entrys, including the additional entry
-        let proof = nym_r.prove(&cred_r, messages_vector, messages_vector, NONCE);
+        let proof = nym_r.prove(&cred_r, messages_vector, messages_vector, &NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public, &proof, messages_vector,)?);
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            messages_vector,
+            Some(&NONCE)
+        )?);
 
         Ok(())
     }
@@ -1645,7 +1663,12 @@ mod tests {
         let nym_p = Nym::new().randomize();
 
         let k_prime = Some(4);
-        let cred = issuer.issue_cred(&all_attributes, k_prime, &nym_p.nym_proof(NONCE))?;
+        let cred = issuer.issue_cred(
+            &all_attributes,
+            k_prime,
+            &nym_p.nym_proof(&NONCE),
+            Some(&NONCE),
+        )?;
 
         // subset of each message set
         // iteratre through message1_str and return vector if element is either `age` or `name` Attribute
@@ -1660,10 +1683,15 @@ mod tests {
         let selected_attrs = vec![Entry(sub_list1_str), Entry(sub_list2_str)];
 
         // prepare a proof
-        let proof = nym_p.prove(&cred, &all_attributes, &selected_attrs, NONCE);
+        let proof = nym_p.prove(&cred, &all_attributes, &selected_attrs, &NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public, &proof, &selected_attrs,)?);
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_attrs,
+            Some(&NONCE)
+        )?);
 
         Ok(())
     }
@@ -1699,7 +1727,12 @@ mod tests {
         let index_l = all_attributes.len() + position;
         let k_prime = Some(std::cmp::min(index_l, l_message.into())); // k_prime must be: MIN(messages_vector.len()) < k_prime < MAX(l_message)
 
-        let cred = issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
+        let cred = issuer.issue_cred(
+            &all_attributes,
+            k_prime,
+            &alice_nym.nym_proof(&NONCE),
+            Some(&NONCE),
+        )?;
 
         let bobby_nym = Nym::new();
 
@@ -1745,10 +1778,15 @@ mod tests {
         ];
 
         // prepare a proof
-        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
+        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, &NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public, &proof, &selected_attrs,)?);
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_attrs,
+            Some(&NONCE)
+        )?);
 
         // if we try to prove Entry[0] or Entry[1] it should fail
         // age is from Entry[0]
@@ -1760,10 +1798,15 @@ mod tests {
         ];
 
         // prepare a proof
-        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
+        let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, &NONCE);
 
         // verify_proof should fail
-        assert!(!verify_proof(&issuer.public, &proof, &selected_attrs,)?);
+        assert!(!verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_attrs,
+            Some(&NONCE)
+        )?);
 
         Ok(())
     }
@@ -1802,8 +1845,12 @@ mod tests {
         let index_l = all_attributes.len() + position;
         let k_prime = Some(std::cmp::min(index_l, l_message.into())); // k_prime must be: MIN(messages_vector.len()) < k_prime < MAX(l_message)
 
-        let alice_cred =
-            issuer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
+        let alice_cred = issuer.issue_cred(
+            &all_attributes,
+            k_prime,
+            &alice_nym.nym_proof(&NONCE),
+            Some(&NONCE),
+        )?;
 
         let bobby_nym = Nym::new();
 
@@ -1840,11 +1887,59 @@ mod tests {
         ];
 
         // prepare a proof
-        let proof = charlie_nym.prove(&charlie_cred, &all_attributes, &selected_attrs, NONCE);
+        let proof = charlie_nym.prove(&charlie_cred, &all_attributes, &selected_attrs, &NONCE);
 
         // verify_proof
-        assert!(verify_proof(&issuer.public, &proof, &selected_attrs)?);
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_attrs,
+            Some(&NONCE)
+        )?);
 
         Ok(())
+    }
+    // Test the nonce matches nym_proof.pederson_open.open_randomness
+    #[test]
+    fn test_nonce_matches() {
+        // Make a NONCENONCE
+        let nonce = Nonce::new(vec![1, 2, 3, 4, 5, 6, 7, 8]);
+
+        let issuer = Issuer::default();
+        let nym = Nym::new();
+
+        let messages_vectors = setup_tests();
+
+        let k_prime = None;
+
+        // issue the cred
+        let cred = issuer
+            .issue_cred(
+                &[Entry(messages_vectors.message1_str.clone())],
+                k_prime,
+                &nym.nym_proof(&nonce),
+                Some(&nonce),
+            )
+            .unwrap();
+
+        // generate a proof using prove
+        let proof = nym.prove(
+            &cred,
+            &[Entry(messages_vectors.message1_str.clone())],
+            &[Entry(messages_vectors.message1_str.clone())],
+            &nonce,
+        );
+
+        // the proof.pedersen_open.open_randomness should match the nonce
+        assert_eq!(proof.nym_proof.pedersen_open.open_randomness, nonce);
+
+        // verify the proof
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &[Entry(messages_vectors.message1_str)],
+            Some(&nonce)
+        )
+        .unwrap());
     }
 }

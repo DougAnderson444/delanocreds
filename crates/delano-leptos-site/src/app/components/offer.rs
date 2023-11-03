@@ -1,7 +1,7 @@
 //! Issue a credential.
 use crate::app::components::{attributes::AttributeEntry, qrcode::ReactiveQRCode};
 use delanocreds::{
-    error, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nym, Randomized,
+    error, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nonce, Nym, Randomized,
 };
 use leptos::*;
 
@@ -11,14 +11,12 @@ pub fn create_offer(
     nym: &ReadSignal<Nym<Randomized>>,
     attributes: Vec<Attribute>,
 ) -> Result<(Credential, Vec<Entry>), error::Error> {
-    const NONCE: Option<&str> = None;
-
     // Issue the (Powerful) Root Credential to Arbitary Nym
     let cred = match issuer.with(|i| {
         i.credential()
             .with_entry(attributes.clone().into())
             .max_entries(&MaxEntries::new(2))
-            .issue_to(&nym.with(|nym| nym.nym_proof(NONCE)))
+            .issue_to(&nym.with(|nym| nym.nym_proof(&Nonce::default())), None)
     }) {
         Ok(cred) => cred,
         Err(e) => panic!("Error issuing cred: {:?}", e),

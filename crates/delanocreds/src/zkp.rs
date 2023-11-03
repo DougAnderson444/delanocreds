@@ -1,6 +1,8 @@
 use std::fmt::Display;
+use std::ops::Deref;
 
 use bls12_381_plus::elliptic_curve::bigint;
+use bls12_381_plus::elliptic_curve::bigint::Encoding;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::prime::PrimeCurveAffine;
@@ -13,6 +15,70 @@ use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
 
 use crate::keypair::NymProof;
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Nonce(pub(crate) Scalar);
+
+/// Create a new [Nonce] with any arbitrary length type that implements AsRef<[u8]>
+impl Nonce {
+    pub fn new(bytes: impl AsRef<[u8]>) -> Self {
+        Self::from(bytes.as_ref())
+    }
+}
+
+impl Default for Nonce {
+    fn default() -> Self {
+        Self(Scalar::random(ThreadRng::default()))
+    }
+}
+
+impl From<Scalar> for Nonce {
+    fn from(scalar: Scalar) -> Self {
+        Self(scalar)
+    }
+}
+
+/// Create a [Nonce] from an arbitrary sized slice of bytes
+impl From<&[u8]> for Nonce {
+    fn from(bytes: &[u8]) -> Self {
+        // hash the bytes to get a 32 byte hash
+        let digest = Sha256::digest(bytes);
+        let big_digest = bigint::U256::from_be_bytes(digest.into());
+        let scalar = Scalar::from_raw(big_digest.into());
+        Self(scalar)
+    }
+}
+
+impl Deref for Nonce {
+    type Target = Scalar;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl PartialEq<bls12_381_plus::Scalar> for &Nonce {
+    fn eq(&self, other: &bls12_381_plus::Scalar) -> bool {
+        self.0 == *other
+    }
+}
+
+impl From<Nonce> for Scalar {
+    fn from(nonce: Nonce) -> Self {
+        nonce.0
+    }
+}
+
+// convert From Option<impl AsRef<[u8]>> to Nonce
+impl From<Option<&[u8]>> for Nonce {
+    fn from(bytes: Option<&[u8]>) -> Self {
+        match bytes {
+            Some(bytes) => Self::new(bytes),
+            None => Self::default(),
+        }
+    }
+}
 
 // These functions were in the original implementation but are unused in this Implementation
 // Keeping them here unused under a 'zkp' flag for potential future use as needed
@@ -230,7 +296,7 @@ pub struct DamgardTransform {
 impl DamgardTransform {
     /// Create a Damgard Transform challenge announcement
     /// Takes an optional randomness (nonce) to use for the announcement
-    pub fn announce(&self, nonce: Option<impl AsRef<[u8]>>) -> (PedersenCommit, PedersenOpen) {
+    pub fn announce(&self, nonce: &Nonce) -> (PedersenCommit, PedersenOpen) {
         let w_random = Scalar::random(ThreadRng::default());
         let w_element = G1Projective::mul_by_generator(&w_random).to_affine();
         let (pedersen_commit, mut pedersen_open) = self.pedersen.commit(nonce, w_random);
@@ -243,7 +309,12 @@ impl DamgardTransform {
     /// # Example:
     ///
     /// assert!(DamgardTransform::verify(their_proof)
-    pub fn verify(nym_proof: &NymProof) -> bool {
+    pub fn verify(nym_proof: &NymProof, nonce: Option<&Nonce>) -> bool {
+        if let Some(nonce) = nonce {
+            if nym_proof.pedersen_open.open_randomness != *nonce {
+                return false;
+            }
+        }
         let left_side = G1Projective::mul_by_generator(&nym_proof.response);
         let right_side = nym_proof.pedersen_open.announce_element.as_ref().unwrap()
             + nym_proof.challenge * nym_proof.public_key;
@@ -278,7 +349,7 @@ pub type PedersenCommit = G1Projective;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PedersenOpen {
     /// Randomness used to open the commitment
-    pub open_randomness: Scalar,
+    pub open_randomness: Nonce,
     /// Randomness used to announce the secret
     pub announce_randomness: Scalar,
     /// Announcement element
@@ -310,18 +381,11 @@ impl Pedersen {
     ///
     /// The nonce can be compared against the Pedersen open randomness to verify that a replay
     /// attach isn't reusing a previously generated proof
-    pub fn commit(
-        &self,
-        nonce: Option<impl AsRef<[u8]>>,
-        msg: Scalar,
-    ) -> (PedersenCommit, PedersenOpen) {
-        // convert Some nonce bytes to Scalar. If no nonce, make randomness ourselves and use it
-        let r: Scalar = nonce.map_or(Scalar::random(ThreadRng::default()), |n| {
-            bigint::U256::from_be_slice(n.as_ref()).into()
-        });
+    pub fn commit(&self, nonce: &Nonce, msg: Scalar) -> (PedersenCommit, PedersenOpen) {
+        let r: Scalar = **nonce;
         let pedersen_commit = r * self.h + G1Projective::mul_by_generator(&msg);
         let pedersen_open = PedersenOpen {
-            open_randomness: r,
+            open_randomness: nonce.clone(),
             announce_randomness: msg,
             announce_element: None,
         };
@@ -331,7 +395,7 @@ impl Pedersen {
 
     /// Decrypts/Decommits the message
     pub fn decommit(&self, pedersen_open: &PedersenOpen, pedersen_commit: &PedersenCommit) -> bool {
-        let c2 = self.h * pedersen_open.open_randomness
+        let c2 = self.h * (*pedersen_open.open_randomness)
             + G1Projective::mul_by_generator(&pedersen_open.announce_randomness);
         &c2 == pedersen_commit
     }
@@ -342,11 +406,10 @@ mod tests {
     use super::*;
     use bls12_381_plus::group::Curve;
 
-    const NONCE: Option<&[u8]> = None;
-
     #[test]
     #[cfg(feature = "zkp")]
     fn test_non_interact_prove() {
+        let nonce: Nonce = Nonce::default();
         // 1. Setup
         // 2. Prove
         // 3. Verify
@@ -404,6 +467,7 @@ mod tests {
 
     #[test]
     fn test_damgard_transform() {
+        let nonce: Nonce = Nonce::default();
         let damgard = DamgardTransform::new();
 
         // create a statement. A statement is a secret and a commitment to that secret.
@@ -412,7 +476,7 @@ mod tests {
                                                                         // h
         let statement = G1Projective::mul_by_generator(secret.expose_secret()).to_affine();
 
-        let (pedersen_commit, pedersen_open) = damgard.announce(NONCE);
+        let (pedersen_commit, pedersen_open) = damgard.announce(&nonce);
 
         let state = ChallengeState::new(vec![statement], &pedersen_commit.to_bytes());
 
@@ -434,6 +498,6 @@ mod tests {
             damgard,
         };
 
-        assert!(DamgardTransform::verify(&proof_nym));
+        assert!(DamgardTransform::verify(&proof_nym, Some(&nonce)));
     }
 }

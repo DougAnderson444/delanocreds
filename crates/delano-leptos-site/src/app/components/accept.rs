@@ -7,7 +7,7 @@
 //! needed to prove.
 
 use crate::app::components::{attributes::AttributeEntry, error::Error};
-use delanocreds::{verify_proof, Credential, Entry, Initial, Nym, Offer, Randomized};
+use delanocreds::{verify_proof, Credential, Entry, Nonce, Nym, Offer, Randomized};
 use leptos::*;
 use leptos_router::use_params_map;
 
@@ -54,9 +54,9 @@ fn UserAccept(nym: ReadSignal<Nym<Randomized>>) -> impl IntoView {
                     Ok(cred) => {
                         log::info!("Credential accepted: {}", cred.to_string());
 
-                        const NONCE: Option<&[u8]> = None;
                         let entries: &[Entry] = &[attributes.get().into()];
                         log::debug!("entries: {:?}", entries);
+                        let nonce = Nonce::default();
                         let (proof, provable_entries) = nym.with(|n| {
                             let mut building = n.proof_builder(&cred, entries);
                             // iterate through all Attributes, select each one
@@ -67,11 +67,16 @@ fn UserAccept(nym: ReadSignal<Nym<Randomized>>) -> impl IntoView {
                                     log::debug!("selecting attribute: {:?}", attribute);
                                     builder.select_attribute(attribute.clone())
                                 })
-                                .prove(NONCE)
+                                .prove(&nonce)
                         });
 
                         // if the proof can pass verify_proof, then return Ok(proof)
-                        match verify_proof(&cred.issuer_public, &proof, &provable_entries) {
+                        match verify_proof(
+                            &cred.issuer_public,
+                            &proof,
+                            &provable_entries,
+                            Some(&nonce),
+                        ) {
                             Ok(true) => log::info!("Proof verified."),
                             Ok(false) => {
                                 log::error!("{:?}", delanocreds::error::Error::InvalidProof)

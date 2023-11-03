@@ -113,9 +113,7 @@ Current full API is available by looking at the `src/lib.rs` tests. Below is a s
 
 ```rust
 use anyhow::Result;
-use delanocreds::{Entry, MaxEntries};
-use delanocreds::Attribute;
-use delanocreds::{Issuer, Nym, verify_proof};
+use delanocreds::{Issuer, Nym, verify_proof, Nonce, Entry, MaxEntries, Attribute};
 
 fn main() -> Result<()> {
     // Build a RootIssuer with ./config.rs default sizes
@@ -136,22 +134,25 @@ fn main() -> Result<()> {
     // A verifier can demand the nym proof include a nonce to prevent replay attacks, or it can skip with with `None`
     // The nonce can be compared against the Pedersen open randomness in the `NymProof` to verify that a replay
     // attacker isn't reusing a previously generated proof
-    let nonce: Option<&[u8]> = None;
+    let nonce = Nonce::default(); // generates a random nonce for us
+
+    // Give a nonce to Alice so she can generate a NymProof using it
+    let nym_proof = alice_nym.nym_proof(&nonce);
 
     let cred = issuer
         .credential() // CredentialBuilder for this Issuer
         .with_entry(root_entry.clone()) // adds a Root Entry
         .max_entries(&MaxEntries::default()) // set the Entry ceiling
-        .issue_to(&alice_nym.nym_proof(nonce))?; // issues to a Nym
+        .issue_to(&nym_proof, Some(&nonce))?; // issues to a Nym
 
     // Send the (powerful) Root Credential, Attributes, and Entrys to Alice
 
     // Alice can use the Credential to prove she is over 21
     let (proof, selected_attributes) = alice_nym.proof_builder(&cred, &[root_entry.clone()])
         .select_attribute(over_21.clone())
-        .prove(nonce);
+        .prove(&nonce);
 
-    assert!(verify_proof(&issuer.public, &proof, &selected_attributes).unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_attributes, Some(&nonce)).unwrap());
 
     // Alice can offer variations of the Credential to others
     let bobby_nym = Nym::new();
@@ -168,9 +169,9 @@ fn main() -> Result<()> {
     // and prove all entries
     let (proof, selected_attributes) = bobby_nym.proof_builder(&bobby_cred, &provable_entries)
         .select_attribute(over_21)
-        .prove(nonce);
+        .prove(&nonce);
 
-    assert!(verify_proof(&issuer.public, &proof, &selected_attributes).unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_attributes, Some(&nonce)).unwrap());
 
     Ok(())
 }

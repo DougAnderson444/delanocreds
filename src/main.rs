@@ -16,10 +16,8 @@
 
 use anyhow::Result;
 use delanocreds::{
-    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nym,
+    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nonce, Nym,
 };
-
-const NONCE: Option<&[u8]> = None;
 
 pub fn main() -> Result<()> {
     println!(" \nRunning a short basic test: \n");
@@ -31,6 +29,8 @@ pub fn main() -> Result<()> {
 }
 
 pub fn basic_bench() -> Result<()> {
+    let nonce = Nonce::default();
+
     //start timer
     let start = std::time::Instant::now();
 
@@ -76,7 +76,12 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
+    let cred = signer.issue_cred(
+        &all_attributes,
+        k_prime,
+        &alice_nym.nym_proof(&nonce),
+        Some(&nonce),
+    )?;
 
     eprintln!(
         "Time to issue cred: {:?} (+{:?})",
@@ -129,7 +134,7 @@ pub fn basic_bench() -> Result<()> {
     ];
 
     // prepare a proof
-    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, &nonce);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
@@ -138,7 +143,12 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    assert!(verify_proof(&signer.public, &proof, &selected_attrs)?);
+    assert!(verify_proof(
+        &signer.public,
+        &proof,
+        &selected_attrs,
+        Some(&nonce)
+    )?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -150,6 +160,8 @@ pub fn basic_bench() -> Result<()> {
 }
 
 fn bench_96_attributes() -> Result<()> {
+    let nonce = Nonce::default();
+
     //start timer
     let start = std::time::Instant::now();
 
@@ -176,7 +188,7 @@ fn bench_96_attributes() -> Result<()> {
     for entry in &entrys {
         cred_buildr.with_entry(entry.clone());
     }
-    let cred = cred_buildr.issue_to(&nym.nym_proof(NONCE))?;
+    let cred = cred_buildr.issue_to(&nym.nym_proof(&nonce), Some(&nonce))?;
 
     let mut all_entries = Vec::new();
     for entry in &entrys {
@@ -196,9 +208,9 @@ fn bench_96_attributes() -> Result<()> {
         selected_entries.push(Entry::new(&attrs));
     });
 
-    let proof = nym.prove(&cred, &all_entries, &selected_entries, NONCE);
+    let proof = nym.prove(&cred, &all_entries, &selected_entries, &nonce);
 
-    assert!(verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_entries, Some(&nonce)).unwrap());
 
     eprintln!(
         "Time to verify {} out of {} attibutes: {:?}",

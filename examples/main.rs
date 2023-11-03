@@ -16,10 +16,8 @@
 
 use anyhow::Result;
 use delanocreds::{
-    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nym,
+    verify_proof, Attribute, Credential, Entry, Issuer, MaxCardinality, MaxEntries, Nonce, Nym,
 };
-
-const NONCE: Option<&[u8]> = None;
 
 pub fn main() -> Result<()> {
     println!(" \nRunning a short basic test: \n");
@@ -31,6 +29,7 @@ pub fn main() -> Result<()> {
 }
 
 pub fn basic_bench() -> Result<()> {
+    let nonce = Nonce::default();
     //start timer
     let start = std::time::Instant::now();
 
@@ -76,7 +75,12 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    let cred = signer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE))?;
+    let cred = signer.issue_cred(
+        &all_attributes,
+        k_prime,
+        &alice_nym.nym_proof(&nonce),
+        Some(&nonce),
+    )?;
 
     eprintln!(
         "Time to issue cred: {:?} (+{:?})",
@@ -129,7 +133,7 @@ pub fn basic_bench() -> Result<()> {
     ];
 
     // prepare a proof
-    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, &nonce);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
@@ -138,7 +142,12 @@ pub fn basic_bench() -> Result<()> {
     );
     let last = start.elapsed();
 
-    assert!(verify_proof(&signer.public, &proof, &selected_attrs)?);
+    assert!(verify_proof(
+        &signer.public,
+        &proof,
+        &selected_attrs,
+        Some(&nonce)
+    )?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -158,6 +167,8 @@ fn bench_30_of_100() -> Result<()> {
     // k_prime - number of attributes sets which can be delegated
 
     // we set the above parameters as t = 25, l = 15, k = 4, k' = 7 and n = 10 to cover many different use-cases
+
+    let nonce = Nonce::default();
 
     //start timer
     let start = std::time::Instant::now();
@@ -205,7 +216,12 @@ fn bench_30_of_100() -> Result<()> {
     );
     let last = start.elapsed();
 
-    let cred = match signer.issue_cred(&all_attributes, k_prime, &alice_nym.nym_proof(NONCE)) {
+    let cred = match signer.issue_cred(
+        &all_attributes,
+        k_prime,
+        &alice_nym.nym_proof(&nonce),
+        Some(&nonce),
+    ) {
         Ok(cred) => cred,
         Err(e) => {
             eprintln!("Error issuing cred: {:?}", e);
@@ -259,7 +275,7 @@ fn bench_30_of_100() -> Result<()> {
         .collect();
 
     // prepare a proof
-    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, NONCE);
+    let proof = bobby_nym.prove(&bobby_cred, &all_attributes, &selected_attrs, &nonce);
 
     eprintln!(
         "Time to prove: {:?} (+{:?})",
@@ -268,7 +284,12 @@ fn bench_30_of_100() -> Result<()> {
     );
     let last = start.elapsed();
 
-    assert!(verify_proof(&signer.public, &proof, &selected_attrs)?);
+    assert!(verify_proof(
+        &signer.public,
+        &proof,
+        &selected_attrs,
+        Some(&nonce)
+    )?);
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",

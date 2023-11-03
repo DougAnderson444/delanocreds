@@ -19,6 +19,7 @@ pub use keypair::{
     spseq_uc::Credential, verify_proof, CredProof, Initial, Issuer, IssuerError, IssuerPublic,
     MaxCardinality, Nym, NymPublic, Offer, Randomized, VK,
 };
+pub use zkp::Nonce;
 
 // wasm32 tests
 #[cfg(target_arch = "wasm32")]
@@ -33,17 +34,26 @@ pub struct ReadmeDoctests;
 /// # Example
 ///
 /// ```
-/// use delanocreds::{Issuer, Nym, Initial, Entry, Attribute, CredentialBuilder, MaxEntries};
+/// use delanocreds::{Issuer, Nym, Initial, Entry, Attribute, CredentialBuilder, MaxEntries, Nonce};
 ///
 /// let issuer = Issuer::default();
 /// let nym = Nym::new();
 /// let root_entry = Entry::new(&[Attribute::new("age > 21")]);
-/// let nonce: Option<&[u8]> = None; // Issuers can demand a nym proof use their nonce to prevent replay attacks
+/// let nonce = Nonce::default(); // Issuers can demand a nym proof use their nonce to prevent replay attacks
+///
+/// // give the nonce to nym so they can generate a proof
+/// let nym_proof = nym.nym_proof(&nonce);
+///
 /// let cred = issuer
 ///     .credential() // CredentialBuilder for this Issuer
 ///     .with_entry(root_entry.clone()) // adds a Root Entry
 ///     .max_entries(&MaxEntries::default()) // set the Entry ceiling
-///     .issue_to(&nym.nym_proof(nonce)); // issues to a Nym
+///     .issue_to(&nym_proof, Some(&nonce))
+///     .expect("issue ok"); // issues to a Nym
+///
+/// // Now the nym can use the Credential to prove the Entry
+/// let proof = nym.prove(&cred, &[root_entry.clone()], &[root_entry.clone()], &nonce);
+/// assert!(delanocreds::verify_proof(&issuer.public, &proof, &[root_entry], Some(&nonce)).unwrap());
 /// ```
 pub struct CredentialBuilder<'a> {
     entries: Vec<Entry>,
@@ -74,10 +84,15 @@ impl<'a> CredentialBuilder<'a> {
     }
 
     /// Finish building the Credetials, and Issue the Credential to a [Randomized] (anonymous) Nym
-    pub fn issue_to(&self, nym_proof: &NymProof) -> Result<Credential, IssuerError> {
+    pub fn issue_to(
+        &self,
+        nym_proof: &NymProof,
+        nonce: Option<&Nonce>,
+    ) -> Result<Credential, IssuerError> {
         // if self.extendable > 0, set to Some(self.extendable), else None
         let k_prime = self.extendable.checked_sub(0);
-        self.issuer.issue_cred(&self.entries, k_prime, nym_proof)
+        self.issuer
+            .issue_cred(&self.entries, k_prime, nym_proof, nonce)
     }
 }
 
@@ -97,16 +112,20 @@ impl<'a> CredentialBuilder<'a> {
 /// # Example
 ///
 /// ```
-/// use delanocreds::{Issuer, Entry, Attribute, Nym, Initial, CredentialBuilder, MaxEntries};
+/// use delanocreds::{Issuer, Entry, Attribute, Nym, Initial, CredentialBuilder, MaxEntries, Nonce};
 /// # fn main() -> anyhow::Result<()> {
 /// let issuer = Issuer::default();
 /// let nym = Nym::new();
 /// let root_entry = Entry::new(&[Attribute::new("age > 21")]);
-/// let nonce: Option<&[u8]> = None; // Issuers can demand a nym proof use their nonce to prevent replay attacks
+/// let nonce = Nonce::default(); // Issuers can demand a nym proof use their nonce to prevent replay attacks
+///
+/// // give the nonce to nym so they can generate a proof
+/// let nym_proof = nym.nym_proof(&nonce);
+///
 /// let cred = CredentialBuilder::new(&issuer)
 ///     .with_entry(root_entry.clone()) // adds a Root Entry
 ///     .max_entries(&MaxEntries::default()) // set the Entry ceiling
-///     .issue_to(&nym.nym_proof(nonce))?; // issues to a Nym
+///     .issue_to(&nym_proof, Some(&nonce))?; // issues to a Nym
 ///
 /// // 1. Offer the unchanged Credential to Bob's Nym
 /// let bobby_nym = Nym::new();
@@ -232,28 +251,31 @@ impl<'a, Stage> OfferBuilder<'a, Stage> {
 /// # Example
 ///
 /// ```
-/// use delanocreds::{Issuer, Nym, Initial, Entry, Attribute, CredentialBuilder, MaxEntries, verify_proof};
+/// use delanocreds::{Issuer, Nym, Initial, Entry, Attribute, CredentialBuilder, MaxEntries, verify_proof, Nonce};
 /// # fn main() -> anyhow::Result<()> {
 /// let issuer = Issuer::default();
 /// let nym = Nym::new();
 /// let over_21 = Attribute::new("age > 21");
 /// let root_entry = Entry::new(&[over_21.clone()]);
 ///
-/// let nonce: Option<&[u8]> = None; // Issuers can demand a nym proof use their nonce to prevent replay attacks
+/// let nonce = Nonce::default(); // Issuers can demand a nym proof use their nonce to prevent replay attacks
+///
+/// // give the nonce to nym so they can generate a proof
+/// let nym_proof = nym.nym_proof(&nonce);
 ///
 /// let cred = CredentialBuilder::new(&issuer)
 ///     .with_entry(root_entry.clone()) // adds a Root Entry
 ///     .max_entries(&MaxEntries::default()) // set the Entry ceiling
-///     .issue_to(&nym.nym_proof(nonce))?; // issues to a Nym
+///     .issue_to(&nym_proof, Some(&nonce))?; // issues to a Nym
 ///
 /// // Nym can prove the credential using the ProofBuilder
 /// let (proof, selected_entries) = nym
 ///     .proof_builder(&cred, &[root_entry])
 ///     .select_attribute(over_21.clone())
-///     .prove(nonce);
+///     .prove(&nonce);
 ///
-/// // Nym can verify the proof
-/// assert!(verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
+/// // Nym can verify the proof and optionally the Nonce
+/// assert!(verify_proof(&issuer.public, &proof, &selected_entries, Some(&nonce)).unwrap());
 ///
 /// // Confirm that over_21 is not contained within the selected_entries
 /// let contains_over_21 = selected_entries
@@ -292,7 +314,7 @@ impl<'a, Stage> ProofBuilder<'a, Stage> {
     }
 
     /// Finish building the Proof
-    pub fn prove(&self, nonce: Option<impl AsRef<[u8]>>) -> (keypair::CredProof, Vec<Entry>) {
+    pub fn prove(&self, nonce: &Nonce) -> (keypair::CredProof, Vec<Entry>) {
         // create selected_attr by filtering all_attributes for those in selected_attributes
         let selected_attr = self
             .all_attributes
@@ -321,6 +343,8 @@ impl<'a, Stage> ProofBuilder<'a, Stage> {
 #[cfg(test)]
 mod lib_api_tests {
 
+    use lazy_static::lazy_static;
+
     use super::*;
     use crate::{
         attributes::Attribute,
@@ -328,7 +352,10 @@ mod lib_api_tests {
         keypair::Nym,
     };
 
-    const NONCE: Option<&[u8]> = None;
+    // static NONCE: Nonce = Nonce(Scalar::from(42u64));
+    lazy_static! {
+        static ref NONCE: Nonce = Nonce(Scalar::from(42u64));
+    }
 
     #[test]
     fn test_credential_building() -> Result<()> {
@@ -345,7 +372,7 @@ mod lib_api_tests {
             .credential() // CredentialBuilder for this Issuer
             .with_entry(root_entry.clone()) // adds a Root Entry
             .max_entries(&MaxEntries::default()) // set the Entry ceiling
-            .issue_to(&nym.nym_proof(NONCE))?; // issues to a Nym
+            .issue_to(&nym.nym_proof(&NONCE), Some(&NONCE))?; // issues to a Nym
 
         assert_eq!(cred.commitment_vector.len(), 1);
 
@@ -353,7 +380,7 @@ mod lib_api_tests {
         let cred = CredentialBuilder::new(&issuer)
             .with_entry(root_entry.clone())
             .max_entries(&MaxEntries::default())
-            .issue_to(&nym.nym_proof(NONCE))?;
+            .issue_to(&nym.nym_proof(&NONCE), Some(&NONCE))?;
 
         assert_eq!(cred.commitment_vector.len(), 1);
 
@@ -361,7 +388,7 @@ mod lib_api_tests {
         let cred = CredentialBuilder::new(&issuer)
             .with_entry(root_entry.clone())
             .max_entries(&MaxEntries::default())
-            .issue_to(&nym.nym_proof(NONCE))?;
+            .issue_to(&nym.nym_proof(&NONCE), Some(&NONCE))?;
 
         assert_eq!(cred.commitment_vector.len(), 1);
         assert_eq!(
@@ -375,7 +402,7 @@ mod lib_api_tests {
             .credential()
             .with_entry(root_entry.clone())
             .with_entry(another_entry)
-            .issue_to(&nym.nym_proof(NONCE))?;
+            .issue_to(&nym.nym_proof(&NONCE), Some(&NONCE))?;
 
         assert_eq!(cred.commitment_vector.len(), 2);
 
@@ -383,9 +410,11 @@ mod lib_api_tests {
         assert!(cred.update_key.is_none());
 
         // nym should be able to prove the credential
-        let proof = nym.prove(&cred, &[root_entry.clone()], &[root_entry.clone()], NONCE);
+        let proof = nym.prove(&cred, &[root_entry.clone()], &[root_entry.clone()], &NONCE);
 
-        assert!(keypair::verify_proof(&issuer.public, &proof, &[root_entry],).unwrap());
+        assert!(
+            keypair::verify_proof(&issuer.public, &proof, &[root_entry], Some(&NONCE)).unwrap()
+        );
 
         Ok(())
     }
@@ -426,7 +455,7 @@ mod lib_api_tests {
             .credential()
             .with_entry(root_entry.clone())
             .max_entries(&MaxEntries::default()) // DEFAULT_MAX_ENTRIES: usize = 6
-            .issue_to(&alice_nym.nym_proof(NONCE))
+            .issue_to(&alice_nym.nym_proof(&NONCE), Some(&NONCE))
         {
             Ok(cred) => cred,
             Err(e) => panic!("Error issuing cred: {:?}", e),
@@ -440,15 +469,19 @@ mod lib_api_tests {
         let bobby_cred = bobby_nym.accept(&offer)?;
 
         // and prove all entries
-        let proof = bobby_nym.prove(&bobby_cred, &provable_entries, &provable_entries, NONCE);
-        assert!(keypair::verify_proof(&issuer.public, &proof, &provable_entries).unwrap());
+        let proof = bobby_nym.prove(&bobby_cred, &provable_entries, &provable_entries, &NONCE);
+        assert!(
+            keypair::verify_proof(&issuer.public, &proof, &provable_entries, Some(&NONCE)).unwrap()
+        );
 
         // or Bob can prove just the selected attribute `over_21` using ProofBuilder
         let (proof, selected_entries) = bobby_nym
             .proof_builder(&bobby_cred, &provable_entries)
             .select_attribute(over_21)
-            .prove(NONCE);
-        assert!(keypair::verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
+            .prove(&NONCE);
+        assert!(
+            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&NONCE)).unwrap()
+        );
 
         // 2. Offer with additional Attributes, using OfferBuilder
         let handsome_attribute = Attribute::new("also handsome");
@@ -466,8 +499,10 @@ mod lib_api_tests {
         let (proof, selected_entries) = charlie_nym
             .proof_builder(&charlie_cred, &provable_entries)
             .select_attribute(handsome_attribute.clone())
-            .prove(NONCE);
-        assert!(keypair::verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
+            .prove(&NONCE);
+        assert!(
+            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&NONCE)).unwrap()
+        );
 
         // 3. Charlie can Offer a redacted version of the Entry(s) to Doug
         let (offer, provable_entries) = charlie_nym
@@ -486,7 +521,7 @@ mod lib_api_tests {
         let (_proof, selected_entries) = doug_nym
             .proof_builder(&doug_cred, &provable_entries)
             .select_attribute(handsome_attribute.clone())
-            .prove(NONCE);
+            .prove(&NONCE);
 
         // show handsome_attribute is not contained within the selected_entries
         let contains_handsome = selected_entries
@@ -522,8 +557,10 @@ mod lib_api_tests {
         let (proof, selected_entries) = even_nym_2
             .proof_builder(&evan_2_cred, &provable_entries)
             .select_attribute(Attribute::new("evan entry #1"))
-            .prove(NONCE);
-        assert!(keypair::verify_proof(&issuer.public, &proof, &selected_entries).unwrap());
+            .prove(&NONCE);
+        assert!(
+            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&NONCE)).unwrap()
+        );
 
         // Adding beyond Max Entries of 3 should fail
         let res = even_nym_2
@@ -532,6 +569,58 @@ mod lib_api_tests {
             .open_offer();
 
         assert!(res.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_delegate_root_cred() -> Result<()> {
+        // This test issues an empty root credential to a Nym, then delegates it to another Nym.
+        // Then we check if the Entry appears as the Root entry, since the root credential was
+        // empty
+        //
+        // This would allow an Issuer to delegate issuance to a Worker on it's behalf, without
+        // having to upload the root keys or seeds.
+
+        // create an Issuer, a User, and issue a cred to a Nym
+        let issuer = Issuer::default();
+        let nym = Nym::new();
+
+        let root_entry = Entry::new(&[]);
+        let nonce = Nonce::default();
+        // Issue the (Powerful) Root Credential to Alice
+        let cred = match issuer
+            .credential()
+            .with_entry(root_entry.clone())
+            .max_entries(&MaxEntries::default()) // DEFAULT_MAX_ENTRIES: usize = 6
+            .issue_to(&nym.nym_proof(&nonce), Some(&nonce))
+        {
+            Ok(cred) => cred,
+            Err(e) => panic!("Error issuing cred: {:?}", e),
+        };
+
+        let del_root_entry = Attribute::new("delegated root entry");
+
+        // Nym accpets then adds an entry
+        let (offer, entries) = nym
+            .offer_builder(&cred, &[root_entry])
+            .additional_entry(Entry::new(&[del_root_entry.clone()]))
+            .open_offer()?;
+
+        // Third party Nym accepts
+        let del_nym = Nym::new();
+        let del_cred = del_nym.accept(&offer)?;
+
+        // Third party Nym can prove added entry attributes
+        let (proof, selected_entries) = del_nym
+            .proof_builder(&del_cred, &entries)
+            .select_attribute(del_root_entry)
+            .prove(&nonce);
+
+        // First Entry is empty, so we can take the "First non-Empty" Attribute as the "Root Entry"
+        assert!(
+            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&nonce)).unwrap()
+        );
 
         Ok(())
     }
