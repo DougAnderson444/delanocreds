@@ -42,11 +42,8 @@ impl From<Scalar> for Nonce {
 /// Create a [Nonce] from an arbitrary sized slice of bytes
 impl From<&[u8]> for Nonce {
     fn from(bytes: &[u8]) -> Self {
-        // hash the bytes to get a 32 byte hash
-        let digest = Sha256::digest(bytes);
-        let big_digest = bigint::U256::from_be_bytes(digest.into());
-        let scalar = Scalar::from_raw(big_digest.into());
-        Self(scalar)
+        let chash = Sha256::digest(bytes);
+        Self(bigint::U256::from_be_slice(&chash).into())
     }
 }
 
@@ -147,9 +144,7 @@ pub mod zkp_schnorr_fiat_shamir {
 
         let digest = Sha256::digest(&state_bytes);
 
-        let big_digest = bigint::U256::from_be_bytes(digest.into());
-
-        Scalar::from_raw(big_digest.into())
+        bigint::U256::from_be_slice(&digest).into()
     }
 
     /// Schnorr proof (non-interactive using FS heuristic)
@@ -207,15 +202,8 @@ pub mod zkp_schnorr_fiat_shamir {
         // sum all w_list items into announcement
         let announcement = w_list.iter().fold(G2Projective::IDENTITY, |acc, x| acc + x);
 
-        // let state = ChallengeState {
-        //     name: "schnorr".to_string(),
-        //     g: G2Projective::GENERATOR,
-        //     statement: stms.to_vec(),
-        //     hash: Sha256::digest(announcement.to_bytes()).into(),
-        // };
         let state = ChallengeState::new(stms.to_vec(), &announcement.to_bytes());
         let hash = self::challenge(&state);
-        // let hash = Scalar::reduce(bigint::U256::from(hash));
         hash == *c
     }
 }
