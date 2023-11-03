@@ -26,7 +26,7 @@ Roadmap:
 
 There are a few ways the delegation can be used:
 
-### Deleagte adding Entries
+### Delegate adding Entries
 
 We can delegate the ability to add Entries (up to `MaxEntries`), but only if the credential is marked as `extendable` and the available Entry slots have not all been used by previous delegatees.
 
