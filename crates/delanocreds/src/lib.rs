@@ -14,10 +14,11 @@ pub use attributes::Attribute;
 use bls12_381_plus::Scalar;
 pub use entry::Entry;
 pub use entry::MaxEntries;
-use keypair::NymProof;
+pub use keypair::NymProof;
 pub use keypair::{
-    spseq_uc::Credential, verify_proof, CredProof, Initial, Issuer, IssuerError, IssuerPublic,
-    MaxCardinality, Nym, NymPublic, Offer, Randomized, VK,
+    spseq_uc::{Credential, CredentialCompressed},
+    verify_proof, CredProof, Initial, Issuer, IssuerError, IssuerPublic, MaxCardinality, Nym,
+    NymPublic, Offer, Randomized, Secret, VK,
 };
 pub use zkp::Nonce;
 
