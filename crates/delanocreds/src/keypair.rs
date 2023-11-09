@@ -7,6 +7,7 @@ use crate::ec::curve::pairing;
 use crate::ec::Scalar;
 use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
+use crate::error::Error;
 use crate::set_commits::{Commitment, CrossSetCommitment};
 use crate::set_commits::{ParamSetCommitment, ParamSetCommitmentCompressed};
 use crate::zkp::Nonce;
@@ -26,7 +27,7 @@ use bls12_381_plus::{
 };
 pub use delano_keys::vk::{VKCompressed, VK};
 use rand::rngs::ThreadRng;
-use secrecy::{ExposeSecret, Secret};
+pub use secrecy::{ExposeSecret, Secret};
 use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
 use serde_with::serde_as;
@@ -886,6 +887,7 @@ impl Nym<Randomized> {
 /// - `y_hat`: The public key of the user
 /// - `t`: The signature of the user
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Signature {
     z: G1Projective,
     y_g1: G1Projective,
