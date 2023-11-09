@@ -11,7 +11,6 @@ use bls12_381_plus::G1Affine;
 use bls12_381_plus::{G1Projective, Scalar};
 use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
-use serde_with::serde_as;
 use sha2::{Digest, Sha256};
 
 use crate::keypair::NymProof;

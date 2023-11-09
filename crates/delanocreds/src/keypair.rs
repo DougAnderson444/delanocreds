@@ -7,7 +7,6 @@ use crate::ec::curve::pairing;
 use crate::ec::Scalar;
 use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
-use crate::error::Error;
 use crate::set_commits::{Commitment, CrossSetCommitment};
 use crate::set_commits::{ParamSetCommitment, ParamSetCommitmentCompressed};
 use crate::zkp::Nonce;
