@@ -28,6 +28,7 @@
 //! // select from the attributes
 //! `let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);`
 use crate::ec::Scalar;
+use crate::error::Error;
 use bls12_381_plus::elliptic_curve::bigint;
 use cid::multibase;
 use cid::multihash;
@@ -121,6 +122,16 @@ impl TryFrom<&cid::Cid> for Attribute {
         } else {
             Err("Invalid Cid")
         }
+    }
+}
+
+/// Try from an arbitrary vector of bytes
+impl TryFrom<Vec<u8>> for Attribute {
+    type Error = Error;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        let cid = Cid::try_from(bytes)?;
+        Ok(Attribute(cid))
     }
 }
 

@@ -13,6 +13,7 @@
 //!
 use crate::attributes::Attribute;
 use crate::config::DEFAULT_MAX_ENTRIES;
+use crate::error;
 use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::Scalar;
 use std::ops::Deref;
@@ -54,6 +55,19 @@ impl std::iter::FromIterator<Attribute> for Entry {
 impl From<Vec<Attribute>> for Entry {
     fn from(item: Vec<Attribute>) -> Self {
         Entry(item)
+    }
+}
+
+/// Try from an arbitrary vector of bytes
+impl TryFrom<Vec<Vec<u8>>> for Entry {
+    type Error = error::Error;
+
+    fn try_from(bytes: Vec<Vec<u8>>) -> Result<Self, Self::Error> {
+        let attributes = bytes
+            .into_iter()
+            .map(|attr| Attribute::try_from(attr))
+            .collect::<Result<Vec<Attribute>, error::Error>>()?;
+        Ok(Entry::new(&attributes))
     }
 }
 
