@@ -1,0 +1,21 @@
+[package]
+name = "delano-wit"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cargo-component-bindings = "0.2.0"
+lazy_static = "1.4.0"
+delanocreds = { workspace = true }
+delano-keys = { workspace = true }
+ciborium = "0.2.1"
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "component:delano-wit"
+
+[package.metadata.component.dependencies]

@@ -1,0 +1,45 @@
+package component:delano-wit
+
+interface types {
+  // An attribute is a 32 bytes hash value
+  type attribute = list<u8>
+
+  record provables {
+    credential: list<u8>,
+    attributes: list<attribute>,
+    selected: list<attribute>,
+    nonce: list<u8>
+  }
+
+  record verifiables {
+    proof: list<u8>, 
+    issuer-public: list<u8>, 
+    nonce: list<u8>, 
+    attributes: list<list<u8>>
+  }
+}
+
+/// A Delanocreds world for the component to target.
+world delanocreds {
+    
+    use types.{attribute, provables, verifiables}
+
+    /// Import a get-seed function from a seed-keeper component.
+    import get-seed: func() -> list<u8>
+    
+    /// Issue a credential Entry to a Nym with maximum entries.
+    export issue: func(nymproof: list<u8>, attributes: list<attribute>, maxentries: u8, nonce: option<list<u8>>) -> result<list<u8>, string>
+
+    /// Export an Issue credential function signature.
+    export offer: func(attributes: list<attribute>) -> result<list<u8>, string>
+
+    /// Export an Accpet credential function signature.
+    export accept: func(credential: list<u8>) -> result<list<u8>, string>
+
+    /// Export a function that proves selected attributes in a given credential
+    export prove: func(values: provables) -> result<list<u8>, string>
+
+    /// Export a function that verifies a proof against a public key, nonce and selected attributes
+    export verify: func(values: verifiables) -> result<bool, string>
+
+}
