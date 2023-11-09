@@ -38,6 +38,7 @@ impl std::fmt::Display for UpdateError {
 /// update key is provided.
 /// - `vk` [`VK`] is the verification key used in the signature
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Credential {
     pub sigma: Signature,
     pub update_key: UpdateKey, // Called DelegatableKey (dk for k prime) in the paper
@@ -50,7 +51,8 @@ impl Credential {
     /// Compress then Serialize the [Credential] into base64 encoded CBOR bytes,
     pub fn to_url_safe(&self) -> String {
         let mut bytes = Vec::new();
-        ciborium::into_writer(&CredentialCompressed::from(self), &mut bytes).unwrap();
+        ciborium::into_writer(&CredentialCompressed::from(self), &mut bytes)
+            .expect("bytes should be serializable");
         // encode cbor bytes as base64URL safe
         general_purpose::URL_SAFE_NO_PAD.encode(&bytes)
     }
