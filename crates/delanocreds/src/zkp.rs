@@ -11,6 +11,7 @@ use bls12_381_plus::G1Affine;
 use bls12_381_plus::{G1Projective, Scalar};
 use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
+use serde_with::serde_as;
 use sha2::{Digest, Sha256};
 
 use crate::keypair::NymProof;
@@ -19,10 +20,13 @@ use crate::keypair::NymProof;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Nonce(pub(crate) Scalar);
 
-/// Create a new [Nonce] with any arbitrary length type that implements AsRef<[u8]>
+/// Create a new [Nonce] with any arbitrary length type that implements AsRef<[u8]> by hashing it
+/// into a 32 byte digest and converting it into a Scalar
 impl Nonce {
+    /// Hash the given bytes into a [Nonce]
     pub fn new(bytes: impl AsRef<[u8]>) -> Self {
-        Self::from(bytes.as_ref())
+        let chash = Sha256::digest(bytes);
+        Self(Scalar::from(bigint::U256::from_be_slice(&chash)))
     }
 }
 
@@ -38,11 +42,31 @@ impl From<Scalar> for Nonce {
     }
 }
 
-/// Create a [Nonce] from an arbitrary sized slice of bytes
-impl From<&[u8]> for Nonce {
-    fn from(bytes: &[u8]) -> Self {
-        let chash = Sha256::digest(bytes);
-        Self(bigint::U256::from_be_slice(&chash).into())
+/// Converts from [u8; 32] directly into a Nonce
+impl From<[u8; 32]> for Nonce {
+    fn from(bytes: [u8; 32]) -> Self {
+        Self(Scalar::from(bigint::U256::from_be_slice(&bytes)).into())
+    }
+}
+
+/// Converts from a &[u8, 32] directly into a Nonce
+impl From<&[u8; 32]> for Nonce {
+    fn from(bytes: &[u8; 32]) -> Self {
+        Self(Scalar::from(bigint::U256::from_be_slice(bytes)).into())
+    }
+}
+
+/// Creates a new [Nonce] from a hash of the given Vec<u8>
+impl From<Vec<u8>> for Nonce {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::new(bytes.as_slice())
+    }
+}
+
+/// Creates a new [Nonce] from a hash of the given &[u8]
+impl From<&Vec<u8>> for Nonce {
+    fn from(bytes: &Vec<u8>) -> Self {
+        Self::new(bytes.as_slice())
     }
 }
 
@@ -56,13 +80,13 @@ impl Deref for Nonce {
 
 impl PartialEq<bls12_381_plus::Scalar> for &Nonce {
     fn eq(&self, other: &bls12_381_plus::Scalar) -> bool {
-        self.0 == *other
+        self.0 == Scalar::from(*other)
     }
 }
 
 impl From<Nonce> for Scalar {
     fn from(nonce: Nonce) -> Self {
-        nonce.0
+        nonce.0.into()
     }
 }
 
@@ -114,7 +138,6 @@ impl<T: PrimeCurveAffine + GroupEncoding> ChallengeState<T> {
     }
 }
 
-pub type Challenge = Scalar;
 // pub type Response = Vec<Scalar>;
 
 /// Schnorr proof (non-interactive using Fiat Shamir heuristic) of the statement
@@ -214,7 +237,7 @@ pub trait Schnorr {
     /// Create a Schnorr challenge
     fn challenge<T: PrimeCurveAffine + GroupEncoding<Repr = impl AsRef<[u8]>> + Display>(
         state: &ChallengeState<T>,
-    ) -> Challenge {
+    ) -> Scalar {
         let mut state_bytes = Vec::new();
         state_bytes.extend_from_slice(state.name.as_bytes());
         state_bytes.extend_from_slice(state.g.to_bytes().as_ref());
@@ -227,7 +250,7 @@ pub trait Schnorr {
 
         let digest = Sha256::digest(&state_bytes);
 
-        bigint::U256::from_be_slice(&digest).into()
+        Scalar::from(bigint::U256::from_be_slice(&digest))
     }
 
     /// Create a Schnorr response to our own challenge
@@ -238,7 +261,7 @@ pub trait Schnorr {
         secret_wit: &Secret<Scalar>,
     ) -> Scalar {
         assert!(G1Projective::mul_by_generator(secret_wit.expose_secret()).to_affine() == *stm);
-        *announce_randomness + challenge * secret_wit.expose_secret()
+        Scalar::from(*announce_randomness + Scalar::from(*challenge) * secret_wit.expose_secret())
     }
 }
 
