@@ -24,4 +24,13 @@ pub enum Error {
     /// Proof is not valid, did not pass verify_proof function
     #[error("Proof is not valid, did not pass verify_proof function")]
     InvalidProof,
+
+    /// Tried to convert bytes into an [Attribute], but failed
+    /// from cid::eror
+    #[error("Tried to convert bytes into an Attribute, but failed")]
+    InvalidAttribute(#[from] cid::Error),
+
+    /// Tried to convert bytes into a Scalar and it failed
+    #[error("Tried to convert bytes into a Scalar and it failed")]
+    InvalidScalar,
 }

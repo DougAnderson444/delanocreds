@@ -79,8 +79,7 @@ impl Guest for Component {
 
         // serialize and return the cred
         let mut bytes = Vec::new();
-        let cred = ciborium::into_writer(&CredentialCompressed::from(&cred), &mut bytes)
-            .map_err(|e| e.to_string())?;
+        let cred = ciborium::into_writer(&cred, &mut bytes).map_err(|e| e.to_string())?;
 
         Ok(bytes)
     }
