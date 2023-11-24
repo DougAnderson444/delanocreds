@@ -49,25 +49,19 @@ pub struct Credential {
 
 impl Credential {
     /// Compress then Serialize the [Credential] into base64 encoded CBOR bytes,
-    pub fn to_url_safe(&self) -> String {
-        let mut bytes = Vec::new();
-        ciborium::into_writer(&CredentialCompressed::from(self), &mut bytes)
-            .expect("bytes should be serializable");
-        // encode cbor bytes as base64URL safe
-        general_purpose::URL_SAFE_NO_PAD.encode(&bytes)
+    pub fn to_url_safe(&self) -> Result<String, error::Error> {
+        let bytes = self.to_bytes()?;
+        Ok(general_purpose::URL_SAFE_NO_PAD.encode(&bytes))
     }
 
     /// Deserialize the [Credential] from URL String CBOR Vec<u8> into a Credential
-    pub fn from_url_safe(s: &str) -> Result<Self, String> {
-        // decode base64URL safe to cbor bytes: general_purpose::URL_SAFE_NO_PAD.decode(s)
-        let bytes = general_purpose::URL_SAFE_NO_PAD
-            .decode(s)
-            .map_err(|e| e.to_string())?;
-        let compressed: CredentialCompressed =
-            ciborium::from_reader(&bytes[..]).map_err(|e| e.to_string())?;
-        compressed.try_into()
+    pub fn from_url_safe(s: &str) -> Result<Self, error::Error> {
+        let bytes = general_purpose::URL_SAFE_NO_PAD.decode(s)?;
+        Self::from_bytes(&bytes[..])
     }
 }
+
+impl CBORCodec for Credential {}
 
 /// [CredentialCompressed] is a compressed version of [Credential]. Each element is compressed into their smallest byte equivalents and serializable as base64URL safe encoding.
 #[serde_as]
@@ -417,9 +411,9 @@ mod test {
             },
         };
 
-        let url_safe = cred.to_url_safe();
+        let url_safe = cred.to_url_safe().expect("to_url_safe to succeed");
 
-        eprintln!("url_safe: {}", url_safe);
+        eprintln!("url_safe: {:?}", url_safe);
 
         let cred2 = Credential::from_url_safe(&url_safe).unwrap();
         assert_eq!(cred, cred2);
