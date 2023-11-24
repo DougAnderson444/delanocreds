@@ -147,7 +147,7 @@ pub fn basic_bench() -> Result<()> {
         &proof,
         &selected_attrs,
         Some(&nonce)
-    )?);
+    ));
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -289,7 +289,7 @@ fn bench_30_of_100() -> Result<()> {
         &proof,
         &selected_attrs,
         Some(&nonce)
-    )?);
+    ));
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",

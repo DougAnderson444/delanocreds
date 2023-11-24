@@ -148,7 +148,7 @@ pub fn basic_bench() -> Result<()> {
         &proof,
         &selected_attrs,
         Some(&nonce)
-    )?);
+    ));
 
     eprintln!(
         "Time to verify : {:?} (+{:?})",
@@ -210,7 +210,12 @@ fn bench_96_attributes() -> Result<()> {
 
     let proof = nym.prove(&cred, &all_entries, &selected_entries, &nonce);
 
-    assert!(verify_proof(&issuer.public, &proof, &selected_entries, Some(&nonce)).unwrap());
+    assert!(verify_proof(
+        &issuer.public,
+        &proof,
+        &selected_entries,
+        Some(&nonce)
+    ));
 
     eprintln!(
         "Time to verify {} out of {} attibutes: {:?}",
