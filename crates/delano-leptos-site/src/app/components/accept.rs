@@ -77,12 +77,9 @@ fn UserAccept(nym: ReadSignal<Nym<Randomized>>) -> impl IntoView {
                             &provable_entries,
                             Some(&nonce),
                         ) {
-                            Ok(true) => log::info!("Proof verified."),
-                            Ok(false) => {
+                            true => log::info!("Proof verified."),
+                            false => {
                                 log::error!("{:?}", delanocreds::error::Error::InvalidProof)
-                            }
-                            Err(e) => {
-                                log::error!("{:?}", delanocreds::error::Error::IssuerError(e))
                             }
                         };
                     }

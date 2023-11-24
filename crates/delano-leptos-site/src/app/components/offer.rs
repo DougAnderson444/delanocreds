@@ -78,9 +78,11 @@ pub fn OfferForm(
         let offer = create_offer(issuer, &nym, attributes);
         match offer {
             Ok((cred, provable_entries)) => {
-                let link = cred.to_url_safe();
-                set_offer_link.set(format!("?offer={}", link));
-                set_offer.set(format!("{}", cred));
+                if let Ok(link) = cred.to_url_safe() {
+                    log::info!("Offer Link: {}", link);
+                    set_offer_link.set(format!("?offer={}", link));
+                    set_offer.set(format!("{}", cred));
+                }
                 log::info!("Provable Entries: {:?}", provable_entries);
             }
             Err(e) => panic!("Error creating offer: {:?}", e),
