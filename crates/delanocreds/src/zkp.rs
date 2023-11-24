@@ -13,6 +13,7 @@ use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
 
+use crate::error::Error;
 use crate::keypair::NymProof;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -41,17 +42,31 @@ impl From<Scalar> for Nonce {
     }
 }
 
-/// Converts from [u8; 32] directly into a Nonce
-impl From<[u8; 32]> for Nonce {
-    fn from(bytes: [u8; 32]) -> Self {
-        Self(Scalar::from(bigint::U256::from_be_slice(&bytes)).into())
+/// Attempts to convert from [u8; 32] directly into a Nonce
+impl TryFrom<[u8; 32]> for Nonce {
+    type Error = Error;
+
+    fn try_from(bytes: [u8; 32]) -> Result<Self, Self::Error> {
+        let maybe_coverted = Scalar::from_be_bytes(&bytes);
+        if maybe_coverted.is_some().into() {
+            Ok(Self(maybe_coverted.unwrap()))
+        } else {
+            Err(Error::NonceConversionError)
+        }
     }
 }
 
 /// Converts from a &[u8, 32] directly into a Nonce
-impl From<&[u8; 32]> for Nonce {
-    fn from(bytes: &[u8; 32]) -> Self {
-        Self(Scalar::from(bigint::U256::from_be_slice(bytes)).into())
+impl TryFrom<&[u8; 32]> for Nonce {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8; 32]) -> Result<Self, Self::Error> {
+        let maybe_coverted = Scalar::from_be_bytes(bytes);
+        if maybe_coverted.is_some().into() {
+            Ok(Self(maybe_coverted.unwrap()))
+        } else {
+            Err(Error::NonceConversionError)
+        }
     }
 }
 
@@ -66,6 +81,12 @@ impl From<Vec<u8>> for Nonce {
 impl From<&Vec<u8>> for Nonce {
     fn from(bytes: &Vec<u8>) -> Self {
         Self::new(bytes.as_slice())
+    }
+}
+
+impl From<&[u8]> for Nonce {
+    fn from(bytes: &[u8]) -> Self {
+        Self::new(bytes)
     }
 }
 
@@ -96,6 +117,30 @@ impl From<Option<&[u8]>> for Nonce {
             Some(bytes) => Self::new(bytes),
             None => Self::default(),
         }
+    }
+}
+
+impl From<Nonce> for Vec<u8> {
+    fn from(nonce: Nonce) -> Self {
+        nonce.0.to_be_bytes().to_vec()
+    }
+}
+
+impl From<&Nonce> for Vec<u8> {
+    fn from(nonce: &Nonce) -> Self {
+        nonce.0.to_be_bytes().to_vec()
+    }
+}
+
+impl From<Nonce> for [u8; 32] {
+    fn from(nonce: Nonce) -> Self {
+        nonce.0.to_be_bytes()
+    }
+}
+
+impl From<&Nonce> for [u8; 32] {
+    fn from(nonce: &Nonce) -> Self {
+        nonce.0.to_be_bytes()
     }
 }
 
@@ -508,5 +553,20 @@ mod tests {
         };
 
         assert!(DamgardTransform::verify(&proof_nym, Some(&nonce)));
+    }
+
+    #[test]
+    fn test_roundtrip_nonce() {
+        // test roundtrip Scalar to 32 bytes and back, first
+        let b = [42u8; 32];
+        let scalar = Scalar::from_be_bytes(&b).expect("bytes to be canonical");
+        let bytes = scalar.to_be_bytes();
+        let scalar2 = Scalar::from_be_bytes(&bytes).expect("bytes to be canonical");
+        assert_eq!(scalar, scalar2);
+
+        let nonce = Nonce::try_from(&b).expect("bytes to be canonical");
+        let bytes: [u8; 32] = nonce.clone().try_into().expect("nonce to be 32 bytes");
+        let nonce2 = Nonce::try_from(bytes).expect("bytes to be canonical");
+        assert_eq!(nonce, nonce2);
     }
 }

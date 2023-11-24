@@ -17,8 +17,8 @@ pub use entry::MaxEntries;
 pub use keypair::NymProof;
 pub use keypair::{
     spseq_uc::{Credential, CredentialCompressed},
-    verify_proof, CredProof, Initial, Issuer, IssuerError, IssuerPublic, MaxCardinality, Nym,
-    NymPublic, Offer, Randomized, Secret, VK,
+    verify_proof, CBORCodec, CredProof, Initial, Issuer, IssuerError, IssuerPublic, MaxCardinality,
+    Nym, NymPublic, Offer, Randomized, Secret, VK,
 };
 pub use zkp::Nonce;
 
@@ -54,7 +54,7 @@ pub struct ReadmeDoctests;
 ///
 /// // Now the nym can use the Credential to prove the Entry
 /// let proof = nym.prove(&cred, &[root_entry.clone()], &[root_entry.clone()], &nonce);
-/// assert!(delanocreds::verify_proof(&issuer.public, &proof, &[root_entry], Some(&nonce)).unwrap());
+/// assert!(delanocreds::verify_proof(&issuer.public, &proof, &[root_entry], Some(&nonce)));
 /// ```
 pub struct CredentialBuilder<'a> {
     entries: Vec<Entry>,
@@ -162,10 +162,8 @@ impl<'a, Stage> OfferBuilder<'a, Stage> {
         }
     }
 
-    /// Allows the proving of [Attribute]s in an [Entry] in the [Credential] Offer.
-    /// The [keypair::Nym] who accepts this offer can prove the allowed [Entry]s to a Verifier.
-    ///
-    /// Can add up to [entry::MaxEntries] attributes as defined for this [Issuer].
+    /// Disallows the proving of the given [Attribute] in an [Entry] by redacting it in the [Credential].
+    /// The [keypair::Nym] who accepts this offer cannot prove the disallowed [Entry]s to a Verifier.
     pub fn without_attribute(&mut self, redacted: Attribute) -> &mut Self {
         self.unprovable_attributes.push(redacted);
         self
@@ -276,7 +274,7 @@ impl<'a, Stage> OfferBuilder<'a, Stage> {
 ///     .prove(&nonce);
 ///
 /// // Nym can verify the proof and optionally the Nonce
-/// assert!(verify_proof(&issuer.public, &proof, &selected_entries, Some(&nonce)).unwrap());
+/// assert!(verify_proof(&issuer.public, &proof, &selected_entries, Some(&nonce)));
 ///
 /// // Confirm that over_21 is not contained within the selected_entries
 /// let contains_over_21 = selected_entries
@@ -413,9 +411,12 @@ mod lib_api_tests {
         // nym should be able to prove the credential
         let proof = nym.prove(&cred, &[root_entry.clone()], &[root_entry.clone()], &NONCE);
 
-        assert!(
-            keypair::verify_proof(&issuer.public, &proof, &[root_entry], Some(&NONCE)).unwrap()
-        );
+        assert!(keypair::verify_proof(
+            &issuer.public,
+            &proof,
+            &[root_entry],
+            Some(&NONCE)
+        ));
 
         Ok(())
     }
@@ -471,18 +472,24 @@ mod lib_api_tests {
 
         // and prove all entries
         let proof = bobby_nym.prove(&bobby_cred, &provable_entries, &provable_entries, &NONCE);
-        assert!(
-            keypair::verify_proof(&issuer.public, &proof, &provable_entries, Some(&NONCE)).unwrap()
-        );
+        assert!(keypair::verify_proof(
+            &issuer.public,
+            &proof,
+            &provable_entries,
+            Some(&NONCE)
+        ));
 
         // or Bob can prove just the selected attribute `over_21` using ProofBuilder
         let (proof, selected_entries) = bobby_nym
             .proof_builder(&bobby_cred, &provable_entries)
             .select_attribute(over_21)
             .prove(&NONCE);
-        assert!(
-            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&NONCE)).unwrap()
-        );
+        assert!(keypair::verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_entries,
+            Some(&NONCE)
+        ));
 
         // 2. Offer with additional Attributes, using OfferBuilder
         let handsome_attribute = Attribute::new("also handsome");
@@ -501,9 +508,12 @@ mod lib_api_tests {
             .proof_builder(&charlie_cred, &provable_entries)
             .select_attribute(handsome_attribute.clone())
             .prove(&NONCE);
-        assert!(
-            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&NONCE)).unwrap()
-        );
+        assert!(keypair::verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_entries,
+            Some(&NONCE)
+        ));
 
         // 3. Charlie can Offer a redacted version of the Entry(s) to Doug
         let (offer, provable_entries) = charlie_nym
@@ -559,9 +569,12 @@ mod lib_api_tests {
             .proof_builder(&evan_2_cred, &provable_entries)
             .select_attribute(Attribute::new("evan entry #1"))
             .prove(&NONCE);
-        assert!(
-            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&NONCE)).unwrap()
-        );
+        assert!(keypair::verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_entries,
+            Some(&NONCE)
+        ));
 
         // Adding beyond Max Entries of 3 should fail
         let res = even_nym_2
@@ -619,9 +632,12 @@ mod lib_api_tests {
             .prove(&nonce);
 
         // First Entry is empty, so we can take the "First non-Empty" Attribute as the "Root Entry"
-        assert!(
-            keypair::verify_proof(&issuer.public, &proof, &selected_entries, Some(&nonce)).unwrap()
-        );
+        assert!(keypair::verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_entries,
+            Some(&nonce)
+        ));
 
         Ok(())
     }

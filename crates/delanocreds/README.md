@@ -152,7 +152,7 @@ fn main() -> Result<()> {
         .select_attribute(over_21.clone())
         .prove(&nonce);
 
-    assert!(verify_proof(&issuer.public, &proof, &selected_attributes, Some(&nonce)).unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_attributes, Some(&nonce)));
 
     // Alice can offer variations of the Credential to others
     let bobby_nym = Nym::new();
@@ -171,7 +171,7 @@ fn main() -> Result<()> {
         .select_attribute(over_21)
         .prove(&nonce);
 
-    assert!(verify_proof(&issuer.public, &proof, &selected_attributes, Some(&nonce)).unwrap());
+    assert!(verify_proof(&issuer.public, &proof, &selected_attributes, Some(&nonce)));
 
     Ok(())
 }

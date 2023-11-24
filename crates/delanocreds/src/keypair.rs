@@ -27,6 +27,7 @@ use bls12_381_plus::{
 pub use delano_keys::vk::{VKCompressed, VK};
 use rand::rngs::ThreadRng;
 pub use secrecy::{ExposeSecret, Secret};
+use serde::{Deserialize, Serialize};
 use serde_with::base64::{Base64, UrlSafe};
 use serde_with::formats::Unpadded;
 use serde_with::serde_as;
@@ -122,11 +123,65 @@ pub struct Issuer {
     sk: Secret<Vec<Scalar>>,
 }
 
+pub trait CBORCodec {
+    /// Serializes to CBOR bytes
+    fn to_bytes(&self) -> Result<Vec<u8>, error::Error>
+    where
+        Self: Sized + Serialize,
+    {
+        let mut bytes = Vec::new();
+        match ciborium::into_writer(&self, &mut bytes) {
+            Ok(_) => Ok(bytes),
+            Err(e) => Err(error::Error::CBORError(format!(
+                "CBORCodec Error serializing to bytes: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Deserialize from CBOR bytes
+    fn from_bytes(bytes: &[u8]) -> Result<Self, error::Error>
+    where
+        for<'a> Self: Sized + Deserialize<'a>,
+    {
+        match ciborium::from_reader(&bytes[..]) {
+            Ok(item) => Ok(item),
+            Err(e) => Err(error::Error::CBORError(format!(
+                "CBORCodec Error deserializing from bytes: {}",
+                e
+            ))),
+        }
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IssuerPublic {
     pub parameters: ParamSetCommitment,
     pub vk: Vec<VK>,
+}
+
+impl CBORCodec for IssuerPublic {}
+
+impl IssuerPublic {
+    /// Compacts the [VK] to a single G1 and single G2, then serilizes them to [IssuerPublicCompressed]
+    pub fn to_compact(&self) -> IssuerPublicCompressed {
+        let vk_b64 = self
+            .vk
+            .clone()
+            .iter()
+            .take(2)
+            .map(|vk| match vk {
+                VK::G1(vk) => VKCompressed::G1(vk.to_bytes()),
+                VK::G2(vk) => VKCompressed::G2(vk.to_bytes()),
+            })
+            .collect::<Vec<_>>();
+
+        IssuerPublicCompressed {
+            vk: vk_b64,
+            parameters: self.parameters.clone().into(),
+        }
+    }
 }
 
 #[serde_as]
@@ -202,27 +257,6 @@ impl TryFrom<IssuerPublicCompressed> for IssuerPublic {
             parameters: item.parameters.try_into()?,
             vk,
         })
-    }
-}
-
-impl IssuerPublic {
-    /// Compacts the [VK] to a single G1 and single G2, then serilizes them to [IssuerPublicCompressed]
-    pub fn to_compact(&self) -> IssuerPublicCompressed {
-        let vk_b64 = self
-            .vk
-            .clone()
-            .iter()
-            .take(2)
-            .map(|vk| match vk {
-                VK::G1(vk) => VKCompressed::G1(vk.to_bytes()),
-                VK::G2(vk) => VKCompressed::G2(vk.to_bytes()),
-            })
-            .collect::<Vec<_>>();
-
-        IssuerPublicCompressed {
-            vk: vk_b64,
-            parameters: self.parameters.clone().into(),
-        }
     }
 }
 
@@ -521,9 +555,12 @@ pub struct NymProof {
     pub damgard: DamgardTransform,
 }
 
+impl CBORCodec for NymProof {}
+
 impl<Stage> Nym<Stage> {
     /// Derive a [Nym] from a given secret that references a big endien 32 byte array which [Zeroize]s it's
-    /// memory after dropping
+    /// memory after dropping. A [Nym] is only ever needed to be given out to an [Issuer] for an
+    /// initial issuance, as [Offer]s are orphaned and don't need a [Nym].
     fn new_from_secret(secret_bytes: Secret<Scalar>) -> Nym<Stage> {
         let key = G1Projective::mul_by_generator(secret_bytes.expose_secret());
         Nym::<Stage> {
@@ -768,6 +805,41 @@ impl<Stage> Nym<Stage> {
             nym_proof: nym.nym_proof(nonce),
         }
     }
+
+    /// Create a proof using Damgard's technique for obtaining malicious verifier interactive zero-knowledge proofs of knowledge
+    ///
+    /// This enables us to obtain malicious verifier interactive zero-knowledge proofs of
+    /// knowledge. Verifiers can optionally provide a nonce to the proof, which will be
+    /// used to generate the challenge. If no nonce is provided, a random nonce will be
+    /// generated. This nonce can be checked against the Pedersen open randomness to
+    /// ensure the proof is valid.
+    pub fn nym_proof(&self, nonce: &Nonce) -> NymProof {
+        let (pedersen_commit, pedersen_open) = self.public.damgard.announce(nonce);
+
+        let state = ChallengeState::new(
+            vec![self.public.damgard.pedersen.h.to_affine()],
+            &pedersen_commit.to_bytes(),
+        );
+
+        let challenge = DamgardTransform::challenge(&state);
+
+        // (challenge: &Challenge, announce_randomness: &Scalar, stm: &G2, secret_wit: &Scalar)
+        let response = DamgardTransform::response(
+            &challenge,
+            &pedersen_open.announce_randomness,
+            &self.public.key.into(),
+            &self.secret,
+        );
+
+        NymProof {
+            challenge,
+            pedersen_open,
+            pedersen_commit,
+            public_key: self.public.key,
+            response,
+            damgard: self.public.damgard.clone(),
+        }
+    }
 }
 
 impl Default for Nym<Randomized> {
@@ -841,41 +913,6 @@ impl Nym<Randomized> {
             sigma
         } else {
             panic!("Invalid verification key"); // TODO: Remove panics, switch to Result
-        }
-    }
-
-    /// Create a proof using Damgard's technique for obtaining malicious verifier interactive zero-knowledge proofs of knowledge
-    ///
-    /// This enables us to obtain malicious verifier interactive zero-knowledge proofs of
-    /// knowledge. Verifiers can optionally provide a nonce to the proof, which will be
-    /// used to generate the challenge. If no nonce is provided, a random nonce will be
-    /// generated. This nonce can be checked against the Pedersen open randomness to
-    /// ensure the proof is valid.
-    pub fn nym_proof(&self, nonce: &Nonce) -> NymProof {
-        let (pedersen_commit, pedersen_open) = self.public.damgard.announce(nonce);
-
-        let state = ChallengeState::new(
-            vec![self.public.damgard.pedersen.h.to_affine()],
-            &pedersen_commit.to_bytes(),
-        );
-
-        let challenge = DamgardTransform::challenge(&state);
-
-        // (challenge: &Challenge, announce_randomness: &Scalar, stm: &G2, secret_wit: &Scalar)
-        let response = DamgardTransform::response(
-            &challenge,
-            &pedersen_open.announce_randomness,
-            &self.public.key.into(),
-            &self.secret,
-        );
-
-        NymProof {
-            challenge,
-            pedersen_open,
-            pedersen_commit,
-            public_key: self.public.key,
-            response,
-            damgard: self.public.damgard.clone(),
         }
     }
 }
@@ -967,8 +1004,11 @@ impl TryFrom<SignatureCompressed> for Signature {
 }
 
 /// Newtype wrapper for a [Credential] which has an orphan [Signature]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Offer(Credential);
+
+impl CBORCodec for Offer {}
 
 impl Deref for Offer {
     type Target = Credential;
@@ -991,6 +1031,24 @@ impl From<Offer> for Credential {
     }
 }
 
+impl TryFrom<Offer> for Vec<u8> {
+    type Error = error::Error;
+
+    fn try_from(value: Offer) -> Result<Self, Self::Error> {
+        let cred: Credential = value.into();
+        Ok(cred.to_bytes()?)
+    }
+}
+
+impl TryFrom<Vec<u8>> for Offer {
+    type Error = error::Error;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        let cred = Credential::from_bytes(&value)?;
+        Ok(cred.into())
+    }
+}
+
 /// Credentials Proof, struct which holds all the information needed to verify a [Credential]
 ///
 /// # Arguments
@@ -998,6 +1056,7 @@ impl From<Offer> for Credential {
 /// - `commitment_vector`: Vec<[`G1`]>, commitment vector of the user
 /// - `witness_pi`: [`G1`], witness of the user
 /// - `nym_public`: [`NymPublic`], proof of the pseudonym
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CredProof {
     sigma: Signature,
     commitment_vector: Vec<G1Projective>,
@@ -1005,13 +1064,15 @@ pub struct CredProof {
     nym_proof: NymProof,
 }
 
+impl CBORCodec for CredProof {}
+
 /// Verify a proof of a [CredProof] against [IssuerPublic] and selected [Entry]s
 pub fn verify_proof(
     issuer_public: &IssuerPublic,
     proof: &CredProof,
     selected_attrs: &[Entry],
     nonce: Option<&Nonce>,
-) -> Result<bool, IssuerError> {
+) -> bool {
     // Get the selected_attr indexes which are not `is_enpty()`,
     // use those indexes to select corresponding `commitment_vectors`
     // zip together `commitment_vector` where `selected_attr` is not empty
@@ -1042,7 +1103,7 @@ pub fn verify_proof(
     );
 
     // assert both check_verify_cross and check_zkp_verify are true && spseq_uc.verify
-    Ok(check_verify_cross && check_zkp_verify && verify_sig)
+    check_verify_cross && check_zkp_verify && verify_sig
 }
 
 #[cfg(test)]
@@ -1633,7 +1694,7 @@ mod tests {
             &proof,
             messages_vector,
             Some(&NONCE)
-        )?);
+        ));
 
         Ok(())
     }
@@ -1692,7 +1753,7 @@ mod tests {
             &proof,
             &selected_attrs,
             Some(&NONCE)
-        )?);
+        ));
 
         Ok(())
     }
@@ -1787,7 +1848,7 @@ mod tests {
             &proof,
             &selected_attrs,
             Some(&NONCE)
-        )?);
+        ));
 
         // if we try to prove Entry[0] or Entry[1] it should fail
         // age is from Entry[0]
@@ -1807,7 +1868,7 @@ mod tests {
             &proof,
             &selected_attrs,
             Some(&NONCE)
-        )?);
+        ));
 
         Ok(())
     }
@@ -1896,7 +1957,7 @@ mod tests {
             &proof,
             &selected_attrs,
             Some(&NONCE)
-        )?);
+        ));
 
         Ok(())
     }
@@ -1940,7 +2001,20 @@ mod tests {
             &proof,
             &[Entry(messages_vectors.message1_str)],
             Some(&nonce)
-        )
-        .unwrap());
+        ));
+    }
+
+    // Test roundtrip CBORCodec NymProof serialization
+    #[test]
+    fn test_nym_proof_roundtrip() {
+        let nym = Nym::new();
+        let nonce = Nonce::new(vec![1, 2, 3, 4, 5, 6, 7, 8]);
+
+        let nym_proof = nym.nym_proof(&nonce);
+
+        let bytes = nym_proof.to_bytes().expect("valid bytes");
+        let nym_proof2 = NymProof::from_bytes(&bytes).expect("valid bytes");
+
+        assert_eq!(nym_proof, nym_proof2);
     }
 }
