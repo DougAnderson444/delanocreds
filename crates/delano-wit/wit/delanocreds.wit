@@ -1,4 +1,4 @@
-package component:delano-wit;
+package delanocreds:wallet@0.1.0;
 
 interface types {
   // An attribute is a 32 bytes hash value
