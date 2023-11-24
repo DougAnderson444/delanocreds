@@ -105,7 +105,7 @@ The intention is to provide the following bindings:
 
 - [x] Rust API
 - [ ] wasm bindgen (wasm32-unknown-unknown)
-- [ ] wasm interface types (WIT)
+- [x] [wasm interface types](https://component-model.bytecodealliance.org/design/wit.html) (WIT)
 
 ## Rust API
 
