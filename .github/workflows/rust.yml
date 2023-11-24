@@ -31,7 +31,7 @@ jobs:
       - name: Install binstall
         uses: taiki-e/install-action@cargo-binstall
       - name: Install cargo component
-        run: cargo binstall cargo-component
+        run: echo yes | cargo binstall cargo-component
       - name: Cargo component build
         run: cd crates/delano-wit && cargo component build
       # run the tests
