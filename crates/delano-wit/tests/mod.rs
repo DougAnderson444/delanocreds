@@ -1,5 +1,9 @@
-use component::delano_wit::types::{OfferConfig, Provables, Verifiables};
-use delanocreds::*;
+mod bindgen {
+    wasmtime::component::bindgen!("delanocreds"); // name of the .wit file
+}
+
+use bindgen::delano::wallet::types::{OfferConfig, Provables, Verifiables};
+use delanocreds::{Attribute, CBORCodec, Credential, MaxEntries, Nonce, NymProof};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -8,8 +12,6 @@ use thiserror::Error;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
-
-wasmtime::component::bindgen!("delanocreds");
 
 struct MyCtx {
     wasi_ctx: Context,
@@ -34,14 +36,14 @@ impl WasiView for MyCtx {
     }
 }
 
-impl component::delano_wit::deps::Host for MyCtx {
+impl bindgen::delano::wallet::seed_keeper::Host for MyCtx {
     /// Stub a seed gen fn
     fn get_seed(&mut self) -> Result<Vec<u8>, wasmtime::Error> {
         Ok(vec![69u8; 32])
     }
 }
 
-impl component::delano_wit::types::Host for MyCtx {}
+impl bindgen::delano::wallet::types::Host for MyCtx {}
 
 #[derive(Error, Debug)]
 pub enum TestError {
@@ -96,7 +98,9 @@ fn main() -> wasmtime::Result<(), TestError> {
     let component = Component::from_file(&engine, &wasm_path)?;
 
     let mut linker = Linker::new(&engine);
-    Delanocreds::add_to_linker(&mut linker, |state: &mut MyCtx| state)?;
+    // link imports like get_seed to our instantiation
+    bindgen::Delanocreds::add_to_linker(&mut linker, |state: &mut MyCtx| state)?;
+    // link the WASI imports to our instantiation
     wasmtime_wasi::preview2::command::sync::add_to_linker(&mut linker)?;
 
     let table = Table::new();
@@ -106,14 +110,15 @@ fn main() -> wasmtime::Result<(), TestError> {
     };
     let mut store = Store::new(&engine, state);
 
-    let (bindings, _) = Delanocreds::instantiate(&mut store, &component, &linker)?;
+    let (bindings, _) = bindgen::Delanocreds::instantiate(&mut store, &component, &linker)?;
+    // World
 
     // Now let's make some credentials!
     // First, we issue the Root Cred to our own Nym, so we need to retreive the Nym's public key
     let nonce = Nonce::default();
     let nonce_bytes: Vec<u8> = nonce.clone().into();
     let nym_proof_bytes = bindings
-        .component_delano_wit_actions()
+        .delano_wallet_actions()
         .call_get_nym_proof(&mut store, &nonce_bytes)?
         .map_err(|e| TestError::Stringified(format!("Get Nym: {:?}", e)))?;
 
@@ -129,7 +134,7 @@ fn main() -> wasmtime::Result<(), TestError> {
     let max_entries = MaxEntries::default();
 
     let cred = bindings
-        .component_delano_wit_actions()
+        .delano_wallet_actions()
         .call_issue(
             &mut store,
             &nym_proof.to_bytes()?,
@@ -149,13 +154,13 @@ fn main() -> wasmtime::Result<(), TestError> {
     };
 
     let offer = bindings
-        .component_delano_wit_actions()
+        .delano_wallet_actions()
         .call_offer(&mut store, &cred, &offer_config)?
         .map_err(|e| TestError::Stringified(format!("Error calling offer: {:?}", e)))?;
 
     // Accept the offer
     let accepted_cred = bindings
-        .component_delano_wit_actions()
+        .delano_wallet_actions()
         .call_accept(&mut store, &offer)?
         .map_err(|e| TestError::Stringified(e))?;
 
@@ -171,7 +176,7 @@ fn main() -> wasmtime::Result<(), TestError> {
     };
 
     let proof = bindings
-        .component_delano_wit_actions()
+        .delano_wallet_actions()
         .call_prove(&mut store, &provables)?
         .map_err(|e| TestError::Stringified(e))?;
 
@@ -184,7 +189,7 @@ fn main() -> wasmtime::Result<(), TestError> {
     };
 
     let verified = bindings
-        .component_delano_wit_actions()
+        .delano_wallet_actions()
         .call_verify(&mut store, &verifiables)?
         .map_err(|e| TestError::Stringified(e))?;
 

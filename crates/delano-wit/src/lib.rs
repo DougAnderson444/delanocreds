@@ -2,10 +2,10 @@ cargo_component_bindings::generate!();
 
 mod utils;
 
-use bindings::component::delano_wit;
-use bindings::component::delano_wit::deps::get_seed;
-use bindings::component::delano_wit::types::{Attribute, OfferConfig, Provables};
-use bindings::exports::component::delano_wit::actions::Guest;
+use bindings::delano::wallet;
+use bindings::delano::wallet::seed_keeper::get_seed;
+use bindings::delano::wallet::types::{Attribute, OfferConfig, Provables};
+use bindings::exports::delano::wallet::actions::Guest;
 
 use delano_keys::kdf::Scalar;
 use delano_keys::kdf::{ExposeSecret, Manager, Zeroizing};
@@ -49,7 +49,7 @@ struct Component;
 
 impl Guest for Component {
     /// Return proof of [Nym] given the Nonce
-    fn get_nym_proof(nonce: delano_wit::types::Nonce) -> Result<Vec<u8>, String> {
+    fn get_nym_proof(nonce: wallet::types::Nonce) -> Result<Vec<u8>, String> {
         let nym = NYM.lock().expect("should be able to lock NYM");
         let nonce = utils::nonce_by_len(&nonce)?;
         let nym_proof = nym.nym_proof(&nonce);
@@ -68,7 +68,7 @@ impl Guest for Component {
     /// CBOR encoded CredentialCompressed bytes.
     fn issue(
         nymproof: Vec<u8>,
-        attributes: Vec<delano_wit::types::Attribute>,
+        attributes: Vec<wallet::types::Attribute>,
         maxentries: u8,
         nonce: Option<Vec<u8>>,
     ) -> Result<Vec<u8>, String> {
@@ -222,7 +222,7 @@ impl Guest for Component {
     }
 
     /// Verify
-    fn verify(values: delano_wit::types::Verifiables) -> Result<bool, String> {
+    fn verify(values: wallet::types::Verifiables) -> Result<bool, String> {
         let issuer_public =
             IssuerPublic::from_bytes(&values.issuer_public).map_err(|e| e.to_string())?;
         let proof = CredProof::from_bytes(&values.proof).map_err(|e| e.to_string())?;

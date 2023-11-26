@@ -1,4 +1,4 @@
-package delanocreds:wallet@0.1.0;
+package delano:wallet@0.1.0;
 
 interface types {
   // An attribute is a 32 bytes hash value
@@ -38,7 +38,7 @@ interface types {
   } 
 }
 
-interface deps {
+interface seed-keeper {
     /// Use a get-seed function from a seed-keeper component.
     get-seed: func() -> list<u8>;
 }
@@ -69,7 +69,7 @@ interface actions {
 /// A Delanocreds world for the component to target.
 world delanocreds {
 
-  import deps;
+  import seed-keeper;
   export actions;
     
 }
