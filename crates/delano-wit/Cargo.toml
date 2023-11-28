@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 cargo-component-bindings = "0.5.0"
 lazy_static = "1.4.0"
-delanocreds = { workspace = true }
+delanocreds = { path ="../delanocreds" }
 delano-keys = { workspace = true }
 ciborium = "0.2.1"
 
