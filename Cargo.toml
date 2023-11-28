@@ -18,7 +18,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.44"
-delanocreds = { workspace = true, features = ["serde", "serde_json"] } 
+delanocreds = { workspace = true }
 blastkids = { workspace = true }  
 
 [dev-dependencies]
@@ -35,7 +35,7 @@ debug = false
 debug-assertions = false
 incremental = false
 lto = true               # Enable Link Time Optimization
-opt-level = 'z'            # Optimize for size
+opt-level = 'z'          # Optimize for size
 overflow-checks = false
 panic = 'abort'          # Abort on panic
 rpath = false
