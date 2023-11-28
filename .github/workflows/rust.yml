@@ -42,7 +42,7 @@ jobs:
       - name: Install cargo component
         run: echo yes | cargo binstall cargo-component
       - name: Cargo component build
-        run: cd crates/delano-wit && cargo component build
+        run: cd crates/delano-wit && cargo component build --release
       # run the tests
       - name: Run workspace tests
         run: cargo test --workspace --verbose
