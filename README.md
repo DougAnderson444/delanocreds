@@ -7,6 +7,7 @@ The Delegateable Anonymous Credentials (DAC) system. A system for issuing and ve
 This is a workspace broken down into:
 
 - [delanocreds](/crates/delanocreds/): The Rust core library for issuing and using anonymous credentials.
+- [delano-keys](/crates/delano-keys/): A Rust library for generating, compacting, expanding, and using BLS12-381 verification keys (VKs).
 - [delano-wit-component](/crates/delano-wit-component/): Wasm Interface Types for [Wasm Component](https://github.com/WebAssembly/component-model) use from any [host system](https://github.com/bytecodealliance/wit-bindgen#host-runtimes-for-components) such as Go, JavaScript, Python or Rust.
 - [examples](examples/): A simple demo that issues and verifies credentials
 
