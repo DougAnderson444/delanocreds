@@ -215,15 +215,10 @@ It also allows an adversarial CA but no delegators’s keys leaks.
 
 # Tests
 
-`cargo test --workspace`
-
-# Build Binary Release
-
-`cargo build --bin delanocreds-bin --release`
-
-Run the built binary:
-
-`./target/release/delanocreds-bin.exe`
+```bash
+cargo test
+cargo test --target wasm32-unknown-unknown
+```
 
 ## Speed
 

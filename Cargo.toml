@@ -6,28 +6,9 @@ resolver = "2"
 delanocreds = { path = "crates/delanocreds" }
 delano-keys = { path = "crates/delano-keys" }
 blastkids = "0.1"
-bls12_381_plus = { version = "0.8.5", features = ["expose-fields", "alloc"] }
+bls12_381_plus = { version = "0.8.11", features = ["expose-fields", "alloc"] }
 secrecy = "0.8"
 base64 = "0.21.4"
-
-[package]
-edition = "2021"
-license = "MIT"
-name = "delanocreds-bin"
-version = "0.1.0"
-
-[dependencies]
-anyhow = "1.0.44"
-delanocreds = { workspace = true }
-blastkids = { workspace = true }  
-
-[dev-dependencies]
-blastkids = { workspace = true }
-delano-keys = { workspace = true }
-secrecy = { workspace = true }
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
 
 [profile.release]
 codegen-units = 1        # allow for maximum size reduction optimizations
@@ -42,4 +23,4 @@ rpath = false
 strip = true             # Automatically strip symbols from the binary.
 
 [patch.crates-io]
-bls12_381_plus = { git = "https://github.com/DougAnderson444/bls12_381_plus", branch = "wasm" }
+bls12_381_plus = { git = "https://github.com/DougAnderson444/bls12_381_plus", branch = "fix-reduce-error-wasm32" }

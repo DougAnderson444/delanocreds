@@ -4,6 +4,8 @@ use delanocreds::Issuer;
 use delanocreds::MaxCardinality;
 use secrecy::zeroize::Zeroizing;
 
+mod smoke;
+
 #[test]
 pub fn create_with_secrets_manager() {
     let seed = Zeroizing::new([69u8; 32]);
