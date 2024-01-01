@@ -1,0 +1,6 @@
+package component:delano-wit-ui;
+
+/// An example world for the component to target.
+world delanocreds-wit-ui {
+    export hello-world: func() -> string;
+}
