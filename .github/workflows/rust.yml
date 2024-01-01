@@ -60,7 +60,8 @@ jobs:
 
       # Build with trunk-rs
       - name: Install Trunk
-        uses: mbround18/trunk-rs@v0.0.1
+        run: echo yes | cargo binstall trunk@0.17.5
+
       - name: Build and Deploy Leptos Directory
         run: cd crates/ && cd delano-leptos-site/ && trunk build --release --all-features
       - name: Build with Jekyll
