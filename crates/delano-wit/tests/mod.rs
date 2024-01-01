@@ -1,5 +1,5 @@
 mod bindgen {
-    wasmtime::component::bindgen!("delanocreds"); // name of the .wit file
+    wasmtime::component::bindgen!("delanocreds"); // name of the world in the .wit file
 }
 
 use bindgen::delano::wallet::types::{OfferConfig, Provables, Verifiables};

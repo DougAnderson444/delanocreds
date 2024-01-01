@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cargo-component-bindings = "0.5.0"
+cargo-component-bindings = "0.6.0"
 lazy_static = "1.4.0"
 delanocreds = { path ="../delanocreds" }
 delano-keys = { workspace = true }
 ciborium = "0.2.1"
 
 [dev-dependencies]
-wasmtime = { version = "15", features = ['component-model'] }
-wasmtime-wasi = "15.0.0"
+wasmtime = { version = "16", features = ['component-model'] }
+wasmtime-wasi = "16.0.0"
 thiserror = "1.0"
 
 [lib]
