@@ -41,3 +41,10 @@ cargo test --target wasm32-unknown-unknown
 ```bash
 cargo build --workspace --target wasm32-unknown-unknown
 ```
+
+Build Wasm Interface Types (WIT)
+
+```bash
+cargo component build --workspace --release
+```
+
