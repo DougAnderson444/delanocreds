@@ -113,8 +113,7 @@ mod delano_wit_ui_tests {
         let mut store = Store::new(&engine, state);
 
         let (bindings, _) =
-            bindgen::DelanocredsWitUi::instantiate(&mut store, &component, &linker)?;
-        // World
+            bindgen::DelanocredsWitUi::instantiate(&mut store, &component, &linker)?; // WorldNameInCamelCase
 
         // Now let's make some credentials!
 

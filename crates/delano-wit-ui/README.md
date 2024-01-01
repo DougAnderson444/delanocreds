@@ -2,7 +2,7 @@
 
 A default implementation of the Delano UI using [`wurbo`](https://github.com/DougAnderson444/wurbo).
 
-Don't like the look of it? You will be able to fork it and modify it to your liking.
+Don't like the look of it? You will be able to fork the HTML templates and modify it to your liking.
 
 # Usage
 
