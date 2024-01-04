@@ -38,11 +38,7 @@ cargo test --target wasm32-unknown-unknown
 
 ## Build Wasm
 
-```bash
-cargo build --workspace --target wasm32-unknown-unknown
-```
-
-Build Wasm Interface Types (WIT)
+Because the workspace includes Wasm Interface Types (WIT), the build command must use `component build` instead of `build`. This is a wrapper around `cargo build` anyway, so it builds non-components too:
 
 ```bash
 cargo component build --workspace --release
