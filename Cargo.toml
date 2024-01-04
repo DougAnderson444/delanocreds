@@ -5,6 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 delanocreds = { path = "crates/delanocreds" }
 delano-keys = { path = "crates/delano-keys" }
+delano-wit-ui = { path = "crates/delano-wit-ui" }
 blastkids = "0.1"
 bls12_381_plus = { version = "0.8.11", features = ["expose-fields", "alloc"] }
 secrecy = "0.8"
