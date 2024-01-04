@@ -1,4 +1,4 @@
-# Delano User Interface
+# Delanocreds User Interface
 
 A default implementation of the Delano UI using [`wurbo`](https://github.com/DougAnderson444/wurbo).
 
@@ -12,4 +12,16 @@ To use this crate, you will need to provide [`delano-wit`](../delano-wit/) (or y
 
 A reference composed app is available here.
 
+# Dev
 
+Using `trunk-rs`:
+
+```bash
+trunk serve --open
+```
+
+Compile your Tailwindcss into `./style/output.css`:
+
+```bash
+npx tailwindcss -i ./style/input.css -o ./style/output.css --watch
+```

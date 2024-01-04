@@ -1,5 +1,5 @@
 [package]
-name = "delano-wit"
+name = "delano-wallet"
 version = "0.1.0"
 edition = "2021"
 
@@ -21,6 +21,6 @@ thiserror = "1.0"
 crate-type = ["cdylib"]
 
 [package.metadata.component]
-package = "component:delano-wit"
+package = "delano:wallet"
 
 [package.metadata.component.dependencies]

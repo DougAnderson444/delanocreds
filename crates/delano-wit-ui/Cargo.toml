@@ -7,6 +7,22 @@ edition = "2021"
 
 [dependencies]
 cargo-component-bindings = "0.6.0"
+wasm-bindgen = { version = "0.2.89", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+wurbo = { path = "../../../wurbo/crates/wurbo" }
+getrandom = { version = "0.2", optional = true, features = ["js"] }
+
+[dependencies.web-sys]
+version = "0.3.4"
+optional = true
+features = [
+  'Document',
+  'Element',
+  'HtmlElement',
+  'Node',
+  'Window',
+]
 
 [dev-dependencies]
 wasmtime = { version = "16", features = ['component-model'] }
@@ -16,7 +32,13 @@ thiserror = "1.0"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = ["wasm-bindgen", "web-sys", "serde-wasm-bindgen", "serde", "getrandom"]
+
 [package.metadata.component]
 package = "component:delano-wit-ui"
 
 [package.metadata.component.dependencies]
+
+[package.metadata.component.target.dependencies]
+"delano:wallet" = { path = "../delano-wallet/wit" }

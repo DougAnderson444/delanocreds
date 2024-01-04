@@ -27,6 +27,7 @@ interface types {
   record offer-config {
     redact: option<redactables>,
     additional-entry: option<entry>,
+    /// Optionally reduces the number of entries that can be added to the credential.
     max-entries: option<u8>
   }
 
@@ -73,3 +74,4 @@ world delanocreds {
   export actions;
     
 }
+

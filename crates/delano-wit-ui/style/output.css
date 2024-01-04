@@ -1,0 +1,7 @@
+/* @tailwind base; */
+
+/* @tailwind components; */
+
+.p-2 {
+  padding: 0.5rem
+}

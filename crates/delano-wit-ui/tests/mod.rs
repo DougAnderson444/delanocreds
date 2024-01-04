@@ -2,6 +2,9 @@ mod bindgen {
     wasmtime::component::bindgen!("delanocreds-wit-ui"); // name of the world in the .wit file
 }
 
+use bindgen::component::delano_wit_ui::context_types;
+use bindgen::exports::component::delano_wit_ui;
+
 use std::{
     env,
     path::{Path, PathBuf},
@@ -34,14 +37,69 @@ impl WasiView for MyCtx {
     }
 }
 
-// impl bindgen::delano::wallet::seed_keeper::Host for MyCtx {
-//     /// Stub a seed gen fn
-//     fn get_seed(&mut self) -> Result<Vec<u8>, wasmtime::Error> {
-//         Ok(vec![69u8; 32])
-//     }
-// }
-//
-// impl bindgen::delano::wallet::types::Host for MyCtx {}
+impl bindgen::component::delano_wit_ui::context_types::Host for MyCtx {}
+impl bindgen::component::delano_wit_ui::wurbo_types::Host for MyCtx {}
+impl bindgen::delano::wallet::types::Host for MyCtx {}
+impl bindgen::delano::wallet::actions::Host for MyCtx {
+    // Strub the following functions with noop
+    /// Gets Nym Proof
+    fn get_nym_proof(
+        &mut self,
+        _nonce: Vec<u8>,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        Ok(Ok(vec![69u8; 32]))
+    }
+
+    /// Issue a credential Entry to a Nym with maximum entries.
+    fn issue(
+        &mut self,
+        _nymproof: Vec<u8>,
+        _attributes: Vec<bindgen::delano::wallet::types::Attribute>,
+        _maxentries: u8,
+        _nonce: Option<Vec<u8>>,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        Ok(Ok(vec![69u8; 32]))
+    }
+
+    /// Create an offer for a credential with its given entries and a given configuration.
+    fn offer(
+        &mut self,
+        _cred: Vec<u8>,
+        _config: bindgen::delano::wallet::types::OfferConfig,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        Ok(Ok(vec![69u8; 32]))
+    }
+
+    /// Accept a credential offer and return the accepte Credential bytes
+    fn accept(&mut self, _offer: Vec<u8>) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        Ok(Ok(vec![69u8; 32]))
+    }
+
+    /// Export a function that proves selected attributes in a given credential
+    fn prove(
+        &mut self,
+        _values: bindgen::delano::wallet::types::Provables,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        Ok(Ok(vec![69u8; 32]))
+    }
+
+    /// Export a function that verifies a proof against a public key, nonce and selected attributes
+    fn verify(
+        &mut self,
+        _values: bindgen::delano::wallet::types::Verifiables,
+    ) -> Result<Result<bool, String>, wasmtime::Error> {
+        Ok(Ok(true))
+    }
+}
+
+impl bindgen::component::delano_wit_ui::wurbo_in::Host for MyCtx {
+    fn addeventlistener(
+        &mut self,
+        _details: bindgen::component::delano_wit_ui::wurbo_in::ListenDetails,
+    ) -> wasmtime::Result<()> {
+        Ok(())
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum TestError {
@@ -62,6 +120,12 @@ pub enum TestError {
     Io(#[from] std::io::Error),
 }
 
+impl From<String> for TestError {
+    fn from(s: String) -> Self {
+        TestError::Stringified(s)
+    }
+}
+
 /// Utility function to get the workspace dir
 pub fn workspace_dir() -> PathBuf {
     let output = std::process::Command::new(env!("CARGO"))
@@ -77,6 +141,8 @@ pub fn workspace_dir() -> PathBuf {
 
 #[cfg(test)]
 mod delano_wit_ui_tests {
+
+    use crate::bindgen::component::delano_wit_ui::context_types::Page;
 
     use super::*;
 
@@ -98,9 +164,8 @@ mod delano_wit_ui_tests {
 
         let mut linker = Linker::new(&engine);
 
-        // link imports to our instantiation, if any
-        // since we don't have nay yet, we need to comment this out
-        // bindgen::DelanocredsWitUi::add_to_linker(&mut linker, |state: &mut MyCtx| state)?;
+        // link imports to our instantiation (such as addeventlistener())
+        bindgen::DelanocredsWitUi::add_to_linker(&mut linker, |state: &mut MyCtx| state)?;
 
         // link the WASI imports to our instantiation
         wasmtime_wasi::preview2::command::sync::add_to_linker(&mut linker)?;
@@ -116,6 +181,48 @@ mod delano_wit_ui_tests {
             bindgen::DelanocredsWitUi::instantiate(&mut store, &component, &linker)?; // WorldNameInCamelCase
 
         // Now let's make some credentials!
+        // First we test the ability to issue a credential.
+        // The interface for issue is:
+        // issue: func(nymproof: list<u8>, attributes: list<attribute>, maxentries: u8, nonce: option<list<u8>>) -> result<list<u8>, string>;
+        // We will stub the nymproof for this UI test. For the UI itself, we need to allow the user to build a State which includes:
+        // - list of attributes
+        // - maxentries
+        // - optional nonce
+
+        // Start with an initial context. We should be able to pass this to render and have it
+        // return our HTML.
+        let name = "Delano Wallet App".to_string();
+        let context = delano_wit_ui::wurbo_out::Context::AllContent(context_types::Everything {
+            page: Some(Page {
+                name: name.clone(),
+                version: "0.0.1".to_string(),
+                description: "A wallet so you can sign your credentials.".to_string(),
+            }),
+            issue: None,
+        });
+
+        let html = bindings
+            .component_delano_wit_ui_wurbo_out()
+            .call_render(&mut store, &context)??;
+
+        eprintln!("HTML: {}", html);
+
+        assert!(html.contains(&name));
+
+        // Next we need to test that the UI can enable a user to create an offer for a credential with its given entries and a given configuration.
+        // The interface for offer is:
+        // offer: func(cred: list<u8>, config: offer-config) -> result<list<u8>, string>;
+        // We will use the credential created from `issue` above. For the UI itself, we need to allow the user to build a State which includes:
+        // - offer-config
+
+        // Accept a credential offer and return the accepte Credential bytes
+        // accept: func(offer: list<u8>) -> result<list<u8>, string>;
+
+        // Export a function that proves selected attributes in a given credential
+        // prove: func(values: provables) -> result<list<u8>, string>;
+
+        // Export a function that verifies a proof against a public key, nonce and selected attributes
+        // verify: func(values: verifiables) -> result<bool, string>;
 
         Ok(())
     }
