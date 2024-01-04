@@ -9,25 +9,26 @@ interface context-types {
     description: string,
   }
 
-  record input {
-    issue: issue-context,
+  record issuer {
+    attributes: list<attribute>
   }
 
-  record issue-context {
-    attributes: list<list<u8>>
+  record attribute {
+    key: string,
+    op: string,
+    value: string,
   }
 
   record everything {
     page: option<page>,
-    issue: option<issue-context>
+    issue: option<issuer>
   }
 
   /// The type of context provided
   variant context {
     all-content(everything),
-    // issuing(issue-context)
+    issuing(issuer)
   }
-
 }
 
 interface wurbo-types {

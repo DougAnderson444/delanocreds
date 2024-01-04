@@ -4,8 +4,8 @@
   <div class="">
     <h2 class="text-xl font-bold">Issue Credential</h2>
     <p>add Attributes below</p>
-    {% for attr in attributes %}
-    <li>{{ attr.key }}: {{ attr.value }}</li>
+    {% for attr in issuer.attributes %}
+    <li>{{ attr.key }} {{ attr.op}} {{ attr.value }}</li>
     {% endfor %}
   </div>
 </div>

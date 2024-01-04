@@ -1,12 +1,14 @@
 cargo_component_bindings::generate!();
 
 mod input;
+mod issuer;
 mod output;
 mod page;
 mod state;
 
 // use input::Input;
 // use output::Output;
+use issuer::IssuerStruct;
 use page::StructPage;
 
 use wurbo::jinja::{Entry, Index, Rest, Templates};
@@ -40,7 +42,7 @@ prelude_bindgen! {WurboGuest, Component, StructContext, Context, LAST_STATE}
 #[derive(Debug, Clone)]
 struct StructContext {
     app: StructPage,
-    // input: Input,
+    issuer: IssuerStruct,
     // output: Output,
 }
 
@@ -48,7 +50,7 @@ impl StructObject for StructContext {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
             "app" => Some(Value::from_struct_object(self.app.clone())),
-            // "input" => Some(Value::from(self.input.clone())),
+            "issuer" => Some(Value::from_struct_object(self.issuer.clone())),
             // "output" => Some(Value::from(self.output.clone())),
             _ => None,
         }
@@ -63,6 +65,7 @@ impl From<&context_types::Context> for StructContext {
     fn from(context: &context_types::Context) -> Self {
         match context {
             context_types::Context::AllContent(ctx) => StructContext::from(ctx.clone()),
+            context_types::Context::Issuing(ctx) => StructContext::from(IssuerStruct::from(ctx)),
         }
     }
 }
@@ -71,8 +74,26 @@ impl From<context_types::Everything> for StructContext {
     fn from(context: context_types::Everything) -> Self {
         StructContext {
             app: StructPage::from(context.page),
-            // input: context.input.into(),
-            // output: context.output.into(),
+            issuer: IssuerStruct::from(context.issue),
+        }
+    }
+}
+
+/// StructContext: From<IssuerStruct>
+impl From<IssuerStruct> for StructContext {
+    fn from(context: IssuerStruct) -> Self {
+        Self {
+            app: StructPage::from(None),
+            issuer: context,
+        }
+    }
+}
+/// StructContext: From<IssuerStruct>
+impl From<&IssuerStruct> for StructContext {
+    fn from(context: &IssuerStruct) -> Self {
+        Self {
+            app: StructPage::from(None),
+            issuer: context.clone(),
         }
     }
 }
