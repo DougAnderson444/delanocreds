@@ -1,1 +1,11 @@
-<div id="output">Out</div>
+<div id="{{output.id}}" class="m-4">
+  <ul class="border border-green-500 rounded">
+    {% for attr in issuer.attributes %}
+    <div class="flex flex-row w-full items-center">
+      <div class="flex-1 p-2">{{attr.key}}</div>
+      <div class="p-1 bg-blue-500 text-white font-semibold">{{attr.op}}</div>
+      <div class="flex-1 p-2">{{attr.value}}</div>
+    </div>
+    {% endfor %}
+  </ul>
+</div>

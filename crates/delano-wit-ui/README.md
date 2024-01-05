@@ -12,12 +12,22 @@ To use this crate, you will need to provide [`delano-wit`](../delano-wit/) (or y
 
 A reference composed app is available here.
 
-# Dev
+# Test
 
-Using `trunk-rs`:
+Tests in [`./tests/mod.rs`](./tests/mod.rs) can be run with:
 
 ```bash
-trunk serve --open
+cargo test
+```
+
+These tests use wasmtime to run the WIT component in Rust, and depend on the `.wit` dependencies in the [`wit`](../wit/deps/) folder, which have been copied over from their source folder. If the dependencies changes, then these copies also need to be updated for the tests to run as intended.
+
+# Dev
+
+Build the component with:
+
+```bash
+cargo component build 
 ```
 
 Compile your Tailwindcss into `./style/output.css`:
@@ -25,3 +35,5 @@ Compile your Tailwindcss into `./style/output.css`:
 ```bash
 npx tailwindcss -i ./style/input.css -o ./style/output.css --watch
 ```
+
+then run the component using `rollup-plugin-wit-component`. See [Example](../../examples/svelte-wit-ui/src/lib/ui/UIOnly.svelte) for example usage. Unfortunately because of the way Vite handle wasm that compiles wasm, `vite dev` mode cannot be used and the code must be built every time.

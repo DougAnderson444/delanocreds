@@ -10,7 +10,7 @@ interface context-types {
   }
 
   record issuer {
-    attributes: list<attribute>
+    attributes: list<attribute>,
   }
 
   record attribute {
@@ -21,13 +21,31 @@ interface context-types {
 
   record everything {
     page: option<page>,
-    issue: option<issuer>
+    issue: option<issuer>,
+  }
+
+  record input-ctx {
+    key: string,
+    value: string,
+  }
+
+  variant kovindex {
+    key(u32),
+    op(u32),
+    value(u32),
+  }
+
+  record kvctx {
+    ctx: kovindex,
+    value: string,
   }
 
   /// The type of context provided
   variant context {
     all-content(everything),
-    issuing(issuer)
+    issuing(issuer),
+    addattribute,
+    editissuerinput(kvctx)
   }
 }
 
@@ -54,10 +72,11 @@ interface wurbo-out {
   use context-types.{context};
 
   // renders the initial Web component with the given data
-  render: func(ctx: context) -> result<string, string>;
+  // and the target template to use as top level entry point
+  render: func(ctx: context, target: string) -> result<string, string>;
 
-  // activate listening 
-  activate: func();
+  // listen on all or given selectors
+  activate: func(selectors: option<list<string>>);
 }
 
 /// An example world for the component to target.

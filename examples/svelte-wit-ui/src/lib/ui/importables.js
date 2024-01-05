@@ -3,12 +3,20 @@ export function buildCodeString(namespace) {
       const bc = new BroadcastChannel('${namespace}');
       export function addeventlistener({ selector, ty }) {
         document.querySelector(selector).addEventListener(ty, (e) => {
-          let ctx = {
-            tag: e.target.name,
-            val: {
-              value: e.target.value,
+          // e.target.dataset.contextValue || e.target.value
+          // if both exist, combine them into a single val. Otherwise, use the one that exists.
+          // This is the only way we can provide both sets in the context.
+          let val = ""
+          if(e.target.dataset.contextValue && e.target.value) {
+            val = {
+              ctx: JSON.parse(e.target.dataset.contextValue),
+              value: e.target.value
             }
-          };
+          } else {
+            val = e.target.dataset.contextValue || e.target.value;
+          }
+          
+          let ctx = { tag: e.target.dataset.contextName, val };
 
           let el = e.target.closest('[data-slot]');
           if(el) {
@@ -16,9 +24,8 @@ export function buildCodeString(namespace) {
             el = el.closest('[data-slot]');
           }
 
-          let rendered = window.${namespace}.render(ctx); 
+          let rendered = window.${namespace}.render(ctx, e.target.dataset.contextTarget); 
 
-          // console.log({ctx}, {rendered});
           bc.postMessage(rendered);
         });
       }`;

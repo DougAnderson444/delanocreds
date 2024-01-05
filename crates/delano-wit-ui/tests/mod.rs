@@ -1,5 +1,6 @@
 mod bindgen {
-    wasmtime::component::bindgen!("delanocreds-wit-ui"); // name of the world in the .wit file
+    // name of the world in the .wit file
+    wasmtime::component::bindgen!("delanocreds-wit-ui");
 }
 
 use bindgen::component::delano_wit_ui::context_types;
@@ -201,13 +202,54 @@ mod delano_wit_ui_tests {
             issue: None,
         });
 
-        let html = bindings
-            .component_delano_wit_ui_wurbo_out()
-            .call_render(&mut store, &context)??;
-
-        eprintln!("HTML: {}", html);
+        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+            &mut store,
+            &context,
+            "index.html",
+        )??;
 
         assert!(html.contains(&name));
+
+        // Now if we render using a context that is Addatribute, the resulting HTML should have a
+        // second <li> block with another default attribute in it.
+
+        let add_attr_context = delano_wit_ui::wurbo_out::Context::Addattribute;
+
+        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+            &mut store,
+            &add_attr_context,
+            "index.html",
+        )??;
+
+        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+            &mut store,
+            &add_attr_context,
+            "index.html",
+        )??;
+
+        // the count of <select should be 2
+        assert_eq!(html.matches("<select").count(), 3);
+
+        // We should be able to edit issuer input by passing in a context that is Editissuerinput
+        let edited_value = "Edited Delano Key".to_string();
+        let edit_issuer_input_ctx =
+            delano_wit_ui::wurbo_out::Context::Editissuerinput(context_types::Kvctx {
+                ctx: context_types::Kovindex::Key(0),
+                value: edited_value.clone(),
+            });
+
+        // render with this edited ctx,
+        // use output.html as the target as we just want to update the shadow state (& display it)
+        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+            &mut store,
+            &edit_issuer_input_ctx,
+            "output.html",
+        )??;
+
+        eprintln!("{}", html);
+
+        // Now there should be a match for the edited value
+        assert!(html.contains(&edited_value));
 
         // Next we need to test that the UI can enable a user to create an offer for a credential with its given entries and a given configuration.
         // The interface for offer is:

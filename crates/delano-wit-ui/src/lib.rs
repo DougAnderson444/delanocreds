@@ -4,11 +4,10 @@ mod input;
 mod issuer;
 mod output;
 mod page;
-mod state;
 
 // use input::Input;
-// use output::Output;
 use issuer::IssuerStruct;
+use output::OutputStruct;
 use page::StructPage;
 
 use wurbo::jinja::{Entry, Index, Rest, Templates};
@@ -25,7 +24,7 @@ struct Component;
 /// We need to provide the templates for the macro to pull in
 fn get_templates() -> Templates {
     Templates::new(
-        Index::new("page.html", include_str!("templates/index.html")),
+        Index::new("index.html", include_str!("templates/index.html")),
         Entry::new("output.html", include_str!("templates/output.html")),
         Rest::new(vec![Entry::new(
             "input.html",
@@ -39,11 +38,11 @@ prelude_bindgen! {WurboGuest, Component, StructContext, Context, LAST_STATE}
 
 /// This is a wrapper around [Context] that implements StructObject on the wrapper.
 /// Enables the conversion of Context to StructContext so we can render with minijinja.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct StructContext {
     app: StructPage,
     issuer: IssuerStruct,
-    // output: Output,
+    output: OutputStruct,
 }
 
 impl StructObject for StructContext {
@@ -51,7 +50,7 @@ impl StructObject for StructContext {
         match name {
             "app" => Some(Value::from_struct_object(self.app.clone())),
             "issuer" => Some(Value::from_struct_object(self.issuer.clone())),
-            // "output" => Some(Value::from(self.output.clone())),
+            "output" => Some(Value::from_struct_object(self.output.clone())),
             _ => None,
         }
     }
@@ -64,8 +63,18 @@ impl StructObject for StructContext {
 impl From<&context_types::Context> for StructContext {
     fn from(context: &context_types::Context) -> Self {
         match context {
-            context_types::Context::AllContent(ctx) => StructContext::from(ctx.clone()),
-            context_types::Context::Issuing(ctx) => StructContext::from(IssuerStruct::from(ctx)),
+            context_types::Context::AllContent(everything) => {
+                StructContext::from(everything.clone())
+            }
+            context_types::Context::Issuing(issuer) => {
+                StructContext::from(IssuerStruct::from(issuer))
+            }
+            context_types::Context::Addattribute => {
+                StructContext::from(IssuerStruct::from_latest().push_attribute())
+            }
+            context_types::Context::Editissuerinput(kvctx) => StructContext::from(
+                StructContext::from(IssuerStruct::from_latest().edit_attribute(kvctx)),
+            ),
         }
     }
 }
@@ -75,25 +84,25 @@ impl From<context_types::Everything> for StructContext {
         StructContext {
             app: StructPage::from(context.page),
             issuer: IssuerStruct::from(context.issue),
+            output: OutputStruct::default(),
         }
     }
 }
 
-/// StructContext: From<IssuerStruct>
 impl From<IssuerStruct> for StructContext {
     fn from(context: IssuerStruct) -> Self {
-        Self {
-            app: StructPage::from(None),
-            issuer: context,
-        }
+        let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+        state.issuer = context.clone();
+        state
     }
 }
-/// StructContext: From<IssuerStruct>
+
 impl From<&IssuerStruct> for StructContext {
     fn from(context: &IssuerStruct) -> Self {
         Self {
             app: StructPage::from(None),
             issuer: context.clone(),
+            output: OutputStruct::default(),
         }
     }
 }
