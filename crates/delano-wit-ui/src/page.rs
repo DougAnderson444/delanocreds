@@ -1,7 +1,7 @@
 use super::*;
 
 /// Page is the wrapper for Input and Output
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct StructPage(Option<context_types::Page>);
 
 impl StructObject for StructPage {
