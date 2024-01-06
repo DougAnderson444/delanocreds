@@ -1,6 +1,9 @@
-use std::ops::DerefMut;
+use std::{ops::DerefMut, sync::OnceLock};
 
 use super::*;
+
+/// Element id for the attributes.html template, which can only be set once.
+static ISSUER_ID: OnceLock<String> = OnceLock::new();
 
 /// Page is the wrapper for Input and Output
 #[derive(Debug, Clone, Default)]
@@ -25,6 +28,7 @@ impl IssuerStruct {
         attributes.push(AttributeStruct::default());
         Self(Some(context_types::Issuer {
             attributes: attributes.into_iter().map(|a| a.into()).collect(),
+            max_entries: self.as_ref().map_or(0, |v| v.max_entries),
         }))
     }
 
@@ -53,6 +57,16 @@ impl IssuerStruct {
         };
         Self(Some(context_types::Issuer {
             attributes: edited_attributes.into_iter().map(|a| a.into()).collect(),
+            max_entries: self.as_ref().map_or(0, |v| v.max_entries),
+        }))
+    }
+
+    /// Create a new IssuerStruct with the given max entries and the latest state
+    pub(crate) fn with_max_entries(max: &u8) -> Self {
+        let issuer = Self::from_latest();
+        Self(Some(context_types::Issuer {
+            max_entries: *max,
+            attributes: issuer.as_ref().unwrap().attributes.clone(),
         }))
     }
 }
@@ -60,7 +74,9 @@ impl IssuerStruct {
 impl StructObject for IssuerStruct {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
-            "id" => Some(Value::from(utils::rand_id())),
+            "id" => Some(Value::from(
+                ISSUER_ID.get_or_init(|| utils::rand_id()).to_owned(),
+            )),
             "attributes" => Some(Value::from(self.as_ref().map_or(
                 vec![AttributeStruct::default()],
                 |v| {
@@ -70,16 +86,23 @@ impl StructObject for IssuerStruct {
                         .collect::<Vec<_>>()
                 },
             ))),
+            // the max entries
+            "max_entries" => Some(Value::from(self.as_ref().map_or(0, |v| v.max_entries))),
             // assigns a random id attribute to the button element, upon which we can apply
             // minijinja filters
-            // ise IssuerEventTarget::default() to make a new button .id and .target for us.
+            // set EventTarget makes .id and .target for us.
+            // We pick ATTRIBUTES_HTML because we need to refresh the input screen with a new entry
             "add_attribute_button" => Some(Value::from_struct_object(EventListener::with_target(
-                "index.html".to_owned(),
+                ATTRIBUTES_HTML.to_owned(),
             ))),
+            // we pick output.html because the input screen is not altered
             "input_key" => Some(Value::from_struct_object(EventListener::with_target(
                 "output.html".to_owned(),
             ))),
-
+            // we pick output.html because the input screen is not altered
+            "input_maxentries" => Some(Value::from_struct_object(EventListener::with_target(
+                "output.html".to_owned(),
+            ))),
             _ => None,
         }
     }
@@ -115,6 +138,7 @@ impl From<IssuerStruct> for context_types::Issuer {
                 .into_iter()
                 .map(|a| a.into())
                 .collect(),
+            max_entries: context.as_ref().map_or(0, |v| v.max_entries),
         }
     }
 }

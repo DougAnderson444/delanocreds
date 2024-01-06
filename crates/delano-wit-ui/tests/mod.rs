@@ -215,7 +215,7 @@ mod delano_wit_ui_tests {
 
         let add_attr_context = delano_wit_ui::wurbo_out::Context::Addattribute;
 
-        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+        let _html = bindings.component_delano_wit_ui_wurbo_out().call_render(
             &mut store,
             &add_attr_context,
             "index.html",

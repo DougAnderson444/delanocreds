@@ -1,0 +1,22 @@
+<!-- a range slider from 0 to 12 to show how many entries Delegatees can add to this -->
+<div class="m-2 p-2" id="{{app.maxentries_id}}">
+  <label class="block text-sm font-medium text-gray-700">
+    Limit the number of additional entries delegatees can add to this
+    credential.
+  </label>
+  <div class="flex mt-1">
+    <span class="text-gray-600 mr-2 grow-0">0</span>
+    <input
+      type="range"
+      min="0"
+      max="12"
+      step="1"
+      class="w-full"
+      value="0"
+      id="{{issuer.input_maxentries.id|on('input')}}"
+      data-context-name="editissuermaxentries"
+      data-context-target="{{ issuer.input_maxentries.target }}"
+    />
+    <span class="text-gray-600 ml-2 grow-0">12</span>
+  </div>
+</div>

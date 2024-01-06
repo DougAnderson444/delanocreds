@@ -1,5 +1,5 @@
 <div id="{{output.id}}" class="m-4">
-  <ul class="border border-green-500 rounded">
+  <ul class="border border-green-500 rounded m-2 w-full">
     {% for attr in issuer.attributes %}
     <div class="flex flex-row w-full items-center">
       <div class="flex-1 p-2">{{attr.key}}</div>
@@ -8,4 +8,11 @@
     </div>
     {% endfor %}
   </ul>
+  <!-- Show max entries -->
+  <div
+    class="flex flex-row m-2 w-full items-center border border-green-500 rounded"
+  >
+    <div class="flex-1 p-2">Max Additional Entries</div>
+    <div class="flex-1 p-2">{{issuer.max_entries}}</div>
+  </div>
 </div>

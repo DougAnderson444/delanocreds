@@ -21,15 +21,20 @@ use std::ops::Deref;
 
 struct Component;
 
+const ATTRIBUTES_HTML: &str = "attributes.html";
+
 /// We need to provide the templates for the macro to pull in
 fn get_templates() -> Templates {
     Templates::new(
         Index::new("index.html", include_str!("templates/index.html")),
         Entry::new("output.html", include_str!("templates/output.html")),
-        Rest::new(vec![Entry::new(
-            "input.html",
-            include_str!("templates/input.html"),
-        )]),
+        Rest::new(vec![
+            Entry::new("input.html", include_str!("templates/input.html")),
+            // "attributes.html"
+            Entry::new(ATTRIBUTES_HTML, include_str!("templates/attributes.html")),
+            // "maxentries.html"
+            Entry::new("maxentries.html", include_str!("templates/maxentries.html")),
+        ]),
     )
 }
 
@@ -75,6 +80,9 @@ impl From<&context_types::Context> for StructContext {
             context_types::Context::Editissuerinput(kvctx) => StructContext::from(
                 StructContext::from(IssuerStruct::from_latest().edit_attribute(kvctx)),
             ),
+            context_types::Context::Editissuermaxentries(max) => {
+                StructContext::from(StructContext::from(IssuerStruct::with_max_entries(max)))
+            }
         }
     }
 }

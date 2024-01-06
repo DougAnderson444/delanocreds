@@ -11,6 +11,7 @@ interface context-types {
 
   record issuer {
     attributes: list<attribute>,
+    max-entries: u8,
   }
 
   record attribute {
@@ -45,7 +46,8 @@ interface context-types {
     all-content(everything),
     issuing(issuer),
     addattribute,
-    editissuerinput(kvctx)
+    editissuerinput(kvctx),
+    editissuermaxentries(u8)
   }
 }
 
