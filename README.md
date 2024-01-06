@@ -11,14 +11,13 @@ This is a workspace broken down into:
 | [delanocreds](/crates/delanocreds/) | ✅ | The Rust core library for issuing and using anonymous credentials. |
 | [delano-keys](/crates/delano-keys/) |  ✅ | A Rust library for generating, compacting, expanding, and using BLS12-381 verification keys (VKs). |
 | [delano-wallet](/crates/delano-wallet/) |  ✅ | Wallet Component, uses Wasm Interface Types ([WIT](https://component-model.bytecodealliance.org/design/wit.html)) for [Wasm Component](https://github.com/WebAssembly/component-model) use from any [host system](https://github.com/bytecodealliance/wit-bindgen#host-runtimes-for-components) such as Go, JavaScript, Python or Rust.
-| [delano-wit-ui](/crates/delano-wit-ui/) | 🚧 | A Work-In-Progress default implementation of the Delano UI using [`wurbo`](https://github.com/DougAnderson444/wurbo) and [`minijinja`](https://docs.rs/minijinja/latest/minijinja/) HTML Templates. <div>
+| [delano-wit-ui](/crates/delano-wit-ui/) | 🚧 | A Work-In-Progress default implementation of the Delano UI using [`wurbo`](https://github.com/DougAnderson444/wurbo) and [`minijinja`](https://docs.rs/minijinja/latest/minijinja/) HTML Templates.  <table>
 -  🟩🟩⬜ issue
 -  ⬜⬜⬜ offer
 -  ⬜⬜⬜ accept
 -  ⬜⬜⬜ prove
 -  ⬜⬜⬜ verify
-</div> |
-| [examples](examples/) |  🚧 | A simple Rust demo that issues and verifies credentials |
+</table>
 
 ## Run Demo Binary
 
