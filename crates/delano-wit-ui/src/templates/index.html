@@ -24,9 +24,10 @@
             class="p-1 bg-blue-500 text-white font-semibold"
             data-context-target="{{ issuer.input_key.target }}"
           >
-            <option value="=">equals</option>
-            <option value=">">greater than</option>
-            <option value="<">less than</option>
+            <!-- In minijinja, I need to check if attr.op|select("==", "="), then insert the word "selected" if true for >,<, and = -->
+            <option value="=" {% if attr.op|select("==", "=") %}selected{% endif %}>equals</option>
+            <option value=">" {% if attr.op|select("==", ">") %}selected{% endif %}>greater than</option>
+            <option value="<" {% if attr.op|select("==", "<") %}selected{% endif %}>less than</option>            
           </select>
           <input
             class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2"
