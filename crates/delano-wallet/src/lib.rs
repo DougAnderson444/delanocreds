@@ -15,6 +15,7 @@ use delanocreds::{
 };
 use std::sync::Mutex;
 use std::sync::OnceLock;
+use utils::nonce_by_len;
 
 static EXPANDED: OnceLock<Secret<Vec<Scalar>>> = OnceLock::new();
 
@@ -59,42 +60,46 @@ impl Guest for Component {
         Ok(bytes)
     }
 
-    /// Issue a credential
+    /// Issue a credential to a holder's [Nym].
     ///
-    /// `nonce` - If the Nonce is 32 bytes long, it will be directly converted into a Scalar, otherwise it
-    /// will be hashed into 32 byte digest then converted into a Scalar
+    /// ## Verifying the [Nym] using [NymProof] and [Nonce]
+    /// If you are issung an extenal credential, you may wish to validate the holder's nym. In this case,
+    /// pass the optional [Nonce] as a 32 byte Vec<u8>.
+    ///
+    /// If no nonce is passed, this validation step is skipped, for example if you are issuing the root credential
+    /// to yourself.
+    ///
+    /// Note on the Nonce: `nonce` - If the Nonce is 32 bytes long, it will be directly converted into a Scalar, otherwise it
+    /// will be _hashe_ into 32 byte digest then converted into a Scalar.
     ///
     /// # Returns
-    /// CBOR encoded CredentialCompressed bytes.
+    /// [CBORCodec] encoded CredentialCompressed bytes.
     fn issue(
-        nymproof: Vec<u8>,
         attributes: Vec<wallet::types::Attribute>,
         maxentries: u8,
-        nonce: Option<Vec<u8>>,
+        options: Option<wallet::types::IssueOptions>,
     ) -> Result<Vec<u8>, String> {
         let issuer = ISSUER.lock().unwrap();
 
         let entry = Entry::try_from(attributes).map_err(|e| e.to_string())?;
-        let nym_proof = NymProof::from_bytes(&nymproof).map_err(|e| e.to_string())?;
 
-        // if nonce is 32 bytes, convert it directly into a Scalar
-        // otherwise, hash it into a 32 byte digest, then convert it into a Scalar
-        let nonce = utils::maybe_nonce(nonce.as_deref())?;
-
-        // check whether nym_proof.pedersen_open.open_randomness != *nonce
-        if let Some(n) = nonce.as_ref() {
-            if nym_proof.pedersen_open.open_randomness != *n {
-                return Err(
-                    // "Nonce does not match the nonce used to create the NymProof. expected {:?} "
-                    format!(
-                        "Nonce does not match the nonce used to create the NymProof. expected {:?} \
-                        but got {:?}",
-                        n, nym_proof.pedersen_open.open_randomness
-                    ),
-                );
+        let (nym_proof, nonce) = match options {
+            Some(options) => {
+                let nonce = utils::maybe_nonce(options.nonce.as_deref())?;
+                let nym_proof = NymProof::from_bytes(&options.nymproof)
+                    .map_err(|e| format!("Error converting nym proof to bytes: {:?}", e))?;
+                (nym_proof, nonce)
             }
-        }
+            _ => {
+                // use our own nym_proof and nonce
+                let nonce = nonce_by_len(&[42u8; 32]).expect("should be able to create nonce");
+                let nym_proof = NYM.lock().unwrap().nym_proof(&nonce);
+                (nym_proof, Some(nonce))
+            }
+        };
 
+        // Issue Credential will verify that the nonce, if any, matches the one we provided in the
+        // request for nym_proof
         let cred = issuer
             .credential()
             .with_entry(entry)

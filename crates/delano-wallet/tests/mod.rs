@@ -13,6 +13,8 @@ use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
 
+use crate::bindgen::exports::delano::wallet::actions::IssueOptions;
+
 struct MyCtx {
     wasi_ctx: Context,
 }
@@ -114,7 +116,17 @@ fn main() -> wasmtime::Result<(), TestError> {
     // World
 
     // Now let's make some credentials!
-    // First, we issue the Root Cred to our own Nym, so we need to retreive the Nym's public key
+    let doug = Attribute::new("name = DougAnderson444").to_bytes();
+    let attrs = vec![doug.clone()];
+
+    // We should be able to leave Issue Options as None, and we will issue Root to own Nym
+    let max_entries = MaxEntries::default();
+
+    let cred = bindings
+        .delano_wallet_actions()
+        .call_issue(&mut store, &attrs.clone(), max_entries.into(), None)?
+        .map_err(|e| TestError::Stringified(e))?;
+
     let nonce = Nonce::default();
     let nonce_bytes: Vec<u8> = nonce.clone().into();
     let nym_proof_bytes = bindings
@@ -127,20 +139,46 @@ fn main() -> wasmtime::Result<(), TestError> {
     // nym_proof.pedersen_open.open_randomness should equal the nonce value
     assert_eq!(nym_proof.pedersen_open.open_randomness, nonce);
 
-    // convert for the wasm call
-    let doug = Attribute::new("name = DougAnderson444").to_bytes();
-    let attrs = vec![doug.clone()];
+    let cred_native = Credential::from_bytes(&cred)?;
+
+    // The self-issued cred should be provable by our nym's proof
+    let provables = Provables {
+        credential: cred.clone(),
+        entries: vec![vec![doug.clone()]],
+        selected: vec![doug.clone()],
+        nonce: nonce_bytes.clone(),
+    };
+
+    let proof = bindings
+        .delano_wallet_actions()
+        .call_prove(&mut store, &provables)?
+        .map_err(|e| TestError::Stringified(e))?;
+
+    // The self-issued cred should be verifiable againsy our nym's proof
+    let verifiables = Verifiables {
+        proof: proof.clone(),
+        issuer_public: cred_native.issuer_public.to_bytes()?,
+        nonce: Some(nonce_bytes.clone()),
+        attributes: attrs.clone(),
+    };
+    assert!(bindings
+        .delano_wallet_actions()
+        .call_verify(&mut store, &verifiables)?
+        .map_err(|e| TestError::Stringified(e))?);
 
     let max_entries = MaxEntries::default();
 
+    // We can also explicitly issue the Root Cred to our own Nym, using IssueOptions, so we need to retreive the Nym's public key
     let cred = bindings
         .delano_wallet_actions()
         .call_issue(
             &mut store,
-            &nym_proof.to_bytes()?,
             &attrs,
             max_entries.into(),
-            Some(&nonce_bytes),
+            Some(&IssueOptions {
+                nymproof: nym_proof.to_bytes()?,
+                nonce: Some(nonce_bytes),
+            }),
         )?
         .map_err(|e| TestError::Stringified(e))?;
 
