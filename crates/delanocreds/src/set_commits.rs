@@ -3,6 +3,7 @@ use crate::ec::univarpoly::UnivarPolynomial;
 use crate::ec::{G1Projective, G2Projective, Scalar};
 use crate::entry::entry_to_scalar;
 use crate::entry::Entry;
+use crate::error;
 use crate::keypair::MaxCardinality;
 use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
@@ -60,7 +61,7 @@ impl From<ParamSetCommitment> for ParamSetCommitmentCompressed {
 
 /// TryFrom [ParamSetCommitmentCompressed] to [ParamSetCommitment]
 impl std::convert::TryFrom<ParamSetCommitmentCompressed> for ParamSetCommitment {
-    type Error = String;
+    type Error = error::Error;
 
     fn try_from(param_sc: ParamSetCommitmentCompressed) -> Result<Self, Self::Error> {
         let pp_commit_g1 = param_sc
@@ -74,7 +75,8 @@ impl std::convert::TryFrom<ParamSetCommitmentCompressed> for ParamSetCommitment 
                 }
                 Ok(g1_maybe.expect("it'll be fine, it passed the check"))
             })
-            .collect::<Result<Vec<G1Projective>, String>>()?;
+            .collect::<Result<Vec<G1Projective>, String>>()
+            .expect("it'll be fine, it passed the check");
 
         let pp_commit_g2 = param_sc
             .pp_commit_g2
@@ -87,7 +89,8 @@ impl std::convert::TryFrom<ParamSetCommitmentCompressed> for ParamSetCommitment 
                 }
                 Ok(g2_maybe.expect("it'll be fine, it passed the check"))
             })
-            .collect::<Result<Vec<G2Projective>, String>>()?;
+            .collect::<Result<Vec<G2Projective>, String>>()
+            .expect("it'll be fine, it passed the check");
 
         Ok(ParamSetCommitment {
             pp_commit_g1,

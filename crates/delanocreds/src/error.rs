@@ -43,4 +43,8 @@ pub enum Error {
 
     #[error("The given Nonce bytes were not convertable to Scalar")]
     NonceConversionError,
+
+    /// from serde_json::Error
+    #[error("Error converting Credential")]
+    CredentialConversionError(#[from] serde_json::Error),
 }

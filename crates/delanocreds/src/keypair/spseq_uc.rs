@@ -79,7 +79,7 @@ pub struct CredentialCompressed {
 
 /// Try to convert from [CredentialCompressed] to [Credential]
 impl TryFrom<CredentialCompressed> for Credential {
-    type Error = String;
+    type Error = error::Error;
     fn try_from(value: CredentialCompressed) -> std::result::Result<Self, Self::Error> {
         let sigma = Signature::try_from(value.sigma)?;
         let update_key = match value.update_key {
@@ -219,13 +219,13 @@ impl Display for Credential {
     }
 }
 
-/// Takes compressed elements and deserializes json string to [Credential]
+/// Try to take compressed elements and deserializes json string to [Credential]
 #[cfg(feature = "serde_json")]
-impl FromStr for Credential {
-    type Err = String;
+impl TryFrom<String> for Credential {
+    type Error = error::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let cred_compressed: CredentialCompressed = serde_json::from_str(s).unwrap();
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        let cred_compressed: CredentialCompressed = serde_json::from_str(&s)?;
         cred_compressed.try_into()
     }
 }

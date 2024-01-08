@@ -221,7 +221,7 @@ impl From<&IssuerPublic> for IssuerPublicCompressed {
 
 /// TryFrom [IssuerPublicCompressed] to [IssuerPublic]
 impl TryFrom<IssuerPublicCompressed> for IssuerPublic {
-    type Error = String;
+    type Error = error::Error;
 
     fn try_from(item: IssuerPublicCompressed) -> Result<Self, Self::Error> {
         let vk = item
@@ -251,7 +251,8 @@ impl TryFrom<IssuerPublicCompressed> for IssuerPublic {
                     ))
                 }
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .expect("G1 and G2 to be fine if they passed the checks");
 
         Ok(Self {
             parameters: item.parameters.try_into()?,
@@ -942,10 +943,10 @@ impl Display for Signature {
 
 /// Uses [SignatureCompressed] to deserialize json string to [Signature]
 impl FromStr for Signature {
-    type Err = String;
+    type Err = error::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let sig_compressed: SignatureCompressed = serde_json::from_str(s).unwrap();
+        let sig_compressed: SignatureCompressed = serde_json::from_str(s)?;
         Signature::try_from(sig_compressed)
     }
 }
@@ -978,7 +979,7 @@ impl From<Signature> for SignatureCompressed {
 
 /// Impl TryFrom for SignatureCompressed to Signature
 impl TryFrom<SignatureCompressed> for Signature {
-    type Error = String;
+    type Error = error::Error;
 
     fn try_from(sig: SignatureCompressed) -> Result<Self, Self::Error> {
         let z = G1Projective::from_bytes(&sig.z);
@@ -991,7 +992,7 @@ impl TryFrom<SignatureCompressed> for Signature {
             || y_hat.is_none().into()
             || t.is_none().into()
         {
-            return Err("Invalid serialization bytes".into());
+            return Err(error::Error::InvalidSignature("Invalid Signature".into()));
         }
 
         Ok(Signature {
