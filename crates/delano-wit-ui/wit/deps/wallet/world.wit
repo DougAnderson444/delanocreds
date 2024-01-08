@@ -20,6 +20,13 @@ interface types {
     attributes: list<attribute>
   }
 
+  /// Issuer config: Default config creates (issues) a credential to yourself.
+  /// Provide a config to offer it to someone else's nym, and optionally verify it with a nonce.
+  record issue-options {
+    nymproof: list<u8>,
+    nonce: option<list<u8>>
+  }
+
   /// Configuration of an Offer. Can set 3 things: 
   /// 1) without-attribute: an optional redactable record of attributes to redact,
   /// 2) additional-entry: an optional single additional entry, 
@@ -45,13 +52,14 @@ interface seed-keeper {
 }
 
 interface actions {
-    use types.{attribute, provables, verifiables, offer-config, nonce};
+    use types.{attribute, provables, verifiables, offer-config, issue-options, nonce};
 
     /// Returns the active Nym of the component.
     get-nym-proof: func(nonce: nonce) -> result<list<u8>, string>;
 
     /// Issue a credential Entry to a Nym with maximum entries.
-    issue: func(nymproof: list<u8>, attributes: list<attribute>, maxentries: u8, nonce: option<list<u8>>) -> result<list<u8>, string>;
+    /// By default issues a credential to your own Nym. To issue to others, set the options to their nymproof and optionally the nonce you gave them.
+    issue: func(attributes: list<attribute>, maxentries: u8, options: option<issue-options>) -> result<list<u8>, string>;
 
     /// Create an offer for a credential with its given entries and a given configuration.
     offer: func(cred: list<u8>, config: offer-config) -> result<list<u8>, string>;
@@ -74,4 +82,3 @@ world delanocreds {
   export actions;
     
 }
-

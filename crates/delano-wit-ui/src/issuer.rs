@@ -19,12 +19,7 @@ impl IssuerStruct {
 
     /// Extends the Vector of attributes by 1.
     pub(crate) fn push_attribute(&mut self) -> Self {
-        let mut attributes = self.as_ref().map_or(vec![AttributeStruct::default()], |v| {
-            v.attributes
-                .iter()
-                .map(|a| AttributeStruct::from(a.clone()))
-                .collect::<Vec<_>>()
-        });
+        let mut attributes = self.get_attributes();
         attributes.push(AttributeStruct::default());
         Self(Some(context_types::Issuer {
             attributes: attributes.into_iter().map(|a| a.into()).collect(),
@@ -35,12 +30,7 @@ impl IssuerStruct {
     /// Use the given context to extract the variant (key, op, or value) and the index
     /// of the attribute to update.
     pub(crate) fn edit_attribute(&self, kvctx: &context_types::Kvctx) -> Self {
-        let mut attributes = self.as_ref().map_or(vec![AttributeStruct::default()], |v| {
-            v.attributes
-                .iter()
-                .map(|a| AttributeStruct::from(a.clone()))
-                .collect::<Vec<_>>()
-        });
+        let mut attributes = self.get_attributes();
         let edited_attributes = match kvctx.ctx {
             context_types::Kovindex::Key(i) => {
                 attributes[i as usize].key = kvctx.value.clone();
@@ -69,6 +59,16 @@ impl IssuerStruct {
             attributes: issuer.as_ref().unwrap().attributes.clone(),
         }))
     }
+
+    /// Utility func to get attributes
+    fn get_attributes(&self) -> Vec<AttributeStruct> {
+        self.as_ref().map_or(vec![AttributeStruct::default()], |v| {
+            v.attributes
+                .iter()
+                .map(|a| AttributeStruct::from(a.clone()))
+                .collect::<Vec<_>>()
+        })
+    }
 }
 
 impl StructObject for IssuerStruct {
@@ -77,16 +77,7 @@ impl StructObject for IssuerStruct {
             "id" => Some(Value::from(
                 ISSUER_ID.get_or_init(|| utils::rand_id()).to_owned(),
             )),
-            "attributes" => Some(Value::from(self.as_ref().map_or(
-                vec![AttributeStruct::default()],
-                |v| {
-                    v.attributes
-                        .iter()
-                        .map(|a| AttributeStruct::from(a.clone()))
-                        .collect::<Vec<_>>()
-                },
-            ))),
-            // the max entries
+            "attributes" => Some(Value::from(self.get_attributes())),
             "max_entries" => Some(Value::from(self.as_ref().map_or(0, |v| v.max_entries))),
             // assigns a random id attribute to the button element, upon which we can apply
             // minijinja filters
@@ -103,6 +94,29 @@ impl StructObject for IssuerStruct {
             "input_maxentries" => Some(Value::from_struct_object(EventListener::with_target(
                 "output.html".to_owned(),
             ))),
+            "credential" => {
+                // convert self.attributes into a Vec<Vec<u8>> and use wallet::delano::issue to calculate the cred
+                let attr_vec = self.as_ref().map_or(vec![], |v| {
+                    v.attributes
+                        .iter()
+                        .map(|a| a.value.as_bytes().to_vec())
+                        .collect::<Vec<_>>()
+                });
+                let max_entries = self.as_ref().map_or(0, |v| v.max_entries);
+
+                match wallet::actions::issue(&attr_vec, max_entries, None) {
+                    Ok(cred) => {
+                        // convert it to hex first
+                        let literal = format!("{:X?}", cred);
+                        let literal = literal.replace("[", "").replace("]", "").replace(", ", "");
+                        Some(Value::from(cred))
+                    }
+                    Err(_e) => {
+                        // log::error!("Error issuing credential: {:?}", e);
+                        None
+                    }
+                }
+            }
             _ => None,
         }
     }
@@ -128,13 +142,7 @@ impl From<IssuerStruct> for context_types::Issuer {
     fn from(context: IssuerStruct) -> Self {
         context_types::Issuer {
             attributes: context
-                .as_ref()
-                .map_or(vec![AttributeStruct::default()], |v| {
-                    v.attributes
-                        .iter()
-                        .map(|a| AttributeStruct::from(a.clone()))
-                        .collect::<Vec<_>>()
-                })
+                .get_attributes()
                 .into_iter()
                 .map(|a| a.into())
                 .collect(),

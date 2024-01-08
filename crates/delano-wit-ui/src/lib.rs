@@ -15,6 +15,7 @@ use wurbo::prelude_bindgen;
 
 use bindings::component::delano_wit_ui::context_types::{self, Context};
 use bindings::component::delano_wit_ui::wurbo_in;
+use bindings::delano::wallet;
 use bindings::exports::component::delano_wit_ui::wurbo_out::Guest as WurboGuest;
 
 use std::ops::Deref;
@@ -98,9 +99,9 @@ impl From<context_types::Everything> for StructContext {
 }
 
 impl From<IssuerStruct> for StructContext {
-    fn from(context: IssuerStruct) -> Self {
+    fn from(issuer_ctx: IssuerStruct) -> Self {
         let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        state.issuer = context.clone();
+        state.issuer = issuer_ctx.clone();
         state
     }
 }

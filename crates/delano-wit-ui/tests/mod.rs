@@ -1,3 +1,8 @@
+//! Modification note:
+//!
+//! This moudle is dependent on wasmtime, which takes it's dependencies from the ./wit/deps/ folder
+//! If you change the dependencies, ensure you also copy the wit into the ./wit/deps/ folder
+//!
 mod bindgen {
     // name of the world in the .wit file
     wasmtime::component::bindgen!("delanocreds-wit-ui");
@@ -54,12 +59,11 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
     /// Issue a credential Entry to a Nym with maximum entries.
     fn issue(
         &mut self,
-        _nymproof: Vec<u8>,
         _attributes: Vec<bindgen::delano::wallet::types::Attribute>,
         _maxentries: u8,
-        _nonce: Option<Vec<u8>>,
+        _options: Option<bindgen::delano::wallet::types::IssueOptions>,
     ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        Ok(Ok(vec![69u8; 32]))
+        Ok(Ok(vec![105u8; 32]))
     }
 
     /// Create an offer for a credential with its given entries and a given configuration.

@@ -6,9 +6,13 @@ Don't like the look of it? You will be able to fork the HTML templates and modif
 
 # Usage
 
-This crate is just the User Interface to interact with the [`delano-wit`](../delano-wit/) Application Binary Interface (ABI) and display the resulting data.
+This crate is just the User Interface to interact with the [`delano-wallet`](../delano-wallet/) Application Binary Interface (ABI) and display the resulting data.
 
-To use this crate, you will need to provide [`delano-wit`](../delano-wit/) (or your fork of it) as an import dependency when using `wasm-tools` to compose your app together.
+To use this crate, you will need to provide [`delano-wit`](../delano-wit/) (or your fork of it) as an import dependency when using `wasm-tools` to compose your app together like this:
+
+```bash
+wasm-tools compose ...
+```
 
 A reference composed app is available here.
 
