@@ -105,12 +105,7 @@ impl StructObject for IssuerStruct {
                 let max_entries = self.as_ref().map_or(0, |v| v.max_entries);
 
                 match wallet::actions::issue(&attr_vec, max_entries, None) {
-                    Ok(cred) => {
-                        // convert it to hex first
-                        let literal = format!("{:X?}", cred);
-                        let literal = literal.replace("[", "").replace("]", "").replace(", ", "");
-                        Some(Value::from(cred))
-                    }
+                    Ok(cred) => Some(Value::from(cred)),
                     Err(_e) => {
                         // log::error!("Error issuing credential: {:?}", e);
                         None
