@@ -13,10 +13,10 @@ use page::StructPage;
 use wurbo::jinja::{Entry, Index, Rest, Templates};
 use wurbo::prelude_bindgen;
 
-use bindings::component::delano_wit_ui::context_types::{self, Context};
-use bindings::component::delano_wit_ui::wurbo_in;
 use bindings::delano::wallet;
-use bindings::exports::component::delano_wit_ui::wurbo_out::Guest as WurboGuest;
+use bindings::delano::wit_ui::context_types::{self, Context};
+use bindings::delano::wit_ui::wurbo_in;
+use bindings::exports::delano::wit_ui::wurbo_out::Guest as WurboGuest;
 
 use std::ops::Deref;
 

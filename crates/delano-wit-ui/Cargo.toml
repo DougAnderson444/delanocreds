@@ -18,7 +18,7 @@ thiserror = "1.0"
 crate-type = ["cdylib"]
 
 [package.metadata.component]
-package = "component:delano-wit-ui"
+package = "delano:wit-ui"
 
 [package.metadata.component.dependencies]
 

@@ -31,7 +31,7 @@
 
 		// define the import handles you are giving to your component
 		let all_importables = [
-			{ 'component:delano-wit-ui/wurbo-in': importables.buildCodeString(listener.namespace) },
+			{ 'delano:wit-ui/wurbo-in': importables.buildCodeString(listener.namespace) },
 			{
 				'delano:wallet/actions@0.1.0': importables.buildWalletActions()
 			}

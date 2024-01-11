@@ -1,4 +1,4 @@
-package component:delano-wit-ui;
+package delano:wit-ui;
 
 interface context-types {
 

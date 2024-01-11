@@ -8,8 +8,8 @@ mod bindgen {
     wasmtime::component::bindgen!("delanocreds-wit-ui");
 }
 
-use bindgen::component::delano_wit_ui::context_types;
-use bindgen::exports::component::delano_wit_ui;
+use bindgen::delano::wit_ui::context_types;
+use bindgen::exports::delano::wit_ui;
 
 use std::{
     env,
@@ -43,8 +43,8 @@ impl WasiView for MyCtx {
     }
 }
 
-impl bindgen::component::delano_wit_ui::context_types::Host for MyCtx {}
-impl bindgen::component::delano_wit_ui::wurbo_types::Host for MyCtx {}
+impl bindgen::delano::wit_ui::context_types::Host for MyCtx {}
+impl bindgen::delano::wit_ui::wurbo_types::Host for MyCtx {}
 impl bindgen::delano::wallet::types::Host for MyCtx {}
 impl bindgen::delano::wallet::actions::Host for MyCtx {
     // Strub the following functions with noop
@@ -97,10 +97,10 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
     }
 }
 
-impl bindgen::component::delano_wit_ui::wurbo_in::Host for MyCtx {
+impl bindgen::delano::wit_ui::wurbo_in::Host for MyCtx {
     fn addeventlistener(
         &mut self,
-        _details: bindgen::component::delano_wit_ui::wurbo_in::ListenDetails,
+        _details: bindgen::delano::wit_ui::wurbo_in::ListenDetails,
     ) -> wasmtime::Result<()> {
         Ok(())
     }
@@ -147,7 +147,7 @@ pub fn workspace_dir() -> PathBuf {
 #[cfg(test)]
 mod delano_wit_ui_tests {
 
-    use crate::bindgen::component::delano_wit_ui::context_types::Page;
+    use crate::bindgen::delano::wit_ui::context_types::Page;
 
     use super::*;
 
@@ -197,7 +197,7 @@ mod delano_wit_ui_tests {
         // Start with an initial context. We should be able to pass this to render and have it
         // return our HTML.
         let name = "Delano Wallet App".to_string();
-        let context = delano_wit_ui::wurbo_out::Context::AllContent(context_types::Everything {
+        let context = wit_ui::wurbo_out::Context::AllContent(context_types::Everything {
             page: Some(Page {
                 name: name.clone(),
                 version: "0.0.1".to_string(),
@@ -206,7 +206,7 @@ mod delano_wit_ui_tests {
             issue: None,
         });
 
-        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+        let html = bindings.delano_wit_ui_wurbo_out().call_render(
             &mut store,
             &context,
             "index.html",
@@ -217,15 +217,15 @@ mod delano_wit_ui_tests {
         // Now if we render using a context that is Addatribute, the resulting HTML should have a
         // second <li> block with another default attribute in it.
 
-        let add_attr_context = delano_wit_ui::wurbo_out::Context::Addattribute;
+        let add_attr_context = wit_ui::wurbo_out::Context::Addattribute;
 
-        let _html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+        let _html = bindings.delano_wit_ui_wurbo_out().call_render(
             &mut store,
             &add_attr_context,
             "index.html",
         )??;
 
-        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+        let html = bindings.delano_wit_ui_wurbo_out().call_render(
             &mut store,
             &add_attr_context,
             "index.html",
@@ -237,14 +237,14 @@ mod delano_wit_ui_tests {
         // We should be able to edit issuer input by passing in a context that is Editissuerinput
         let edited_value = "Edited Delano Key".to_string();
         let edit_issuer_input_ctx =
-            delano_wit_ui::wurbo_out::Context::Editissuerinput(context_types::Kvctx {
+            wit_ui::wurbo_out::Context::Editissuerinput(context_types::Kvctx {
                 ctx: context_types::Kovindex::Key(0),
                 value: edited_value.clone(),
             });
 
         // render with this edited ctx,
         // use output.html as the target as we just want to update the shadow state (& display it)
-        let html = bindings.component_delano_wit_ui_wurbo_out().call_render(
+        let html = bindings.delano_wit_ui_wurbo_out().call_render(
             &mut store,
             &edit_issuer_input_ctx,
             "output.html",
