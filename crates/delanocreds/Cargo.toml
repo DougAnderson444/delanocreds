@@ -25,7 +25,7 @@ ciborium = "0.2.1"
 
 # optional dependencies, enabled by default (see features below)
 serde = { version = "1.0", optional = true, features = ["derive"] }
-serde_json ={ version = "1.0.107", optional = true }
+serde_json = { version = "1.0.107", optional = true }
 serde_with = { version = "3.3.0", optional = true, features = ["base64"] }
 
 [dev-dependencies]
