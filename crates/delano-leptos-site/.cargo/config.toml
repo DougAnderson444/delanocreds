@@ -1,5 +1,5 @@
-# [env]
-# BASE_PATH = "/delanocreds/" # Github pages base path, this does nothing -- needs to be in root folder of workspace
+[env]
+BASE_PATH = "/delanocreds/" # Github pages base path, this does nothing -- needs to be in root folder of workspace
 
 [build]
 target = "wasm32-unknown-unknown"
