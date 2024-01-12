@@ -1,12 +1,8 @@
-name: Build Rust & Deploy Leptos Page
+name: Build Rust
 
 on:
   push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "!*-rc[0-9]+"
-  # push:
-  #   branches: ["master"]
+    branches: ["master"]
   # pull_request:
   #   branches: ["master"]
   workflow_dispatch:
@@ -54,32 +50,3 @@ jobs:
 
       - name: Run workspace tests
         run: cargo test --workspace --verbose
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
-
-      # Build with trunk-rs
-      - name: Install Trunk
-        run: echo yes | cargo binstall trunk@0.17.5
-
-      - name: Build and Deploy Leptos Directory
-        run: cd crates/ && cd delano-leptos-site/ && trunk build --release --all-features
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
-        with:
-          source: ./crates/delano-leptos-site/dist
-          destination: ./_site
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
-
-  # Deployment job
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v2
