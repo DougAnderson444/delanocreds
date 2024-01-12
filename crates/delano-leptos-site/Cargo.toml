@@ -1,3 +1,6 @@
+[workspace]
+# deprecated crate, exclude from top workspace
+
 [package]
 description = "Delanocreds: Delegated Anonymous Credentials"
 edition = "2021"
