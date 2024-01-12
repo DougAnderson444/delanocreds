@@ -24,3 +24,4 @@ package = "delano:wit-ui"
 
 [package.metadata.component.target.dependencies]
 "delano:wallet" = { path = "../delano-wallet/wit" }
+"seed-keeper:wallet" = { path = "../delano-wallet/wit/deps/seed-keeper-wallet" }

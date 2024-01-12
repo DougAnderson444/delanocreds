@@ -24,3 +24,6 @@ crate-type = ["cdylib"]
 package = "delano:wallet"
 
 [package.metadata.component.dependencies]
+
+[package.metadata.component.target.dependencies]
+"seed-keeper:wallet" = { path = "wit/deps/seed-keeper-wallet" }

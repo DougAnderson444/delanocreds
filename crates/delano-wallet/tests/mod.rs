@@ -38,10 +38,10 @@ impl WasiView for MyCtx {
     }
 }
 
-impl bindgen::delano::wallet::seed_keeper::Host for MyCtx {
+impl bindgen::seed_keeper::wallet::config::Host for MyCtx {
     /// Stub a seed gen fn
-    fn get_seed(&mut self) -> Result<Vec<u8>, wasmtime::Error> {
-        Ok(vec![69u8; 32])
+    fn get_seed(&mut self) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        Ok(Ok(vec![69u8; 32]))
     }
 }
 

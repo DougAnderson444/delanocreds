@@ -3,9 +3,9 @@ cargo_component_bindings::generate!();
 mod utils;
 
 use bindings::delano::wallet;
-use bindings::delano::wallet::seed_keeper::get_seed;
 use bindings::delano::wallet::types::{Attribute, OfferConfig, Provables};
 use bindings::exports::delano::wallet::actions::Guest;
+use bindings::seed_keeper::wallet::config::get_seed;
 
 use delano_keys::kdf::Scalar;
 use delano_keys::kdf::{ExposeSecret, Manager, Zeroizing};
@@ -20,7 +20,13 @@ use utils::nonce_by_len;
 static EXPANDED: OnceLock<Secret<Vec<Scalar>>> = OnceLock::new();
 
 fn get_expanded() -> Secret<Vec<Scalar>> {
-    let seed = get_seed();
+    // TODO: Is there a better way to handle this lack of get_seed?
+    let seed = get_seed().unwrap_or_else(|e| {
+        panic!(
+            "Error getting seed from seed_keeper: {:?}. Please ensure seed_keeper is configured and running",
+            e
+        )
+    });
     // derive secret key fromseed using delano_keys
     let seed = Zeroizing::new(seed);
     let manager: Manager = Manager::from_seed(seed);

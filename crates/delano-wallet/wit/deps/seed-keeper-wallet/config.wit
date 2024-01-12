@@ -1,0 +1,13 @@
+// The only function used from this interface is get-seed, which returns the
+// plaintext seed. This is used by the wallet to generate the secret.
+// We only needs this file here for the ./tests/mod.rs tests to compile.
+// Normallly we would submodule and symlink this, but it seems overkill for
+// this one function interface.
+
+package seed-keeper:wallet@0.1.0;
+
+interface config {
+
+    /// Get the plaintext seed
+    get-seed: func() -> result<list<u8>, string>;
+}

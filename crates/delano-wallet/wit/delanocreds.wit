@@ -46,11 +46,6 @@ interface types {
   } 
 }
 
-interface seed-keeper {
-    /// Use a get-seed function from a seed-keeper component.
-    get-seed: func() -> list<u8>;
-}
-
 interface actions {
     use types.{attribute, provables, verifiables, offer-config, issue-options, nonce};
 
@@ -78,7 +73,9 @@ interface actions {
 /// A Delanocreds world for the component to target.
 world delanocreds {
 
-  import seed-keeper;
+  /// Import the seed-keeper wallet config, so we can call get-seed()
+  import seed-keeper:wallet/config@0.1.0;
+
   export actions;
     
 }
