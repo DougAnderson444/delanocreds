@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 cargo-component-bindings = "0.6.0"
-wurbo = { version = "0.1.4" }
+wurbo = { version = "0.1.6" }
 
 [dev-dependencies]
 wasmtime = { version = "16", features = ['component-model'] }
