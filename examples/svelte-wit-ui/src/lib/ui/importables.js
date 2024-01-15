@@ -24,11 +24,19 @@ export function buildCodeString(namespace) {
             return
           }
 
+          console.log('ctx', ctx);
+
           let rendered = window.${namespace}.render(ctx, e.target.dataset.contextTarget); 
 
           bc.postMessage(rendered);
         });
-      }`;
+      }
+
+      // Enables the guest components to emit a broadcast message to all peers on the same domain origin browsing context
+      export function emit(message) {
+        bc.postMessage(message);
+      }
+`;
 }
 
 export function buildWalletActions() {
