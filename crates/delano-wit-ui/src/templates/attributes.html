@@ -8,18 +8,16 @@
           <input
             class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2"
             type="text"
-            id="{{ issuer.input_key.id|on('keyup') }}"
+            id="{{ issuer.input_key|on('keyup') }}"
             data-context-name="editissuerinput"
-            data-context-value='{ "tag": "key", "val": {{loop.index0}} }'
+            data-context-value='{ "ctx": { "tag": "key", "val": {{loop.index0}} } }'
             value="{{attr.key}}"
-            data-context-target="{{ issuer.input_key.target }}"
           />
           <select
-            id="{{ issuer.input_key.id|on('change') }}"
+            id="{{ issuer.input_key|on('change') }}"
             data-context-name="editissuerinput"
-            data-context-value='{ "tag": "op", "val": {{loop.index0}} }'
+            data-context-value='{ "ctx": { "tag": "op", "val": {{loop.index0}} } }'
             class="p-1 bg-blue-500 text-white font-semibold"
-            data-context-target="{{ issuer.input_key.target }}"
           >
             <!-- In minijinja, I need to check if attr.op|select("==", "="), then insert the word "selected" if true for >,<, and = -->
             <option value="=" {% if attr.op|select("==", "=") %}selected{% endif %}>equals</option>
@@ -29,17 +27,15 @@
           <input
             class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2"
             type="text"
-            id="{{ issuer.input_key.id|on('keyup') }}"
+            id="{{ issuer.input_key|on('keyup') }}"
             data-context-name="editissuerinput"
-            data-context-value='{ "tag": "value", "val": {{loop.index0}} }'
+            data-context-value='{ "ctx": { "tag": "value", "val": {{loop.index0}} } }'
             value="{{attr.value}}"
-            data-context-target="{{ issuer.input_key.target }}"
           />
           <div class="flex-grow-0 mx-2">
             <button
               class="bg-red-500 hover:bg-red-700 text-xl text-white font-bold py-2 px-4 m-1 rounded shadow"
               type="button"
-              name="button"
               data-context="removeattribute"
             >
               x
@@ -50,13 +46,10 @@
       {% endfor %}
       <!-- the context must match the context variant in the WIT world, this is how it gets routed to the renderer -->
       <button
-        id="{{ issuer.add_attribute_button.id|on('click') }}"
+        id="{{ issuer.add_attribute_button|on('click') }}"
         class="border-4 border-dashed w-full hover:bg-blue-500 hover:text-white hover:border-neutral-50 font-bold py-2 px-4 rounded text-xl"
         type="button"
-        name="addattribute"
         data-context-name="addattribute"
-        data-context-value=""
-        data-context-target="{{ issuer.add_attribute_button.target }}"
       >
         +
       </button>

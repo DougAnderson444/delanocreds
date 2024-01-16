@@ -11,10 +11,9 @@
       max="12"
       step="1"
       class="w-full"
-      value="0"
-      id="{{issuer.input_maxentries.id|on('input')}}"
+      value="{{issuer.max_entries}}"
+      id="{{issuer.input_maxentries|on('change')}}"
       data-context-name="editissuermaxentries"
-      data-context-target="{{ issuer.input_maxentries.target }}"
     />
     <span class="text-gray-600 ml-2 grow-0">12</span>
   </div>

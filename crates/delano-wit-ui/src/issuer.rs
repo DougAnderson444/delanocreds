@@ -81,19 +81,9 @@ impl StructObject for IssuerStruct {
             "max_entries" => Some(Value::from(self.as_ref().map_or(0, |v| v.max_entries))),
             // assigns a random id attribute to the button element, upon which we can apply
             // minijinja filters
-            // set EventTarget makes .id and .target for us.
-            // We pick ATTRIBUTES_HTML because we need to refresh the input screen with a new entry
-            "add_attribute_button" => Some(Value::from_struct_object(EventListener::with_target(
-                ATTRIBUTES_HTML.to_owned(),
-            ))),
-            // we pick output.html because the input screen is not altered
-            "input_key" => Some(Value::from_struct_object(EventListener::with_target(
-                "output.html".to_owned(),
-            ))),
-            // we pick output.html because the input screen is not altered
-            "input_maxentries" => Some(Value::from_struct_object(EventListener::with_target(
-                "output.html".to_owned(),
-            ))),
+            "add_attribute_button" => Some(Value::from(utils::rand_id())),
+            "input_key" => Some(Value::from(utils::rand_id())),
+            "input_maxentries" => Some(Value::from(utils::rand_id())),
             "credential" => {
                 // convert self.attributes into a Vec<Vec<u8>> and use wallet::delano::issue to calculate the cred
                 let attr_vec = self.as_ref().map_or(vec![], |v| {
@@ -151,44 +141,6 @@ impl Deref for IssuerStruct {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-/// Use this to create id and target fields for our event targets.
-#[derive(Debug, Clone)]
-struct EventListener {
-    id: String,
-    target: String,
-}
-
-impl Default for EventListener {
-    fn default() -> Self {
-        Self::with_target("index.html".to_string())
-    }
-}
-
-impl EventListener {
-    /// Create a new IssuerEventTarget with a random id and target
-    pub(crate) fn with_target(target: String) -> Self {
-        Self {
-            id: utils::rand_id(),
-            target,
-        }
-    }
-}
-
-impl StructObject for EventListener {
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
-            "id" => Some(Value::from(self.id.to_owned())),
-            "target" => Some(Value::from_safe_string(self.target.to_owned())),
-            _ => None,
-        }
-    }
-
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["id", "target"])
     }
 }
 
