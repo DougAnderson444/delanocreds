@@ -206,11 +206,9 @@ mod delano_wit_ui_tests {
             issue: None,
         });
 
-        let html = bindings.delano_wit_ui_wurbo_out().call_render(
-            &mut store,
-            &context,
-            "index.html",
-        )??;
+        let html = bindings
+            .delano_wit_ui_wurbo_out()
+            .call_render(&mut store, &context)??;
 
         assert!(html.contains(&name));
 
@@ -219,17 +217,13 @@ mod delano_wit_ui_tests {
 
         let add_attr_context = wit_ui::wurbo_out::Context::Addattribute;
 
-        let _html = bindings.delano_wit_ui_wurbo_out().call_render(
-            &mut store,
-            &add_attr_context,
-            "index.html",
-        )??;
+        let _html = bindings
+            .delano_wit_ui_wurbo_out()
+            .call_render(&mut store, &add_attr_context)??;
 
-        let html = bindings.delano_wit_ui_wurbo_out().call_render(
-            &mut store,
-            &add_attr_context,
-            "index.html",
-        )??;
+        let html = bindings
+            .delano_wit_ui_wurbo_out()
+            .call_render(&mut store, &add_attr_context)??;
 
         // the count of <select should be 2
         assert_eq!(html.matches("<select").count(), 3);
@@ -244,11 +238,9 @@ mod delano_wit_ui_tests {
 
         // render with this edited ctx,
         // use output.html as the target as we just want to update the shadow state (& display it)
-        let html = bindings.delano_wit_ui_wurbo_out().call_render(
-            &mut store,
-            &edit_issuer_input_ctx,
-            "output.html",
-        )??;
+        let html = bindings
+            .delano_wit_ui_wurbo_out()
+            .call_render(&mut store, &edit_issuer_input_ctx)??;
 
         eprintln!("{}", html);
 
