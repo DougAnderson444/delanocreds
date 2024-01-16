@@ -4,3 +4,4 @@ crates/delano-leptos-site/dist/
 # anything in the todo directory 
 /todo
 crates/delano-leptos-site/style/output.css
+crates/delano-wit-ui/style/output.css
