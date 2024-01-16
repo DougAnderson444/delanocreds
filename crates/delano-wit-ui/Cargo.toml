@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 cargo-component-bindings = "0.6.0"
-wurbo = { version = "0.1.6" }
+wurbo = { version = "0.1.7" }
 
 [dev-dependencies]
 wasmtime = { version = "16", features = ['component-model'] }
@@ -22,6 +22,7 @@ package = "delano:wit-ui"
 
 [package.metadata.component.dependencies]
 
+# wasmtime needs these deps linked here to compile ./tests/mod.rs
 [package.metadata.component.target.dependencies]
 "delano:wallet" = { path = "../delano-wallet/wit" }
 "seed-keeper:wallet" = { path = "../delano-wallet/wit/deps/seed-keeper-wallet" }
