@@ -4,14 +4,26 @@ export function buildCodeString(namespace) {
       export function addeventlistener({ selector, ty }) {
         document.querySelector(selector).addEventListener(ty, (e) => {
 
-          // if both exist, combine them into a single val. Otherwise, use the one that exists.
-          // This is the only way we can provide both sets in the context.
+          let val = e.target.value;
 
-          let val = (e.target.dataset.contextValue && e.target.value)
-             ? { ctx: JSON.parse(e.target.dataset.contextValue), value: e.target.value }
-             : e.target.dataset.contextValue || e.target.value;
-          
-          let ctx = { tag: e.target.dataset.contextName || e.target.name, val };
+          // detect if form event
+          if(e.target.closest('form')) {
+            e.preventDefault();
+          }
+
+          let tag  = e.target.dataset.contextName || e.target.name;
+
+          try {
+            val = Object.assign({}, 
+                    typeof JSON.parse(e.target.dataset.contextValue) === 'object' 
+                    ? JSON.parse(e.target.dataset.contextValue) 
+                    : {}, 
+                    { value: e.target.value });
+          } catch(e) {
+            console.warn('Could not parse contextValue');
+          }
+
+          let ctx = { tag, val };
 
           let el = e.target.closest('[data-slot]');
           if(el) {
@@ -19,14 +31,7 @@ export function buildCodeString(namespace) {
             el = el.closest('[data-slot]');
           }
 
-          if(!e.target.dataset.contextTarget) {
-            console.warn("No contextTarget found on event target. Did you set data-context-target='output.html'?");
-            return
-          }
-
-          console.log('ctx', ctx);
-
-          let rendered = window.${namespace}.render(ctx, e.target.dataset.contextTarget); 
+          let rendered = window.${namespace}.render(ctx); 
 
           bc.postMessage(rendered);
         });
