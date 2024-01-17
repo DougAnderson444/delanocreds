@@ -51,7 +51,7 @@
 				}
 			}
 		};
-		renderedHTML = mod.wurboOut.render(data, 'index.html');
+		renderedHTML = mod.wurboOut.render(data);
 
 		// lisen for events from the component
 		listener.listen(mod);
