@@ -1,5 +1,8 @@
+#![feature(once_cell_try)]
+
 cargo_component_bindings::generate!();
 
+mod error;
 mod utils;
 
 use bindings::delano::wallet;
@@ -9,47 +12,61 @@ use bindings::seed_keeper::wallet::config::get_seed;
 
 use delano_keys::kdf::Scalar;
 use delano_keys::kdf::{ExposeSecret, Manager, Zeroizing};
+// Opinionatedly choose CBOR as our byte encoding format
+use delanocreds::CBORCodec;
 use delanocreds::{
-    verify_proof, CBORCodec, CredProof, Credential, Entry, Initial, Issuer, IssuerPublic,
-    MaxCardinality, MaxEntries, Nonce, Nym, NymProof, Offer, Secret,
+    verify_proof, CredProof, Credential, Entry, Initial, Issuer, IssuerPublic, MaxCardinality,
+    MaxEntries, Nonce, Nym, NymProof, Offer, Secret,
 };
-use std::sync::Mutex;
+use error::Error;
+
 use std::sync::OnceLock;
 use utils::nonce_by_len;
 
+// We cannot have &self in the WIT model
+// so we use static variables to store the state between functions
+// See https://crates.io/crates/lazy_static
 static EXPANDED: OnceLock<Secret<Vec<Scalar>>> = OnceLock::new();
+static NYM: OnceLock<Nym<Initial>> = OnceLock::new();
+static ISSUER: OnceLock<Issuer> = OnceLock::new();
 
-fn get_expanded() -> Secret<Vec<Scalar>> {
-    // TODO: Is there a better way to handle this lack of get_seed?
-    let seed = get_seed().unwrap_or_else(|e| {
-        panic!(
-            "Error getting seed from seed_keeper: {:?}. Please ensure seed_keeper is configured and running",
-            e
-        )
-    });
+/// Uses the seed keeper to get a seed, then expands it into a secret key using Deterministic
+/// Hierarchical Derivation (delano_keys)
+fn expand() -> Result<Secret<Vec<Scalar>>, Error> {
+    let seed = get_seed().map_err(|e| Error::GetSeed(e.to_string()))?;
     // derive secret key fromseed using delano_keys
     let seed = Zeroizing::new(seed);
     let manager: Manager = Manager::from_seed(seed);
 
     let account = manager.account(1);
 
-    account.expand_to(MaxEntries::default().into())
+    Ok(account.expand_to(MaxEntries::default().into()))
 }
 
-// We cannot have &self in the WIT model
-// so we use static variables to store the state between functions
-// See https://crates.io/crates/lazy_static
-lazy_static::lazy_static! {
-    static ref ISSUER: Mutex<Issuer> = {
-        let expanded = EXPANDED.get_or_init(|| get_expanded());
+/// Gets or tries to init NYM if get_seed (through get_expanded()) returns Ok, returns Err otherwise.
+/// NYM is the keypair that we use to create credentials.
+fn assert_nym() -> Result<(), Error> {
+    NYM.get_or_try_init(|| -> Result<Nym<Initial>, Error> {
+        let expanded =
+            EXPANDED.get_or_try_init(|| -> Result<Secret<Vec<Scalar>>, Error> { Ok(expand()?) })?;
 
-        Mutex::new(Issuer::new_with_secret(expanded.expose_secret().clone().into(), MaxCardinality::default()))
-    };
+        Ok(Nym::from_secret(expanded.expose_secret().clone()[0].into()))
+    })?;
+    Ok(())
+}
 
-    static ref NYM: Mutex<Nym<Initial>> = {
-        let expanded = EXPANDED.get_or_init(|| get_expanded());
-        Mutex::new(Nym::from_secret(expanded.expose_secret().clone()[0].into()))
-    };
+/// Gets or tries to init ISSUER if get_seed (through get_expanded()) returns Ok, returns Err otherwise.
+fn assert_issuer() -> Result<(), Error> {
+    ISSUER.get_or_try_init(|| -> Result<Issuer, Error> {
+        let expanded =
+            EXPANDED.get_or_try_init(|| -> Result<Secret<Vec<Scalar>>, Error> { Ok(expand()?) })?;
+
+        Ok(Issuer::new_with_secret(
+            expanded.expose_secret().clone().into(),
+            MaxCardinality::default(),
+        ))
+    })?;
+    Ok(())
 }
 
 struct Component;
@@ -57,7 +74,10 @@ struct Component;
 impl Guest for Component {
     /// Return proof of [Nym] given the Nonce
     fn get_nym_proof(nonce: wallet::types::Nonce) -> Result<Vec<u8>, String> {
-        let nym = NYM.lock().expect("should be able to lock NYM");
+        assert_nym().map_err(|e| e.to_string())?;
+        let nym = NYM
+            .get()
+            .expect("NYM should be initialized by assert_nym, but it wasn't");
         let nonce = utils::nonce_by_len(&nonce)?;
         let nym_proof = nym.nym_proof(&nonce);
         let bytes = nym_proof
@@ -85,7 +105,10 @@ impl Guest for Component {
         maxentries: u8,
         options: Option<wallet::types::IssueOptions>,
     ) -> Result<Vec<u8>, String> {
-        let issuer = ISSUER.lock().unwrap();
+        assert_issuer().map_err(|e| e.to_string())?;
+        let issuer = ISSUER
+            .get()
+            .expect("ISSUER should be initialized by assert_issuer, but it wasn't");
 
         let entry = Entry::try_from(attributes).map_err(|e| e.to_string())?;
 
@@ -97,9 +120,11 @@ impl Guest for Component {
                 (nym_proof, nonce)
             }
             _ => {
-                // use our own nym_proof and nonce
+                // use our own nym_proof and nonce, self-issued credential
                 let nonce = nonce_by_len(&[42u8; 32]).expect("should be able to create nonce");
-                let nym_proof = NYM.lock().unwrap().nym_proof(&nonce);
+                assert_nym().map_err(|e| e.to_string())?;
+                let nym = NYM.get().expect("NYM should be initialized");
+                let nym_proof = nym.nym_proof(&nonce);
                 (nym_proof, Some(nonce))
             }
         };
@@ -125,7 +150,8 @@ impl Guest for Component {
     fn offer(cred: Vec<u8>, config: OfferConfig) -> Result<Vec<u8>, String> {
         // Create an offer from the Entry with the given config
         // first, use our NYM to create an offer builder
-        let nym = NYM.lock().expect("should be able to lock NYM");
+        assert_nym().map_err(|e| e.to_string())?;
+        let nym = NYM.get().expect("NYM should be initialized");
 
         // if offer_config is None, make entries empty array, else set to offer_config.redact.entries
         let (entries, redact) = match config.redact {
@@ -189,7 +215,8 @@ impl Guest for Component {
     /// Accept a CBOR Serialized Credential (apply our signing key to it so it can only be used by
     /// us)
     fn accept(offer: Vec<u8>) -> Result<Vec<u8>, String> {
-        let nym = NYM.lock().unwrap();
+        assert_nym().map_err(|e| e.to_string())?;
+        let nym = NYM.get().expect("NYM should be initialized");
 
         let offer = Offer::from_bytes(&offer)
             .map_err(|e| format!("Error converting offer to Offer: {:?}", e))?;
@@ -205,7 +232,8 @@ impl Guest for Component {
 
     /// Prove
     fn prove(values: Provables) -> Result<Vec<u8>, String> {
-        let nym = NYM.lock().unwrap();
+        assert_nym().map_err(|e| e.to_string())?;
+        let nym = NYM.get().expect("NYM should be initialized");
 
         let cred = Credential::from_bytes(&values.credential)
             .map_err(|e| format!("Error in prove converting bytes to Credential: {e}"))?;
