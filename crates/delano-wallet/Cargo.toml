@@ -10,7 +10,7 @@ cargo-component-bindings = "0.6.0"
 lazy_static = "1.4.0"
 delanocreds = { path ="../delanocreds" }
 delano-keys = { workspace = true }
-ciborium = "0.2.1"
+thiserror = "1.0"
 
 [dev-dependencies]
 wasmtime = { version = "16", features = ['component-model'] }
