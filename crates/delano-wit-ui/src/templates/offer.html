@@ -1,0 +1,45 @@
+<!-- Offer page has a title, then two rows: each starts with a checkbox, then "email / SMS" respectively, then a button "Send" -->
+<!-- The first row is for email, the second for SMS -->
+<!-- all flex box and evently spaced -->
+<div class="flex w-full flex-col p-4">
+  <h1 class="text-2xl font-bold text-green-600 drop-shadow-sm">
+    Send Credential Offer:
+  </h1>
+  <div class="flex flex-col">
+    <div class="my-2">
+      <input type="checkbox" checked />
+      <span>Include Hints (ex: First name = ? Age > ?) </span>
+    </div>
+    <div class="my-2 flex flex-row content-center rounded-sm">
+      <input
+        id="{{issuer.input_email|on('keyup')}}"
+        placeholder="email"
+        class="-mr-1 w-full rounded-l border border-blue-300 p-2 align-middle"
+      />
+      <!-- <button -->
+      <!--   class="rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700" -->
+      <!-- > -->
+      <!--   Send -->
+      <!-- </button> -->
+    </div>
+    <div class="my-2 flex flex-row rounded-sm">
+      <input
+        id="{{issuer.input_sms|on('keyup')}}"
+        placeholder="sms"
+        class="-mr-1 w-full rounded-l border border-blue-300 p-2 align-middle"
+      />
+      <!-- <button -->
+      <!--   class="rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700" -->
+      <!-- > -->
+      <!--   Send -->
+      <!-- </button> -->
+    </div>
+  </div>
+  Link:
+  <a
+    href="/#{{issuer.offer}}"
+    target="_blank"
+    class="underline text-blue-500 font-semibold"
+    >Link to Offer</a
+  >
+</div>

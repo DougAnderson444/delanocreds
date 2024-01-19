@@ -1,0 +1,41 @@
+<div class="flex flex-row w-full items-center">
+    <form class="flex flex-col w-full sm:flex-row py-1 animate-slideDown">
+      <!-- I need to put both: key|op|value and the loop.index0 in the context somehow -->
+      <input
+        class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2"
+        type="text"
+        id="{{ item.input_key|on('keyup') }}"
+        data-context-name="{{context}}"
+        data-context-value='{ "ctx": { "tag": "key", "val": {{loop.index0}} } }'
+        value="{{attr.key}}"
+      />
+      <select
+        id="{{ item.input_key|on('change') }}"
+        data-context-name="{{context}}"
+        data-context-value='{ "ctx": { "tag": "op", "val": {{loop.index0}} } }'
+        class="p-1 bg-blue-500 text-white font-semibold"
+      >
+        <!-- In minijinja, I need to check if attr.op|select("==", "="), then insert the word "selected" if true for >,<, and = -->
+        <option value="=" {% if attr.op|select("==", "=") %}selected{% endif %}>equals</option>
+        <option value=">" {% if attr.op|select("==", ">") %}selected{% endif %}>greater than</option>
+        <option value="<" {% if attr.op|select("==", "<") %}selected{% endif %}>less than</option>            
+      </select>
+      <input
+        class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2"
+        type="text"
+        id="{{ item.input_key|on('keyup') }}"
+        data-context-name="{{context}}"
+        data-context-value='{ "ctx": { "tag": "value", "val": {{loop.index0}} } }'
+        value="{{attr.value}}"
+      />
+      <div class="flex-grow-0 mx-2">
+        <button
+          class="bg-red-500 hover:bg-red-700 text-xl text-white font-bold py-2 px-4 m-1 rounded shadow"
+          type="button"
+          data-context="removeattribute"
+        >
+          x
+        </button>
+      </div>
+    </form>
+  </div>
