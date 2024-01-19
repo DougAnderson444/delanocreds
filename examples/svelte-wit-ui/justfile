@@ -1,9 +1,6 @@
 # compose the *.wasm files together
 build:
-  cargo component build --workspace --release
+  cargo component build --workspace
 
-compose: build
-  wasm-tools compose -c compose-config.yml -o ./src/lib/full/aggregate.wasm ../../target/wasm32-wasi/release/delano_wit_ui.wasm
-
-preview: build compose
-  cd ../../sveltekit/ && npm run build && npm run preview -- --open
+preview: build
+  npm run build && npm run preview -- --open
