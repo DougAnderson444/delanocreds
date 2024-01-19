@@ -7,7 +7,10 @@ edition = "2021"
 
 [dependencies]
 cargo-component-bindings = "0.6.0"
-wurbo = { version = "0.1.7" }
+wurbo = { version = "0.1.8" }
+base64ct = { version = "1.6.0", features = ["alloc"] }
+serde = { version = "1.0.130", features = ["derive"] }
+convert_case = "0.6.0"
 
 [dev-dependencies]
 wasmtime = { version = "16", features = ['component-model'] }
@@ -19,6 +22,11 @@ crate-type = ["cdylib"]
 
 [package.metadata.component]
 package = "delano:wit-ui"
+
+# It's not documented, but you can use `package.metadata.component.bindings` to
+# set additional derive attributes for the generated bindings:
+[package.metadata.component.bindings]
+derives = []
 
 [package.metadata.component.dependencies]
 

@@ -1,9 +1,11 @@
 cargo_component_bindings::generate!();
 
+mod attributes;
 mod input;
 mod issuer;
 mod output;
 mod page;
+mod util;
 
 // use input::Input;
 use issuer::IssuerStruct;
@@ -37,6 +39,10 @@ fn get_templates() -> Templates {
             Entry::new(ATTRIBUTES_HTML, include_str!("templates/attributes.html")),
             // "maxentries.html"
             Entry::new("maxentries.html", include_str!("templates/maxentries.html")),
+            // offer.html
+            Entry::new("offer.html", include_str!("templates/offer.html")),
+            // kov.html
+            Entry::new("kov.html", include_str!("templates/kov.html")),
         ]),
     )
 }

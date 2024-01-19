@@ -1,9 +1,13 @@
-use std::{ops::DerefMut, sync::OnceLock};
-
 use super::*;
+
+use base64ct::{Base64UrlUnpadded, Encoding};
+use std::{ops::DerefMut, sync::OnceLock};
 
 /// Element id for the attributes.html template, which can only be set once.
 static ISSUER_ID: OnceLock<String> = OnceLock::new();
+
+/// Constant for default max_entries
+const DEFAULT_MAX_ENTRIES: u8 = 1;
 
 /// Page is the wrapper for Input and Output
 #[derive(Debug, Clone, Default)]
@@ -23,7 +27,7 @@ impl IssuerStruct {
         attributes.push(AttributeStruct::default());
         Self(Some(context_types::Issuer {
             attributes: attributes.into_iter().map(|a| a.into()).collect(),
-            max_entries: self.as_ref().map_or(0, |v| v.max_entries),
+            max_entries: self.as_ref().map_or(DEFAULT_MAX_ENTRIES, |v| v.max_entries),
         }))
     }
 
@@ -47,7 +51,7 @@ impl IssuerStruct {
         };
         Self(Some(context_types::Issuer {
             attributes: edited_attributes.into_iter().map(|a| a.into()).collect(),
-            max_entries: self.as_ref().map_or(0, |v| v.max_entries),
+            max_entries: self.as_ref().map_or(DEFAULT_MAX_ENTRIES, |v| v.max_entries),
         }))
     }
 
@@ -78,13 +82,52 @@ impl StructObject for IssuerStruct {
                 ISSUER_ID.get_or_init(|| utils::rand_id()).to_owned(),
             )),
             "attributes" => Some(Value::from(self.get_attributes())),
-            "max_entries" => Some(Value::from(self.as_ref().map_or(0, |v| v.max_entries))),
+            "max_entries" => Some(Value::from(
+                self.as_ref().map_or(DEFAULT_MAX_ENTRIES, |v| v.max_entries),
+            )),
             // assigns a random id attribute to the button element, upon which we can apply
             // minijinja filters
             "add_attribute_button" => Some(Value::from(utils::rand_id())),
             "input_key" => Some(Value::from(utils::rand_id())),
             "input_maxentries" => Some(Value::from(utils::rand_id())),
+            "input_email" => Some(Value::from(utils::rand_id())),
+            "input_sms" => Some(Value::from(utils::rand_id())),
+            "context_editissuerinput" => {
+                // We do this so we get the exact name of the context, any changes
+                // will trigger compile error.
+                let context_name = context_types::Context::Editissuerinput(context_types::Kvctx {
+                    ctx: context_types::Kovindex::Key(0),
+                    value: "".to_string(),
+                });
+                Some(Value::from(util::variant_string(context_name)))
+            }
             "credential" => {
+                // convert self.attributes into a Vec<Vec<u8>> and use wallet::delano::issue to calculate the cred
+                let attr_vec = self.as_ref().map_or(vec![], |v| {
+                    v.attributes
+                        .iter()
+                        .map(|a| {
+                            // each attribute has a key, op, and value
+                            // we need to concatenate them into a single string
+                            // key + op + value
+                            // and then convert that string into a Vec<u8>
+                            let concat = format!("{}{}{}", a.key, a.op, a.value);
+                            concat.as_bytes().to_vec()
+                        })
+                        .collect::<Vec<_>>()
+                });
+                let max_entries = self.as_ref().map_or(DEFAULT_MAX_ENTRIES, |v| v.max_entries);
+
+                match wallet::actions::issue(&attr_vec, max_entries, None) {
+                    Ok(cred) => Some(Value::from(cred)),
+                    Err(e) => {
+                        eprintln!("Error issuing credential: {:?}", e);
+                        None
+                    }
+                }
+            }
+            // offer is a link to the credential, including hints
+            "offer" => {
                 // convert self.attributes into a Vec<Vec<u8>> and use wallet::delano::issue to calculate the cred
                 let attr_vec = self.as_ref().map_or(vec![], |v| {
                     v.attributes
@@ -92,14 +135,11 @@ impl StructObject for IssuerStruct {
                         .map(|a| a.value.as_bytes().to_vec())
                         .collect::<Vec<_>>()
                 });
-                let max_entries = self.as_ref().map_or(0, |v| v.max_entries);
+                let max_entries = self.as_ref().map_or(DEFAULT_MAX_ENTRIES, |v| v.max_entries);
 
                 match wallet::actions::issue(&attr_vec, max_entries, None) {
-                    Ok(cred) => Some(Value::from(cred)),
-                    Err(_e) => {
-                        // log::error!("Error issuing credential: {:?}", e);
-                        None
-                    }
+                    Ok(cred) => Some(Value::from(Base64UrlUnpadded::encode_string(&cred))),
+                    _ => Some(Value::from("No credential")),
                 }
             }
             _ => None,
@@ -131,7 +171,9 @@ impl From<IssuerStruct> for context_types::Issuer {
                 .into_iter()
                 .map(|a| a.into())
                 .collect(),
-            max_entries: context.as_ref().map_or(0, |v| v.max_entries),
+            max_entries: context
+                .as_ref()
+                .map_or(DEFAULT_MAX_ENTRIES, |v| v.max_entries),
         }
     }
 }
