@@ -6,13 +6,9 @@
     Send Credential Offer:
   </h1>
   <div class="flex flex-col">
-    <div class="my-2">
-      <input type="checkbox" checked />
-      <span>Include Hints (ex: First name = ? Age > ?) </span>
-    </div>
     <div class="my-2 flex flex-row content-center rounded-sm">
       <input
-        id="{{issuer.input_email|on('keyup')}}"
+        id="{{issuer.id|on('keyup')}}"
         placeholder="email"
         class="-mr-1 w-full rounded-l border border-blue-300 p-2 align-middle"
       />
@@ -24,7 +20,7 @@
     </div>
     <div class="my-2 flex flex-row rounded-sm">
       <input
-        id="{{issuer.input_sms|on('keyup')}}"
+        id="{{issuer.id|on('keyup')}}"
         placeholder="sms"
         class="-mr-1 w-full rounded-l border border-blue-300 p-2 align-middle"
       />

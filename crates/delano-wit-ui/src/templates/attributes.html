@@ -2,11 +2,10 @@
   <h2 class="text-xl font-bold">Create a Credential</h2>
   <div class="flex flex-col w-full items-center">
     {% for attr in issuer.attributes %} {% with item = issuer, context =
-    issuer.context_editissuerinput %} {% include "kov.html" %} {% endwith %} {%
-    endfor %}
+    issuer.context %} {% include "kov.html" %} {% endwith %} {% endfor %}
     <!-- the context must match the context variant in the WIT world, this is how it gets routed to the renderer -->
     <button
-      id="{{ issuer.add_attribute_button|on('click') }}"
+      id="{{ issuer.id|on('click') }}"
       class="border-4 border-dashed w-full hover:bg-blue-500 hover:text-white hover:border-neutral-50 font-bold py-2 px-4 rounded text-xl"
       type="button"
       data-context-name="addattribute"

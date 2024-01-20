@@ -39,6 +39,19 @@ impl Operator {
     }
 }
 
+impl StructObject for Operator {
+    fn get_field(&self, name: &str) -> Option<Value> {
+        match name {
+            "value" => Some(Value::from(self.value())),
+            _ => None,
+        }
+    }
+    /// So that debug will show the values
+    fn static_fields(&self) -> Option<&'static [&'static str]> {
+        Some(&["value"])
+    }
+}
+
 impl ToString for Operator {
     fn to_string(&self) -> String {
         self.value().to_string()
@@ -58,15 +71,10 @@ impl TryFrom<String> for Operator {
     }
 }
 
-/// Atrribute Key Operator Value (KOV)
-#[derive(Default, Clone)]
-pub struct AttributeKOV {
-    /// Key
-    pub key: AttributeKey,
-    /// Operator
-    pub op: Operator,
-    /// Value
-    pub value: AttributeValue,
+impl From<Operator> for wurbo::prelude::Value {
+    fn from(operator: Operator) -> Self {
+        Self::from_struct_object(operator)
+    }
 }
 
 /// Newtype Key to create an AttributeKOV struct
@@ -93,10 +101,36 @@ impl Deref for AttributeValue {
     }
 }
 
+/// Atrribute Key Operator Value (KOV)
+#[derive(Default, Clone)]
+pub struct AttributeKOV {
+    /// Key
+    pub key: AttributeKey,
+    /// Operator
+    pub op: Operator,
+    /// Value
+    pub value: AttributeValue,
+}
+
 impl AttributeKOV {
     /// Create a new AttributeKOV from AttributeKey, Operator, and AttributeValue
     pub fn new(key: AttributeKey, op: Operator, value: AttributeValue) -> Self {
         Self { key, op, value }
+    }
+}
+
+impl StructObject for AttributeKOV {
+    fn get_field(&self, name: &str) -> Option<Value> {
+        match name {
+            "key" => Some(Value::from(self.key.deref().clone())),
+            "op" => Some(Value::from(self.op.get_field("value").unwrap())),
+            "value" => Some(Value::from(self.value.deref().clone())),
+            _ => None,
+        }
+    }
+    /// So that debug will show the values
+    fn static_fields(&self) -> Option<&'static [&'static str]> {
+        Some(&["key", "op", "value"])
     }
 }
 
@@ -127,44 +161,89 @@ impl From<context_types::Attribute> for AttributeKOV {
     }
 }
 
+impl From<context_types::Hint> for AttributeKOV {
+    fn from(hint: context_types::Hint) -> Self {
+        Self {
+            key: AttributeKey(hint.key),
+            op: Operator::try_from(hint.op).unwrap_or_default(),
+            value: AttributeValue("".to_string()),
+        }
+    }
+}
+
+impl From<AttributeKOV> for wurbo::prelude::Value {
+    fn from(attribute: AttributeKOV) -> Self {
+        Self::from_struct_object(attribute)
+    }
+}
+
 /// Hints are only the key and operator values
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct AttributeHint {
+pub struct Hint {
     /// Key
     pub key: AttributeKey,
     /// Operator
     pub op: Operator,
 }
 
-impl AttributeHint {
+impl Hint {
     /// Create a new AttributeHint from AttributeKey and Operator
     pub fn new(key: AttributeKey, op: Operator) -> Self {
         Self { key, op }
     }
 }
 
-impl ToString for AttributeHint {
+impl StructObject for Hint {
+    fn get_field(&self, name: &str) -> Option<Value> {
+        match name {
+            "key" => Some(Value::from(self.key.deref().clone())),
+            "op" => Some(Value::from(self.op.clone())),
+            _ => None,
+        }
+    }
+    /// So that debug will show the values
+    fn static_fields(&self) -> Option<&'static [&'static str]> {
+        Some(&["key", "op"])
+    }
+}
+
+impl ToString for Hint {
     fn to_string(&self) -> String {
         format!("{} {}", *self.key, self.op.to_string())
     }
 }
 
-impl From<IssuerStruct> for Vec<AttributeHint> {
+impl From<IssuerStruct> for Vec<Hint> {
     fn from(issuer: IssuerStruct) -> Self {
         issuer.as_ref().map_or(vec![], |v| {
             v.attributes
                 .iter()
-                .map(|a| AttributeHint::from(a.clone()))
+                .map(|a| Hint::from(a.clone()))
                 .collect::<Vec<_>>()
         })
     }
 }
 
-impl From<context_types::Attribute> for AttributeHint {
+impl From<context_types::Attribute> for Hint {
     fn from(attribute: context_types::Attribute) -> Self {
         Self {
             key: AttributeKey(attribute.key),
             op: Operator::try_from(attribute.op).unwrap_or_default(),
         }
+    }
+}
+
+impl From<context_types::Hint> for Hint {
+    fn from(hint: context_types::Hint) -> Self {
+        Self {
+            key: AttributeKey(hint.key),
+            op: Operator::try_from(hint.op).unwrap_or_default(),
+        }
+    }
+}
+
+impl From<Hint> for wurbo::prelude::Value {
+    fn from(hint: Hint) -> Self {
+        Self::from_struct_object(hint)
     }
 }

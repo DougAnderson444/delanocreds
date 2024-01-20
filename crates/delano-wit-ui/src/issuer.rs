@@ -1,10 +1,7 @@
 use super::*;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use std::{ops::DerefMut, sync::OnceLock};
-
-/// Element id for the attributes.html template, which can only be set once.
-static ISSUER_ID: OnceLock<String> = OnceLock::new();
+use std::ops::DerefMut;
 
 /// Constant for default max_entries
 const DEFAULT_MAX_ENTRIES: u8 = 1;
@@ -78,26 +75,18 @@ impl IssuerStruct {
 impl StructObject for IssuerStruct {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
-            "id" => Some(Value::from(
-                ISSUER_ID.get_or_init(|| utils::rand_id()).to_owned(),
-            )),
+            // assigns a random id attribute to the button element, upon which we can apply
+            "id" => Some(Value::from(utils::rand_id())),
             "attributes" => Some(Value::from(self.get_attributes())),
             "max_entries" => Some(Value::from(
                 self.as_ref().map_or(DEFAULT_MAX_ENTRIES, |v| v.max_entries),
             )),
-            // assigns a random id attribute to the button element, upon which we can apply
-            // minijinja filters
-            "add_attribute_button" => Some(Value::from(utils::rand_id())),
-            "input_key" => Some(Value::from(utils::rand_id())),
-            "input_maxentries" => Some(Value::from(utils::rand_id())),
-            "input_email" => Some(Value::from(utils::rand_id())),
-            "input_sms" => Some(Value::from(utils::rand_id())),
-            "context_editissuerinput" => {
+            "context" => {
                 // We do this so we get the exact name of the context, any changes
                 // will trigger compile error.
-                let context_name = context_types::Context::Editissuerinput(context_types::Kvctx {
-                    ctx: context_types::Kovindex::Key(0),
-                    value: "".to_string(),
+                let context_name = context_types::Context::Editattribute(context_types::Kvctx {
+                    ctx: context_types::Kovindex::Key(Default::default()),
+                    value: Default::default(),
                 });
                 Some(Value::from(util::variant_string(context_name)))
             }

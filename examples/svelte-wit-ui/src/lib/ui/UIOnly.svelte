@@ -1,6 +1,8 @@
 <script>
 	import { onMount, tick } from 'svelte';
 	import * as wurbo from 'wurbo';
+	// When we use $page.url.hash, responding to chnages in the hash becomes very easy.
+	import { page } from '$app/stores';
 
 	// Import wasm component bytes as a url
 	import wasmURL from '../../../../../target/wasm32-wasi/debug/delano_wit_ui.wasm?url';
@@ -40,6 +42,18 @@
 		// load the import handles into the Wasm component and get the ES module returned
 		mod = await load(wasmBytes, all_importables);
 
+		// get the string after the hash (slice 1)
+		let offer = null;
+		try {
+			let hash = $page.url.hash.slice(1);
+			let offer = state?.offer || null;
+			let decoded = atob(hash);
+			let state = JSON.parse(decoded);
+			offer = state?.offer || null;
+		} catch (e) {
+			console.warn(e);
+		}
+
 		// call `render` with your inputs for the component
 		let data = {
 			tag: 'all-content',
@@ -48,6 +62,14 @@
 					name: 'Delanocreds Wallet app',
 					version: '0.1.0',
 					description: 'A wallet app for Delanocreds'
+				},
+				offer: {
+					cred: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]),
+					// TypedArray of {key: op: } objects
+					hints: [
+						{ key: 'Name', op: '=' },
+						{ key: 'Age', op: '>' }
+					]
 				}
 			}
 		};

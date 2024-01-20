@@ -204,6 +204,7 @@ mod delano_wit_ui_tests {
                 description: "A wallet so you can sign your credentials.".to_string(),
             }),
             issue: None,
+            offer: None,
         });
 
         let html = bindings
@@ -228,10 +229,10 @@ mod delano_wit_ui_tests {
         // the count of <select should be 2
         assert_eq!(html.matches("<select").count(), 3);
 
-        // We should be able to edit issuer input by passing in a context that is Editissuerinput
+        // We should be able to edit attribute input by passing in a context that is Editissuerinput
         let edited_value = "Edited Delano Key".to_string();
         let edit_issuer_input_ctx =
-            wit_ui::wurbo_out::Context::Editissuerinput(context_types::Kvctx {
+            wit_ui::wurbo_out::Context::Editattribute(context_types::Kvctx {
                 ctx: context_types::Kovindex::Key(0),
                 value: edited_value.clone(),
             });
@@ -247,11 +248,21 @@ mod delano_wit_ui_tests {
         // Now there should be a match for the edited value
         assert!(html.contains(&edited_value));
 
-        // Next we need to test that the UI can enable a user to create an offer for a credential with its given entries and a given configuration.
-        // The interface for offer is:
-        // offer: func(cred: list<u8>, config: offer-config) -> result<list<u8>, string>;
-        // We will use the credential created from `issue` above. For the UI itself, we need to allow the user to build a State which includes:
-        // - offer-config
+        // Should able to process an offer
+        let offer = wit_ui::wurbo_out::Context::Offer(context_types::Offer {
+            cred: Default::default(),
+            hints: Some(vec![context_types::Hint {
+                key: "Age".to_string(),
+                op: ">".to_string(),
+            }]),
+        });
+
+        // Render using offer context above
+        let html = bindings
+            .delano_wit_ui_wurbo_out()
+            .call_render(&mut store, &offer)??;
+
+        println!("\n*** OFFER ***:\n{}", html);
 
         // Accept a credential offer and return the accepte Credential bytes
         // accept: func(offer: list<u8>) -> result<list<u8>, string>;

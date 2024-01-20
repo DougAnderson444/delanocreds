@@ -14,6 +14,16 @@ interface context-types {
     max-entries: u8,
   }
 
+  record offer {
+    cred: list<u8>,
+    hints: option<list<hint>>
+  }
+
+  record hint {
+    key: string,
+    op: string,
+  }
+
   record attribute {
     key: string,
     op: string,
@@ -23,6 +33,7 @@ interface context-types {
   record everything {
     page: option<page>,
     issue: option<issuer>,
+    offer: option<offer>,
   }
 
   record input-ctx {
@@ -46,8 +57,9 @@ interface context-types {
     all-content(everything),
     issuing(issuer),
     addattribute,
-    editissuerinput(kvctx),
-    editissuermaxentries(u8)
+    editattribute(kvctx),
+    editissuermaxentries(u8),
+    offer(offer),
   }
 }
 

@@ -4,27 +4,27 @@
       <input
         class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2"
         type="text"
-        id="{{ item.input_key|on('keyup') }}"
-        data-context-name="{{context}}"
+        id="{{ item.id|on('change') }}"
+        data-context-name="{{item.context}}"
         data-context-value='{ "ctx": { "tag": "key", "val": {{loop.index0}} } }'
         value="{{attr.key}}"
       />
       <select
-        id="{{ item.input_key|on('change') }}"
-        data-context-name="{{context}}"
+        id="{{ item.id|on('change') }}"
+        data-context-name="{{item.context}}"
         data-context-value='{ "ctx": { "tag": "op", "val": {{loop.index0}} } }'
         class="p-1 bg-blue-500 text-white font-semibold"
       >
         <!-- In minijinja, I need to check if attr.op|select("==", "="), then insert the word "selected" if true for >,<, and = -->
-        <option value="=" {% if attr.op|select("==", "=") %}selected{% endif %}>equals</option>
-        <option value=">" {% if attr.op|select("==", ">") %}selected{% endif %}>greater than</option>
-        <option value="<" {% if attr.op|select("==", "<") %}selected{% endif %}>less than</option>            
+        <option value="=" {% if attr.op|safe|select("==", "=") %}selected{% endif %}>equals</option>
+        <option value=">" {% if attr.op|safe|select("==", ">") %}selected{% endif %}>greater than</option>
+        <option value="<" {% if attr.op|safe|select("==", "<") %}selected{% endif %}>less than</option>            
       </select>
       <input
         class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2"
         type="text"
-        id="{{ item.input_key|on('keyup') }}"
-        data-context-name="{{context}}"
+        id="{{ item.id|on('keyup') }}"
+        data-context-name="{{item.context}}"
         data-context-value='{ "ctx": { "tag": "value", "val": {{loop.index0}} } }'
         value="{{attr.value}}"
       />
