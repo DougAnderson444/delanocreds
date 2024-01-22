@@ -1,6 +1,6 @@
 {% if offer and offer.hints %}
 <div class="" id="{{offer.id}}">
-  <h2 class="text-xl font-bold">Accept a Credential</h2>
+  <h2 class="text-xl font-bold">Extend, Select and Prove</h2>
   <div class="flex flex-col w-full items-center">
     {% for attr in offer.hints %} {% with item = offer, context = offer.context
     %} {% include "kov.html" %} {% endwith %} {% endfor %}
@@ -11,7 +11,7 @@
       type="button"
       data-context-name="acceptoffer"
     >
-      Accept
+      + Extend
     </button>
   </div>
 </div>
