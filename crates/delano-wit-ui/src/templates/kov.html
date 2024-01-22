@@ -1,10 +1,21 @@
 <div class="flex flex-row w-full items-center">
     <form class="flex flex-col w-full sm:flex-row py-1 animate-slideDown">
-      <!-- I need to put both: key|op|value and the loop.index0 in the context somehow -->
+      <!-- Show select checkbox, only if attr is selectable -->
+      <!-- In minijinja, I need to check if attr.select|select("==", true), then insert the word "checked" if true -->
+      {% if attr.selectable|safe|select("==", true) %}
       <input
-        class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2"
-        type="text"
+        class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2 "
+        type="checkbox"
         id="{{ item.id|on('change') }}"
+        data-context-name="{{item.context}}"
+        data-context-value='{ "ctx": { "tag": "select", "val": {{loop.index0}} } }'
+        {% if attr.selected|safe|select("==", "true") %}checked{% endif %}
+      />
+      {% endif %}
+      <input
+        class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2 sm:w-1/3"
+        type="text"
+        id="{{ item.id|on('keyup') }}"
         data-context-name="{{item.context}}"
         data-context-value='{ "ctx": { "tag": "key", "val": {{loop.index0}} } }'
         value="{{attr.key}}"
@@ -21,21 +32,21 @@
         <option value="<" {% if attr.op|safe|select("==", "<") %}selected{% endif %}>less than</option>            
       </select>
       <input
-        class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2"
+        class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2 sm:w-1/3"
         type="text"
         id="{{ item.id|on('keyup') }}"
         data-context-name="{{item.context}}"
         data-context-value='{ "ctx": { "tag": "value", "val": {{loop.index0}} } }'
         value="{{attr.value}}"
       />
-      <div class="flex-grow-0 mx-2">
-        <button
-          class="bg-red-500 hover:bg-red-700 text-xl text-white font-bold py-2 px-4 m-1 rounded shadow"
-          type="button"
-          data-context="removeattribute"
-        >
-          x
-        </button>
-      </div>
+      <!-- <div class="flex-grow-0 mx-2"> -->
+      <!--   <button -->
+      <!--     class="bg-red-500 hover:bg-red-700 text-xl text-white font-bold py-2 px-4 m-1 rounded shadow" -->
+      <!--     type="button" -->
+      <!--     data-context="removeattribute" -->
+      <!--   > -->
+      <!--     x -->
+      <!--   </button> -->
+      <!-- </div> -->
     </form>
   </div>
