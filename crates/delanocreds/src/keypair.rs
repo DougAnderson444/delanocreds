@@ -616,6 +616,36 @@ impl<Stage> Nym<Stage> {
         super::ProofBuilder::new(self, cred, entries)
     }
 
+    /// Extends a [Credential] with an additional [Entry].
+    pub fn extend(
+        &self,
+        cred: &Credential,
+        addl_attrs: &Entry,
+    ) -> Result<Credential, error::Error> {
+        // Before we offer the Credential, change the Representative so we stay anonymous
+        // This differs slightly from the reference Python implementation which
+        // runs `change_rep` algorithm upon `accept()` protocol (they call it `delegatee()` function)
+        // We make this change because we want to change the rep before we offer the credential to someone else
+        // as opposed to changing it before we accept it for ourselves.
+
+        // `mu` has to be `Scalar::ONE` here because it can only be randomized _once_,
+        // which is during the prove() function
+        // mu randomizes the commitment vector. Setting it to ONE means the commitment vector is not randomized
+        let mu = Scalar::ONE;
+
+        // Note: change_rel does NOT change Signature { t, ..}
+        let cred = spseq_uc::change_rel(
+            &cred.issuer_public.parameters,
+            addl_attrs,
+            cred.clone(),
+            &mu,
+        )
+        .map_err(|e| {
+            error::Error::ChangeRelationsFailed(format!("Change Relations Failed: {}", e))
+        })?;
+
+        Ok(cred)
+    }
     /// Creates an orphan [Offer] for a [Credential]. This function will also validate the given
     /// [NymProof] is valid, but does not associate/link this offer with that [Nym] (see note below).
     ///
@@ -2017,5 +2047,92 @@ mod tests {
         let nym_proof2 = NymProof::from_bytes(&bytes).expect("valid bytes");
 
         assert_eq!(nym_proof, nym_proof2);
+    }
+
+    // Test nym.extend credential by a single entry
+    #[test]
+    fn test_extend_credential() -> Result<()> {
+        let issuer = Issuer::default();
+        let nym = Nym::new();
+
+        let messages_vectors = setup_tests();
+
+        let k_prime = Some(4);
+
+        // issue the cred
+        let cred = issuer
+            .issue_cred(
+                &[Entry(messages_vectors.message1_str.clone())],
+                k_prime,
+                &nym.nym_proof(&NONCE),
+                Some(&NONCE),
+            )
+            .unwrap();
+
+        let nonce = Nonce::new(vec![1, 2, 3, 4, 5, 6, 7, 8]);
+
+        // generate a proof using prove
+        let proof = nym.prove(
+            &cred,
+            &[Entry(messages_vectors.message1_str.clone())],
+            &[Entry(messages_vectors.message1_str.clone())],
+            &nonce,
+        );
+
+        // the proof.pedersen_open.open_randomness should match the nonce
+        assert_eq!(proof.nym_proof.pedersen_open.open_randomness, nonce);
+
+        // verify the proof
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &[Entry(messages_vectors.message1_str.clone())],
+            Some(&nonce)
+        ));
+
+        // extend the credential
+        let extended_cred = nym.extend(&cred, &Entry(messages_vectors.message2_str.clone()))?;
+
+        // generate a proof using prove
+        let proof = nym.prove(
+            &extended_cred,
+            &[
+                Entry(messages_vectors.message1_str.clone()),
+                Entry(messages_vectors.message2_str.clone()),
+            ],
+            &[Entry(messages_vectors.message1_str.clone())],
+            &NONCE,
+        );
+
+        // verify the proof
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &[Entry(messages_vectors.message1_str.clone())],
+            Some(&NONCE)
+        ));
+
+        let selected_attrs = vec![Entry(vec![]), Entry(messages_vectors.message2_str.clone())];
+
+        // generate a proof using prove
+        let proof = nym.prove(
+            &extended_cred,
+            &[
+                Entry(messages_vectors.message1_str.clone()),
+                Entry(messages_vectors.message2_str.clone()),
+            ],
+            &selected_attrs,
+            &nonce,
+        );
+
+        // verify the proof
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &selected_attrs,
+            Some(&nonce)
+        ));
+
+        Ok(())
     }
 }
