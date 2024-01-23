@@ -213,6 +213,10 @@ mod delano_wit_ui_tests {
 
         assert!(html.contains(&name));
 
+        println!("\n*** INITIAL ***:\n{}", html);
+
+        assert_eq!(html.matches("<select").count(), 1);
+
         // Now if we render using a context that is Addatribute, the resulting HTML should have a
         // second <li> block with another default attribute in it.
 
@@ -233,7 +237,10 @@ mod delano_wit_ui_tests {
         let edited_value = "Edited Delano Key".to_string();
         let edit_issuer_input_ctx =
             wit_ui::wurbo_out::Context::Editattribute(context_types::Kvctx {
-                ctx: context_types::Kovindex::Key(0),
+                ctx: context_types::Entry {
+                    idx: 0,
+                    val: context_types::Kovindex::Key(0),
+                },
                 value: edited_value.clone(),
             });
 
@@ -251,10 +258,10 @@ mod delano_wit_ui_tests {
         // Should able to process an offer
         let offer = wit_ui::wurbo_out::Context::Offer(context_types::Offer {
             cred: Default::default(),
-            hints: Some(vec![context_types::Hint {
+            hints: Some(vec![vec![context_types::Hint {
                 key: "Age".to_string(),
                 op: ">".to_string(),
-            }]),
+            }]]),
         });
 
         // Render using offer context above

@@ -46,10 +46,13 @@
 		let offer = null;
 		try {
 			let hash = $page.url.hash.slice(1);
-			let offer = state?.offer || null;
+			// replace the URLSafe Base64 with a regular Base64 first
+			hash = hash.replace(/-/g, '+').replace(/_/g, '/');
 			let decoded = atob(hash);
 			let state = JSON.parse(decoded);
 			offer = state?.offer || null;
+			// set array to Uint8Arrays
+			offer = { ...offer, cred: new Uint8Array(offer.cred) };
 		} catch (e) {
 			console.warn(e);
 		}
@@ -63,14 +66,15 @@
 					version: '0.1.0',
 					description: 'A wallet app for Delanocreds'
 				},
-				offer: {
-					cred: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]),
-					// TypedArray of {key: op: } objects
-					hints: [
-						{ key: 'Name', op: '=' },
-						{ key: 'Age', op: '>' }
-					]
-				}
+				offer
+				// : {
+				// 	cred: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]),
+				// 	// TypedArray of {key: op: } objects
+				// 	hints: [
+				// 		{ key: 'Name', op: '=' },
+				// 		{ key: 'Age', op: '>' }
+				// 	]
+				// }
 			}
 		};
 		renderedHTML = mod.wurboOut.render(data);

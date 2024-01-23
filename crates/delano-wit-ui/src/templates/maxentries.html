@@ -1,20 +1,18 @@
 <!-- a range slider from 0 to 12 to show how many entries Delegatees can add to this -->
-<div class="m-2 p-2" id="{{app.maxentries_id}}">
+<div class="m-2 p-2" id="{{app.id}}">
   <label class="block text-sm font-medium text-gray-700">
     Limit the number of times this credential can be extended by delegatees.
   </label>
   <div class="flex mt-1">
-    <span class="text-gray-600 mr-2 grow-0">0</span>
     <input
       type="range"
       min="0"
       max="3"
       step="1"
       class="w-full"
-      value="{{issuer.max_entries}}"
-      id="{{issuer.id|on('change')}}"
-      data-context-name="editissuermaxentries"
+      value="{{credential.max_entries}}"
+      id="{{app.id|on('change')}}"
+      data-context-name="editmaxentries"
     />
-    <span class="text-gray-600 ml-2 grow-0">3</span>
   </div>
 </div>

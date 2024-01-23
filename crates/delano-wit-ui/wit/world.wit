@@ -16,7 +16,7 @@ interface context-types {
 
   record offer {
     cred: list<u8>,
-    hints: option<list<hint>>
+    hints: option<list<list<hint>>>
   }
 
   record hint {
@@ -47,18 +47,26 @@ interface context-types {
     value(u32),
   }
 
+  record entry {
+    idx: u32,
+    val: kovindex
+  }
+
   record kvctx {
-    ctx: kovindex,
+    ctx: entry,
     value: string,
   }
 
   /// The type of context provided
   variant context {
     all-content(everything),
-    issuing(issuer),
+    // issuing(issuer),
+    // Adds a new attribute to an existing Entry of the Credential
     addattribute,
+    // Adds a New Entry to the Credential
+    newentry,
     editattribute(kvctx),
-    editissuermaxentries(u8),
+    editmaxentries(u8),
     offer(offer),
   }
 }

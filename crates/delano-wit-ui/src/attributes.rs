@@ -3,7 +3,7 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
-use crate::issuer::IssuerStruct;
+use crate::credential::CredentialStruct;
 
 /// Constant representing the Equal operator
 pub const EQUAL: &str = "=";
@@ -17,10 +17,13 @@ pub const GREATER_THAN: &str = ">";
 pub enum Operator {
     /// Equals Operator
     #[default]
+    #[serde(rename = "=")]
     Equal,
     /// Less Than Operator
+    #[serde(rename = "<")]
     LessThan,
     /// Greater Than Operator
+    #[serde(rename = ">")]
     GreaterThan,
 }
 
@@ -79,7 +82,7 @@ impl From<Operator> for wurbo::prelude::Value {
 
 /// Newtype Key to create an AttributeKOV struct
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct AttributeKey(String);
+pub struct AttributeKey(pub String);
 
 impl Deref for AttributeKey {
     type Target = String;
@@ -91,7 +94,7 @@ impl Deref for AttributeKey {
 
 /// Newtype Value to create an AttributeKOV struct
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct AttributeValue(String);
+pub struct AttributeValue(pub String);
 
 impl Deref for AttributeValue {
     type Target = String;
@@ -102,7 +105,7 @@ impl Deref for AttributeValue {
 }
 
 /// Atrribute Key Operator Value (KOV)
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct AttributeKOV {
     /// Key
     pub key: AttributeKey,
@@ -116,6 +119,11 @@ impl AttributeKOV {
     /// Create a new AttributeKOV from AttributeKey, Operator, and AttributeValue
     pub fn new(key: AttributeKey, op: Operator, value: AttributeValue) -> Self {
         Self { key, op, value }
+    }
+
+    /// Represent this KOV as byte vector
+    pub fn into_bytes(&self) -> Vec<u8> {
+        format!("{} {} {}", *self.key, self.op.to_string(), *self.value).into_bytes()
     }
 }
 
@@ -140,14 +148,16 @@ impl ToString for AttributeKOV {
     }
 }
 
-impl From<IssuerStruct> for Vec<AttributeKOV> {
-    fn from(issuer: IssuerStruct) -> Self {
-        issuer.as_ref().map_or(vec![], |v| {
-            v.attributes
-                .iter()
-                .map(|a| AttributeKOV::from(a.clone()))
-                .collect::<Vec<_>>()
-        })
+impl From<CredentialStruct> for Vec<Vec<AttributeKOV>> {
+    fn from(cred: CredentialStruct) -> Self {
+        cred.entries
+            .iter()
+            .map(|a| {
+                a.iter()
+                    .map(|a| AttributeKOV::from(a.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 }
 
@@ -213,14 +223,21 @@ impl ToString for Hint {
     }
 }
 
-impl From<IssuerStruct> for Vec<Hint> {
-    fn from(issuer: IssuerStruct) -> Self {
-        issuer.as_ref().map_or(vec![], |v| {
-            v.attributes
-                .iter()
-                .map(|a| Hint::from(a.clone()))
-                .collect::<Vec<_>>()
-        })
+impl From<CredentialStruct> for Vec<Vec<Hint>> {
+    fn from(cred: CredentialStruct) -> Self {
+        cred.entries
+            .iter()
+            .map(|a| a.iter().map(|a| Hint::from(a.clone())).collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    }
+}
+
+impl From<AttributeKOV> for Hint {
+    fn from(attribute: AttributeKOV) -> Self {
+        Self {
+            key: attribute.key,
+            op: attribute.op,
+        }
     }
 }
 
@@ -229,6 +246,15 @@ impl From<context_types::Attribute> for Hint {
         Self {
             key: AttributeKey(attribute.key),
             op: Operator::try_from(attribute.op).unwrap_or_default(),
+        }
+    }
+}
+
+impl From<Hint> for context_types::Hint {
+    fn from(hint: Hint) -> Self {
+        Self {
+            key: hint.key.deref().clone(),
+            op: hint.op.to_string(),
         }
     }
 }

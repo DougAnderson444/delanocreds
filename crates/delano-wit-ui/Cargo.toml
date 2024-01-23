@@ -10,6 +10,7 @@ cargo-component-bindings = "0.6.0"
 wurbo = { version = "0.1.8" }
 base64ct = { version = "1.6.0", features = ["alloc"] }
 serde = { version = "1.0.130", features = ["derive"] }
+serde_json = { version = "1.0.107" }
 convert_case = "0.6.0"
 
 [dev-dependencies]

@@ -232,6 +232,7 @@ impl Deref for AttributeStruct {
     }
 }
 
+// We need derefmut to mutate the KOV index
 impl DerefMut for AttributeStruct {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
