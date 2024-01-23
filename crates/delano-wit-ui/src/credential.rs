@@ -256,9 +256,9 @@ mod delano_cred_ui_tests {
         let mut cred = CredentialStruct::default();
         cred = cred.push_attribute();
 
-        assert_eq!(cred.entries.len(), 1);
+        assert_eq!(cred.entries[0].len(), 2);
 
         cred = cred.push_attribute();
-        assert_eq!(cred.entries.len(), 2);
+        assert_eq!(cred.entries[0].len(), 3);
     }
 }
