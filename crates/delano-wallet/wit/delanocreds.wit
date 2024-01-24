@@ -5,6 +5,8 @@ interface types {
   type attribute = list<u8>;
   type entry = list<attribute>;
   type nonce = list<u8>;
+  type proof = list<u8>;
+  type selected = list<entry>;
 
   record provables {
     credential: list<u8>,
@@ -17,7 +19,7 @@ interface types {
     proof: list<u8>, 
     issuer-public: list<u8>, 
     nonce: option<list<u8>>, 
-    attributes: list<attribute>
+    selected: selected
   }
 
   /// Issuer config: Default config creates (issues) a credential to yourself.
@@ -47,7 +49,7 @@ interface types {
 }
 
 interface actions {
-    use types.{attribute, provables, verifiables, offer-config, issue-options, nonce};
+    use types.{attribute, provables, verifiables, offer-config, issue-options, nonce, entry, proof, selected};
 
     /// Returns the active Nym of the component.
     get-nym-proof: func(nonce: nonce) -> result<list<u8>, string>;
@@ -62,8 +64,13 @@ interface actions {
     /// Accept a credential offer and return the accepte Credential bytes
     accept: func(offer: list<u8>) -> result<list<u8>, string>;
 
+    /// Extend a credential with a new entry
+    extend: func(cred: list<u8>, entry: entry) -> result<list<u8>, string>;
+
     /// Export a function that proves selected attributes in a given credential
-    prove: func(values: provables) -> result<list<u8>, string>;
+    /// Returns the selected attributes in the proper order in order to verify the proof,
+    /// as each Attribute needs to be verified from their respective Entry.
+    prove: func(values: provables) -> result<tuple<proof, selected>, string>;
 
     /// Export a function that verifies a proof against a public key, nonce and selected attributes
     verify: func(values: verifiables) -> result<bool, string>;
