@@ -117,15 +117,19 @@ fn main() -> wasmtime::Result<(), TestError> {
 
     // Now let's make some credentials!
     let doug = Attribute::new("name = DougAnderson444").to_bytes();
-    let attrs = vec![doug.clone()];
+    let root_entry = vec![doug.clone()];
 
     // We should be able to leave Issue Options as None, and we will issue Root to own Nym
     let max_entries = MaxEntries::default();
 
     let cred = bindings
         .delano_wallet_actions()
-        .call_issue(&mut store, &attrs.clone(), max_entries.into(), None)?
+        .call_issue(&mut store, &root_entry.clone(), max_entries.into(), None)?
         .map_err(|e| TestError::Stringified(e))?;
+
+    // There should be an update key in the cred
+    let cred_native = Credential::from_bytes(&cred)?;
+    assert!(cred_native.update_key.is_some());
 
     let nonce = Nonce::default();
     let nonce_bytes: Vec<u8> = nonce.clone().into();
@@ -144,12 +148,12 @@ fn main() -> wasmtime::Result<(), TestError> {
     // The self-issued cred should be provable by our nym's proof
     let provables = Provables {
         credential: cred.clone(),
-        entries: vec![vec![doug.clone()]],
+        entries: vec![root_entry.clone()],
         selected: vec![doug.clone()],
         nonce: nonce_bytes.clone(),
     };
 
-    let proof = bindings
+    let (proof, selected) = bindings
         .delano_wallet_actions()
         .call_prove(&mut store, &provables)?
         .map_err(|e| TestError::Stringified(e))?;
@@ -159,7 +163,7 @@ fn main() -> wasmtime::Result<(), TestError> {
         proof: proof.clone(),
         issuer_public: cred_native.issuer_public.to_bytes()?,
         nonce: Some(nonce_bytes.clone()),
-        attributes: attrs.clone(),
+        selected: selected.clone(),
     };
     assert!(bindings
         .delano_wallet_actions()
@@ -173,11 +177,11 @@ fn main() -> wasmtime::Result<(), TestError> {
         .delano_wallet_actions()
         .call_issue(
             &mut store,
-            &attrs,
+            &root_entry,
             max_entries.into(),
             Some(&IssueOptions {
                 nymproof: nym_proof.to_bytes()?,
-                nonce: Some(nonce_bytes),
+                nonce: Some(nonce_bytes.clone()),
             }),
         )?
         .map_err(|e| TestError::Stringified(e))?;
@@ -213,7 +217,7 @@ fn main() -> wasmtime::Result<(), TestError> {
         nonce: verifiers_nonce_bytes.clone(),
     };
 
-    let proof = bindings
+    let (proof, selected) = bindings
         .delano_wallet_actions()
         .call_prove(&mut store, &provables)?
         .map_err(|e| TestError::Stringified(e))?;
@@ -223,7 +227,7 @@ fn main() -> wasmtime::Result<(), TestError> {
         proof: proof.clone(),
         issuer_public: cred_native.issuer_public.to_bytes()?,
         nonce: Some(verifiers_nonce_bytes.clone()),
-        attributes: vec![doug],
+        selected: selected.clone(),
     };
 
     let verified = bindings
@@ -233,5 +237,50 @@ fn main() -> wasmtime::Result<(), TestError> {
 
     assert!(verified);
 
+    //
+    // Begin Extend
+    //
+    // extend the given credential with another Entry
+    //
+    //
+    let another_attr = Attribute::new("Doug = cool").to_bytes();
+    let another_entry = vec![another_attr.clone()];
+
+    let extended_cred = bindings
+        .delano_wallet_actions()
+        .call_extend(&mut store, &accepted_cred, &another_entry)?
+        .map_err(|e| TestError::Stringified(e))?;
+
+    // assert that we can make a proof of the another_attr with the extended cred
+    let provables = Provables {
+        credential: extended_cred.clone(),
+        entries: vec![root_entry.clone(), another_entry.clone()],
+        selected: vec![another_attr.clone()],
+        nonce: nonce_bytes.clone(),
+    };
+
+    let (proof, selected) = bindings
+        .delano_wallet_actions()
+        .call_prove(&mut store, &provables)?
+        .map_err(|e| TestError::Stringified(e))?;
+
+    // verify the proof
+    let verifiables = Verifiables {
+        proof: proof.clone(),
+        issuer_public: cred_native.issuer_public.to_bytes()?,
+        nonce: Some(nonce_bytes.clone()),
+        selected: selected.clone(),
+    };
+
+    let verified = bindings
+        .delano_wallet_actions()
+        .call_verify(&mut store, &verifiables)?
+        .map_err(|e| TestError::Stringified(e))?;
+
+    assert!(verified);
+
+    //
+    // End Extend
+    //
     Ok(())
 }
