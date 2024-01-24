@@ -230,8 +230,28 @@ impl Guest for Component {
         Ok(bytes)
     }
 
+    /// Extend the given credential with the given entry
+    fn extend(cred: Vec<u8>, entry: wallet::types::Entry) -> Result<Vec<u8>, String> {
+        assert_nym().map_err(|e| e.to_string())?;
+        let nym = NYM.get().expect("NYM should be initialized");
+
+        let cred = Credential::from_bytes(&cred)
+            .map_err(|e| format!("Error converting cred to Credential: {:?}", e))?;
+        let entry = Entry::try_from(entry).map_err(|e| e.to_string())?;
+
+        let extended_cred = nym
+            .extend(&cred, &entry)
+            .map_err(|e| format!("Error extending credential: {:?}", e))?;
+
+        let bytes = extended_cred
+            .to_bytes()
+            .map_err(|e| format!("Error converting extended cred to bytes: {:?}", e))?;
+
+        Ok(bytes)
+    }
+
     /// Prove
-    fn prove(values: Provables) -> Result<Vec<u8>, String> {
+    fn prove(values: Provables) -> Result<(Vec<u8>, Vec<Vec<Vec<u8>>>), String> {
         assert_nym().map_err(|e| e.to_string())?;
         let nym = NYM.get().expect("NYM should be initialized");
 
@@ -255,9 +275,15 @@ impl Guest for Component {
 
         let nonce: Nonce = utils::nonce_by_len(&values.nonce)?;
 
-        let (proof, _selected_entries) = buildr.prove(&nonce);
+        let (proof, selected_entries) = buildr.prove(&nonce);
 
-        Ok(proof.to_bytes().map_err(|e| e.to_string())?)
+        Ok((
+            proof.to_bytes().map_err(|e| e.to_string())?,
+            selected_entries
+                .iter()
+                .map(|entry| entry.iter().map(|attr| attr.to_bytes()).collect())
+                .collect(),
+        ))
     }
 
     /// Verify
@@ -266,19 +292,14 @@ impl Guest for Component {
             IssuerPublic::from_bytes(&values.issuer_public).map_err(|e| e.to_string())?;
         let proof = CredProof::from_bytes(&values.proof).map_err(|e| e.to_string())?;
         let selected_attrs = values
-            .attributes
+            .selected
             .iter()
-            .map(|attr| delanocreds::Attribute::try_from(attr.clone()).map_err(|e| e.to_string()))
+            .map(|entry| Entry::try_from(entry.clone()).map_err(|e| e.to_string()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let nonce = utils::maybe_nonce(values.nonce.as_deref())?;
 
-        let is_verified = verify_proof(
-            &issuer_public,
-            &proof,
-            &[delanocreds::Entry(selected_attrs)],
-            nonce.as_ref(),
-        );
+        let is_verified = verify_proof(&issuer_public, &proof, &selected_attrs, nonce.as_ref());
 
         Ok(is_verified)
     }
