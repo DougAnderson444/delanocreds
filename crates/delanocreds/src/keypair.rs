@@ -2112,7 +2112,7 @@ mod tests {
             Some(&NONCE)
         ));
 
-        let selected_attrs = vec![Entry(vec![]), Entry(messages_vectors.message2_str.clone())];
+        let selected_entries = vec![Entry(vec![]), Entry(messages_vectors.message2_str.clone())];
 
         // generate a proof using prove
         let proof = nym.prove(
@@ -2121,7 +2121,7 @@ mod tests {
                 Entry(messages_vectors.message1_str.clone()),
                 Entry(messages_vectors.message2_str.clone()),
             ],
-            &selected_attrs,
+            &selected_entries,
             &nonce,
         );
 
@@ -2129,7 +2129,7 @@ mod tests {
         assert!(verify_proof(
             &issuer.public,
             &proof,
-            &selected_attrs,
+            &selected_entries,
             Some(&nonce)
         ));
 
