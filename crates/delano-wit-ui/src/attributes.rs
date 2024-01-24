@@ -93,7 +93,7 @@ impl Deref for AttributeKey {
 }
 
 /// Newtype Value to create an AttributeKOV struct
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct AttributeValue(pub String);
 
 impl Deref for AttributeValue {
@@ -105,7 +105,7 @@ impl Deref for AttributeValue {
 }
 
 /// Atrribute Key Operator Value (KOV)
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct AttributeKOV {
     /// Key
     pub key: AttributeKey,
@@ -113,12 +113,20 @@ pub struct AttributeKOV {
     pub op: Operator,
     /// Value
     pub value: AttributeValue,
+    /// Selected, whether the user has selected this attribute for inclusion in the credential
+    /// proof
+    pub selected: bool,
 }
 
 impl AttributeKOV {
     /// Create a new AttributeKOV from AttributeKey, Operator, and AttributeValue
     pub fn new(key: AttributeKey, op: Operator, value: AttributeValue) -> Self {
-        Self { key, op, value }
+        Self {
+            key,
+            op,
+            value,
+            ..Default::default()
+        }
     }
 
     /// Represent this KOV as byte vector
@@ -167,16 +175,7 @@ impl From<context_types::Attribute> for AttributeKOV {
             key: AttributeKey(attribute.key),
             op: Operator::try_from(attribute.op).unwrap_or_default(),
             value: AttributeValue(attribute.value),
-        }
-    }
-}
-
-impl From<context_types::Hint> for AttributeKOV {
-    fn from(hint: context_types::Hint) -> Self {
-        Self {
-            key: AttributeKey(hint.key),
-            op: Operator::try_from(hint.op).unwrap_or_default(),
-            value: AttributeValue("".to_string()),
+            selected: false,
         }
     }
 }
@@ -241,6 +240,17 @@ impl From<AttributeKOV> for Hint {
     }
 }
 
+impl From<Hint> for AttributeKOV {
+    fn from(hint: Hint) -> Self {
+        Self {
+            key: hint.key,
+            op: hint.op,
+            value: AttributeValue("".to_string()),
+            selected: false,
+        }
+    }
+}
+
 impl From<context_types::Attribute> for Hint {
     fn from(attribute: context_types::Attribute) -> Self {
         Self {
@@ -250,20 +260,12 @@ impl From<context_types::Attribute> for Hint {
     }
 }
 
-impl From<Hint> for context_types::Hint {
+impl From<Hint> for context_types::Attribute {
     fn from(hint: Hint) -> Self {
         Self {
             key: hint.key.deref().clone(),
             op: hint.op.to_string(),
-        }
-    }
-}
-
-impl From<context_types::Hint> for Hint {
-    fn from(hint: context_types::Hint) -> Self {
-        Self {
-            key: AttributeKey(hint.key),
-            op: Operator::try_from(hint.op).unwrap_or_default(),
+            value: "".to_string(),
         }
     }
 }

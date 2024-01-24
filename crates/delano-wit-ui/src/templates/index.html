@@ -2,15 +2,17 @@
 <!-- Width up to approx 675px in Tailwindcss -->
 <div id="app" class="p-2 max-w-lg mx-auto">
   <h1 class="text-red-600 text-2xl font-bold">{{app.name}}</h1>
-  {% if offer.hints|length == 0 %}
+  <!---->
+  <!---->
+  {% if loaded is undefined %}
   <div>
     <div>{% include "create.html" %}</div>
     <div>{% include "maxentries.html" %}</div>
-    <div>{% include "output.html" %}</div>
   </div>
   {% else %}
   <div>
     <div>{% include "accept.html" %}</div>
   </div>
   {% endif %}
+  <div>{% include "output.html" %}</div>
 </div>

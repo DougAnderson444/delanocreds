@@ -1,7 +1,7 @@
 //! Module to hold Offer code
 use super::*;
 
-use attributes::AttributeKOV;
+use delanocreds::{Credential, Issuer, Nym};
 use serde::{Deserialize, Serialize};
 
 /// Offers will be sent to others over the wire, and injested by Wasm Interface types.
@@ -16,73 +16,42 @@ pub enum Context {
         /// The Credential bytes
         cred: Vec<u8>,
         /// The Hints
-        hints: Vec<Vec<attributes::Hint>>,
+        hints: Vec<Vec<attributes::AttributeKOV>>,
     },
 }
 
-/// OfferStruct is the minijinja wrapper around the Offer context
-#[derive(Debug, Clone, Default)]
-pub(crate) struct OfferStruct(Option<context_types::Offer>);
+/// A dummy Credential for testing and development
+/// Created from [delanocreds::Credential]
+pub fn dummy_cred() -> Credential {
+    let issuer = Issuer::default();
+    let nym = Nym::new();
 
-impl OfferStruct {
-    /// Gets the hints as a Vector of [attributes::Attribute]
-    fn entries_from_hints(&self) -> Vec<Vec<AttributeKOV>> {
-        self.as_ref().map_or(vec![], |v| {
-            v.hints
-                .as_ref()
-                .unwrap_or(&vec![vec![]])
-                .iter()
-                .map(|a| {
-                    a.iter()
-                        .map(|a| AttributeKOV::from(a.clone()))
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        })
-    }
+    let root_entry = delanocreds::Entry::new(&[]);
+    let nonce = delanocreds::Nonce::default();
+    // Issue the (Powerful) Root Credential to Alice
+    let cred = match issuer
+        .credential()
+        .with_entry(root_entry.clone())
+        .max_entries(&3)
+        .issue_to(&nym.nym_proof(&nonce), Some(&nonce))
+    {
+        Ok(cred) => cred,
+        Err(e) => panic!("Error issuing cred: {:?}", e),
+    };
+    cred
 }
 
-impl StructObject for OfferStruct {
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
-            // if the ID is static, set it here. Otherwise, you can use {{app.id}}
-            "id" => Some(Value::from(utils::rand_id())),
-            "hints" => Some(Value::from(self.entries_from_hints())),
-            // context of any changes (like adding a new row)
-            "context" => {
-                // We do this so we get the exact name of the context, any changes
-                // will trigger compile error.
-                let context_name = context_types::Context::Offer(context_types::Offer {
-                    cred: Default::default(),
-                    hints: Default::default(),
-                });
-                Some(Value::from(util::variant_string(context_name)))
-            }
-            _ => None,
-        }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["id", "hints", "context"])
-    }
-}
+#[cfg(test)]
+mod tests {
+    use delanocreds::CBORCodec;
 
-impl From<Option<context_types::Offer>> for OfferStruct {
-    fn from(context: Option<context_types::Offer>) -> Self {
-        Self(context)
-    }
-}
+    use super::*;
 
-impl From<context_types::Offer> for OfferStruct {
-    fn from(context: context_types::Offer) -> Self {
-        Self(Some(context))
-    }
-}
+    #[test]
+    fn test_dummy_cred() {
+        let cred = dummy_cred().to_bytes();
 
-impl Deref for OfferStruct {
-    type Target = Option<context_types::Offer>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+        // print the bytes
+        println!("{:?}", cred);
     }
 }

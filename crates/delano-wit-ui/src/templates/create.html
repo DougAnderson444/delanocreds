@@ -4,7 +4,8 @@
     <!-- Main loop -->
     {% for entry in credential.entries %}
     <!-- Set vars -->
-    {% with item = credential, context = credential.context, entryloop = loop %}
+    {% with item = credential, context = credential.context, entryloop =
+    loop.index0 %}
     <!-- sub loop -->
     {% for attr in entry %}
     <!-- Main content include-->

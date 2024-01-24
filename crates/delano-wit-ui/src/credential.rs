@@ -6,11 +6,14 @@ use self::attributes::Hint;
 use super::*;
 use crate::attributes::AttributeKOV;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use delanocreds::{CBORCodec, Credential};
 use std::ops::DerefMut;
 
 /// The Credential Struct
 #[derive(Debug, Clone)]
 pub struct CredentialStruct {
+    /// The credential bytes received when loaded, if any
+    pub credential: Option<Vec<u8>>,
     /// The Credential's Attributes, as entered at each level
     pub entries: Vec<Vec<AttributeKOV>>,
     /// The Credential's Max Entries
@@ -22,6 +25,7 @@ impl Default for CredentialStruct {
         Self {
             entries: vec![vec![AttributeKOV::default()]],
             max_entries: 0,
+            credential: None,
         }
     }
 }
@@ -41,13 +45,9 @@ impl CredentialStruct {
     }
 
     /// Entends the Vector of entries by 1.
-    pub(crate) fn push_entry(&self) -> Self {
-        let mut entries = self.entries.clone();
-        entries.push(vec![AttributeKOV::default()]);
-        Self {
-            entries,
-            max_entries: self.max_entries,
-        }
+    pub(crate) fn push_entry(mut self) -> Self {
+        self.entries.push(vec![AttributeKOV::default()]);
+        self
     }
     /// Use the given context to extract the variant (key, op, or value) and the index
     /// of the attribute to update.
@@ -81,10 +81,21 @@ impl CredentialStruct {
                     attributes::AttributeValue(kvctx.value.clone());
                 self.entries
             }
+            // set if selected
+            context_types::Entry {
+                idx,
+                val: context_types::Kovindex::Selected(i),
+            } => {
+                // show idx, i, and kvctx.value
+                println!("idx: {:?}, i: {:?}, kvctx.value: {:?}", idx, i, kvctx.value);
+                self.entries[idx as usize][i as usize].selected = !kvctx.value.is_empty();
+                self.entries
+            }
         };
         Self {
             entries: edited_attributes.to_vec(),
             max_entries: self.max_entries,
+            ..self
         }
     }
 
@@ -94,6 +105,7 @@ impl CredentialStruct {
         Self {
             max_entries: *max as usize,
             entries: cred.entries.clone(),
+            ..cred
         }
     }
 
@@ -117,6 +129,37 @@ impl CredentialStruct {
                 max_entries: Some(self.max_entries as u8),
             },
         )
+    }
+
+    /// Generate a proof using the given
+    fn prove(&self, credential: Vec<u8>, nonce: Vec<u8>) -> Result<Vec<u8>, String> {
+        let mut selected = Vec::new();
+
+        let entries = self
+            .entries
+            .iter()
+            .map(|entry| {
+                entry
+                    .iter()
+                    .map(|kov| {
+                        let bytes = delanocreds::Attribute::new(kov.to_string()).to_bytes();
+                        if kov.selected {
+                            selected.push(bytes.clone());
+                        }
+                        bytes
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let provables: wallet::types::Provables = wallet::types::Provables {
+            credential,
+            entries,
+            selected,
+            nonce,
+        };
+
+        wallet::actions::prove(&provables)
     }
 }
 
@@ -152,10 +195,14 @@ impl StructObject for CredentialStruct {
                 let offer = self.offer(cred).unwrap_or_default();
 
                 // convert the attributes to hint
-                let hints: Vec<Vec<Hint>> = self
+                let hints: Vec<Vec<AttributeKOV>> = self
                     .entries
                     .iter()
-                    .map(|a| a.iter().map(|a| Hint::from(a.clone())).collect::<Vec<_>>())
+                    .map(|a| {
+                        a.iter()
+                            .map(|a| Hint::from(a.clone()).into())
+                            .collect::<Vec<_>>()
+                    })
                     .collect::<Vec<_>>();
 
                 let offer = crate::offer::Context::Offer { cred: offer, hints };
@@ -210,6 +257,64 @@ impl StructObject for AttributeStruct {
     /// So that debug will show the values
     fn static_fields(&self) -> Option<&'static [&'static str]> {
         Some(&["id", "key", "op", "value"])
+    }
+}
+
+impl From<CredentialStruct> for wurbo::prelude::Value {
+    fn from(context: CredentialStruct) -> Self {
+        Self::from_struct_object(context)
+    }
+}
+
+impl From<Option<context_types::Loadables>> for CredentialStruct {
+    fn from(maybe_loadables: Option<context_types::Loadables>) -> Self {
+        match maybe_loadables {
+            Some(loadables) => Self::from(loadables),
+            None => Self::default(),
+        }
+    }
+}
+
+/// From WIT context Loadables type, which consist of a cred field and a hints field, which are list<list<Attribute>>
+impl From<context_types::Loadables> for CredentialStruct {
+    fn from(loadables: context_types::Loadables) -> Self {
+        // get credential from bytes so we can get the length of max entries
+        match (
+            Credential::from_bytes(&loadables.cred),
+            loadables.hints.as_ref(),
+        ) {
+            (Ok(cred), Some(entry_hints)) => {
+                // extract update key from cred
+                let update_key = cred.update_key;
+                // if update key is None, max entries is 0
+                // if update key is Some, max entries is the length of the update key
+                let max_entries = update_key.map(|k| k.len()).unwrap_or_default();
+
+                Self {
+                    credential: Some(loadables.cred),
+                    entries: entry_hints
+                        .iter()
+                        .map(|a| {
+                            a.iter()
+                                .map(|a| AttributeKOV::from(a.clone()))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>(),
+                    // max entries is in the Cred, it's the length of the update_key, if any.
+                    max_entries: max_entries as usize,
+                }
+            }
+            _ => {
+                eprintln!("Error deserializing credential",);
+                Self::default()
+            }
+        }
+    }
+}
+
+impl From<&context_types::Loadables> for CredentialStruct {
+    fn from(loadables: &context_types::Loadables) -> Self {
+        Self::from(loadables.clone())
     }
 }
 

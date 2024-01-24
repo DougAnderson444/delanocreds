@@ -12,7 +12,6 @@ mod util;
 use credential::CredentialStruct;
 // use input::Input;
 // use issuer::IssuerStruct;
-use offer::OfferStruct;
 use output::OutputStruct;
 use page::StructPage;
 
@@ -25,7 +24,7 @@ use bindings::delano::wit_ui::wurbo_in;
 use bindings::exports::delano::wit_ui::wurbo_out::Guest as WurboGuest;
 
 use std::ops::Deref;
-use std::sync::OnceLock;
+// use std::sync::OnceLock;
 
 struct Component;
 
@@ -65,7 +64,7 @@ prelude_bindgen! {WurboGuest, Component, StructContext, Context, LAST_STATE}
 struct StructContext {
     app: StructPage,
     credential: CredentialStruct,
-    offer: OfferStruct,
+    loaded: Option<context_types::Loadables>,
     output: OutputStruct,
     target: Option<String>,
 }
@@ -84,14 +83,20 @@ impl StructObject for StructContext {
         match name {
             "app" => Some(Value::from_struct_object(self.app.clone())),
             "output" => Some(Value::from_struct_object(self.output.clone())),
-            "offer" => Some(Value::from_struct_object(self.offer.clone())),
             "credential" => Some(Value::from_struct_object(self.credential.clone())),
+            // self.as_ref().map(|v| v.name.clone()).unwrap_or_default(),
+            "loaded" => match self.loaded.as_ref() {
+                Some(loadables) => Some(Value::from_struct_object(CredentialStruct::from(
+                    loadables.clone(),
+                ))),
+                None => None,
+            },
             _ => None,
         }
     }
     /// So that debug will show the values
     fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["app"])
+        Some(&["app", "output", "credential", "loaded"])
     }
 }
 
@@ -119,10 +124,6 @@ impl From<&context_types::Context> for StructContext {
                 StructContext::from(CredentialStruct::with_max_entries(max))
                     .with_target(OUTPUT_HTML.to_string())
             }
-            context_types::Context::Offer(offer) => {
-                StructContext::from(OfferStruct::from(offer.clone()))
-                    .with_target(ACCEPT_HTML.to_string())
-            }
             // Creates a New Entry in the credential. This can only be done once (ie. only 1
             // additional Entry can be added)
             context_types::Context::Newentry => {
@@ -137,9 +138,9 @@ impl From<context_types::Everything> for StructContext {
     fn from(context: context_types::Everything) -> Self {
         StructContext {
             app: StructPage::from(context.page),
-            credential: CredentialStruct::default(),
-            offer: OfferStruct::from(context.offer),
+            credential: CredentialStruct::from(context.load.clone()),
             output: OutputStruct::default(),
+            loaded: context.load,
             target: None,
         }
     }
@@ -154,10 +155,10 @@ impl From<CredentialStruct> for StructContext {
     }
 }
 
-impl From<OfferStruct> for StructContext {
-    fn from(offer_ctx: OfferStruct) -> Self {
+impl From<context_types::Loadables> for StructContext {
+    fn from(loadables: context_types::Loadables) -> Self {
         let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        state.offer = offer_ctx.clone();
+        state.loaded = Some(loadables);
         state
     }
 }
