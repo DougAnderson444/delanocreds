@@ -5,7 +5,7 @@
 	import { page } from '$app/stores';
 
 	// Import wasm component bytes as a url
-	import wasmURL from '../../../../../target/wasm32-wasi/debug/delano_wit_ui.wasm?url';
+	import wasmURL from '../../../../../target/wasm32-wasi/release/delano_wit_ui.wasm?url';
 	import * as importables from './importables.js';
 
 	export let load;
@@ -66,7 +66,7 @@
 					version: '0.1.0',
 					description: 'A wallet app for Delanocreds'
 				},
-				offer
+				load: offer
 				// : {
 				// 	cred: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]),
 				// 	// TypedArray of {key: op: } objects

@@ -1,6 +1,6 @@
 # compose the *.wasm files together
 build:
-  cargo component build --workspace
+  cargo component build --workspace --release
 
 preview: build
   npm run build && npm run preview -- --open
