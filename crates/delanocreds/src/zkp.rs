@@ -110,7 +110,6 @@ impl From<Nonce> for Scalar {
     }
 }
 
-// convert From Option<impl AsRef<[u8]>> to Nonce
 impl From<Option<&[u8]>> for Nonce {
     fn from(bytes: Option<&[u8]>) -> Self {
         match bytes {
