@@ -81,13 +81,10 @@ impl CredentialStruct {
                     attributes::AttributeValue(kvctx.value.clone());
                 self.entries
             }
-            // set if selected
             context_types::Entry {
                 idx,
                 val: context_types::Kovindex::Selected(i),
             } => {
-                // show idx, i, and kvctx.value
-                println!("idx: {:?}, i: {:?}, kvctx.value: {:?}", idx, i, kvctx.value);
                 self.entries[idx as usize][i as usize].selected = !kvctx.value.is_empty();
                 self.entries
             }
@@ -132,7 +129,11 @@ impl CredentialStruct {
     }
 
     /// Generate a proof using the given
-    fn prove(&self, credential: Vec<u8>, nonce: Vec<u8>) -> Result<Vec<u8>, String> {
+    fn prove(
+        &self,
+        credential: Vec<u8>,
+        nonce: Vec<u8>,
+    ) -> Result<(Vec<u8>, Vec<Vec<Vec<u8>>>), String> {
         let mut selected = Vec::new();
 
         let entries = self
@@ -182,13 +183,13 @@ impl StructObject for CredentialStruct {
                 });
                 Some(Value::from(util::variant_string(context_name)))
             }
-            "credential" => match self.issue() {
-                Ok(cred) => Some(Value::from(cred)),
-                Err(e) => {
-                    eprintln!("Error issuing credential: {:?}", e);
-                    None
-                }
-            },
+            // "credential" => match self.issue() {
+            //     Ok(cred) => Some(Value::from(cred)),
+            //     Err(e) => {
+            //         eprintln!("Error issuing credential: {:?}", e);
+            //         None
+            //     }
+            // },
             // offer is a link to the credential, including hints
             "offer" => {
                 let cred = self.issue().unwrap_or_default();
@@ -212,6 +213,12 @@ impl StructObject for CredentialStruct {
                 let b64 = Base64UrlUnpadded::encode_string(serialized.as_bytes());
 
                 Some(Value::from(b64))
+            }
+            "proof" => {
+                // To go from the current credential to a proof, we need to:
+                // 1) Extend the current credential with the additional entry
+                // 2) generate the proof with the extended credential
+                None
             }
             _ => None,
         }
