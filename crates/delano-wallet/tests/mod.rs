@@ -13,7 +13,7 @@ use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
 
-use crate::bindgen::exports::delano::wallet::actions::IssueOptions;
+use crate::bindgen::{delano::wallet, exports::delano::wallet::actions::IssueOptions};
 
 struct MyCtx {
     wasi_ctx: Context,
@@ -153,7 +153,7 @@ fn main() -> wasmtime::Result<(), TestError> {
         nonce: nonce_bytes.clone(),
     };
 
-    let (proof, selected) = bindings
+    let wallet::types::Proven { proof, selected } = bindings
         .delano_wallet_actions()
         .call_prove(&mut store, &provables)?
         .map_err(|e| TestError::Stringified(e))?;
@@ -217,7 +217,7 @@ fn main() -> wasmtime::Result<(), TestError> {
         nonce: verifiers_nonce_bytes.clone(),
     };
 
-    let (proof, selected) = bindings
+    let wallet::types::Proven { proof, selected } = bindings
         .delano_wallet_actions()
         .call_prove(&mut store, &provables)?
         .map_err(|e| TestError::Stringified(e))?;
@@ -259,7 +259,7 @@ fn main() -> wasmtime::Result<(), TestError> {
         nonce: nonce_bytes.clone(),
     };
 
-    let (proof, selected) = bindings
+    let wallet::types::Proven { proof, selected } = bindings
         .delano_wallet_actions()
         .call_prove(&mut store, &provables)?
         .map_err(|e| TestError::Stringified(e))?;

@@ -15,6 +15,11 @@ interface types {
     nonce: list<u8>
   }
 
+  record proven {
+    proof: list<u8>,
+    selected: list<entry>
+  }
+
   record verifiables {
     proof: list<u8>, 
     issuer-public: list<u8>, 
@@ -49,7 +54,7 @@ interface types {
 }
 
 interface actions {
-    use types.{attribute, provables, verifiables, offer-config, issue-options, nonce, entry, proof, selected};
+    use types.{attribute, provables, verifiables, offer-config, issue-options, nonce, entry, proven};
 
     /// Returns the active Nym of the component.
     get-nym-proof: func(nonce: nonce) -> result<list<u8>, string>;
@@ -70,7 +75,7 @@ interface actions {
     /// Export a function that proves selected attributes in a given credential
     /// Returns the selected attributes in the proper order in order to verify the proof,
     /// as each Attribute needs to be verified from their respective Entry.
-    prove: func(values: provables) -> result<tuple<proof, selected>, string>;
+    prove: func(values: provables) -> result<proven, string>;
 
     /// Export a function that verifies a proof against a public key, nonce and selected attributes
     verify: func(values: verifiables) -> result<bool, string>;

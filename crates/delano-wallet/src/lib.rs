@@ -251,7 +251,7 @@ impl Guest for Component {
     }
 
     /// Prove
-    fn prove(values: Provables) -> Result<(Vec<u8>, Vec<Vec<Vec<u8>>>), String> {
+    fn prove(values: Provables) -> Result<wallet::types::Proven, String> {
         assert_nym().map_err(|e| e.to_string())?;
         let nym = NYM.get().expect("NYM should be initialized");
 
@@ -277,13 +277,13 @@ impl Guest for Component {
 
         let (proof, selected_entries) = buildr.prove(&nonce);
 
-        Ok((
-            proof.to_bytes().map_err(|e| e.to_string())?,
-            selected_entries
+        Ok(wallet::types::Proven {
+            proof: proof.to_bytes().map_err(|e| e.to_string())?,
+            selected: selected_entries
                 .iter()
                 .map(|entry| entry.iter().map(|attr| attr.to_bytes()).collect())
                 .collect(),
-        ))
+        })
     }
 
     /// Verify
