@@ -1,8 +1,5 @@
-<!-- These pages need to: issue, offer, accept, prove, and verify -->
-<!-- Width up to approx 675px in Tailwindcss -->
 <div id="app" class="p-2 max-w-lg mx-auto">
   <h1 class="text-red-600 text-2xl font-bold">{{app.name}}</h1>
-  <!---->
   <!---->
   {% if loaded is undefined %}
   <div>
@@ -10,6 +7,7 @@
     <div>{% include "maxentries.html" %}</div>
   </div>
   {% else %}
+  <!-- Use a loaded offer to extend, select and prove -->
   <div>
     <div>{% include "accept.html" %}</div>
   </div>

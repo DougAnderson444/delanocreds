@@ -105,7 +105,7 @@ impl Deref for AttributeValue {
 }
 
 /// Atrribute Key Operator Value (KOV)
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AttributeKOV {
     /// Key
     pub key: AttributeKey,
@@ -118,6 +118,17 @@ pub struct AttributeKOV {
     pub selected: bool,
 }
 
+impl Default for AttributeKOV {
+    fn default() -> Self {
+        Self {
+            key: AttributeKey::default(),
+            op: Operator::Equal,
+            value: AttributeValue::default(),
+            selected: true,
+        }
+    }
+}
+
 impl AttributeKOV {
     /// Create a new AttributeKOV from AttributeKey, Operator, and AttributeValue
     pub fn new(key: AttributeKey, op: Operator, value: AttributeValue) -> Self {
@@ -125,7 +136,7 @@ impl AttributeKOV {
             key,
             op,
             value,
-            ..Default::default()
+            selected: true,
         }
     }
 
@@ -141,12 +152,13 @@ impl StructObject for AttributeKOV {
             "key" => Some(Value::from(self.key.deref().clone())),
             "op" => Some(Value::from(self.op.get_field("value").unwrap())),
             "value" => Some(Value::from(self.value.deref().clone())),
+            "selected" => Some(Value::from(self.selected)),
             _ => None,
         }
     }
     /// So that debug will show the values
     fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["key", "op", "value"])
+        Some(&["key", "op", "value", "selected"])
     }
 }
 
@@ -175,7 +187,7 @@ impl From<context_types::Attribute> for AttributeKOV {
             key: AttributeKey(attribute.key),
             op: Operator::try_from(attribute.op).unwrap_or_default(),
             value: AttributeValue(attribute.value),
-            selected: false,
+            selected: true,
         }
     }
 }
@@ -246,7 +258,7 @@ impl From<Hint> for AttributeKOV {
             key: hint.key,
             op: hint.op,
             value: AttributeValue("".to_string()),
-            selected: false,
+            selected: true,
         }
     }
 }

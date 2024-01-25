@@ -5,8 +5,7 @@ use self::attributes::Hint;
 
 use super::*;
 use crate::attributes::AttributeKOV;
-use base64ct::{Base64UrlUnpadded, Encoding};
-use delanocreds::{CBORCodec, Credential};
+use delanocreds::{CBORCodec, Credential, Nonce};
 use std::ops::DerefMut;
 
 /// The Credential Struct
@@ -128,12 +127,33 @@ impl CredentialStruct {
         )
     }
 
-    /// Generate a proof using the given
-    fn prove(
-        &self,
-        credential: Vec<u8>,
-        nonce: Vec<u8>,
-    ) -> Result<(Vec<u8>, Vec<Vec<Vec<u8>>>), String> {
+    /// Extend the loaded credential with the given addtional attribute Entry.
+    /// When we use this UI to load a credential that is given to use, the UI
+    /// allows a user to "Extend" the credential with an additional Entry of 1 or more attributes.
+    ///
+    /// When we extend, we are taking the length -1 Entries (likely just a single enrty, but could
+    /// be more), accepting the offered credential with these entries, and then adding the additional
+    /// entry using the lest of the entries Vector for the extension.
+    ///
+    /// This yields an extended proof that can be used to prove attributes in the additional entry.
+    fn extend(&self, cred: Vec<u8>) -> Result<Vec<u8>, String> {
+        // accept given credential
+        // it'll fail to prove if the Entry attributes don't match the credential
+        let accepted = wallet::actions::accept(&cred)?;
+
+        // extend the accepted credential with the last entry in self.entries as wallet::types::Entry
+        let last_entry = self.entries[self.entries.len() - 1]
+            .iter()
+            .map(|kov| {
+                let bytes = delanocreds::Attribute::new(kov.to_string()).to_bytes();
+                bytes
+            })
+            .collect::<Vec<_>>();
+        wallet::actions::extend(&accepted, &last_entry)
+    }
+
+    /// Generate a proof and selected Entrys using the given credential and nonce
+    fn prove(&self, credential: Vec<u8>, nonce: Vec<u8>) -> Result<wallet::types::Proven, String> {
         let mut selected = Vec::new();
 
         let entries = self
@@ -207,18 +227,70 @@ impl StructObject for CredentialStruct {
                     .collect::<Vec<_>>();
 
                 let offer = crate::offer::Context::Offer { cred: offer, hints };
-
-                let serialized = serde_json::to_string(&offer).unwrap_or_default();
-
-                let b64 = Base64UrlUnpadded::encode_string(serialized.as_bytes());
-
-                Some(Value::from(b64))
+                Some(Value::from(offer.to_urlsafe()))
             }
             "proof" => {
                 // To go from the current credential to a proof, we need to:
                 // 1) Extend the current credential with the additional entry
                 // 2) generate the proof with the extended credential
-                None
+
+                // if self.credential is None, we can't extend it, return None
+                let cred = match &self.credential {
+                    Some(cred) => cred,
+                    None => return Some(Value::from("No credential loaded")),
+                };
+
+                // we have a cred, if there is only 1 self.entries, return None
+                if self.entries.len() == 1 {
+                    return None;
+                }
+
+                let extended = match self.extend(cred.clone()) {
+                    Ok(extended) => extended,
+                    Err(e) => {
+                        eprintln!("Error extending credential: {:?}", e);
+                        return Some(Value::from("Error extending credential"));
+                    }
+                };
+
+                // generate a proof for the extended cred using selected attributeKOVs
+                let nonce = Nonce::default();
+                let nonce_bytes: Vec<u8> = nonce.into();
+                let wallet::types::Proven { proof, selected } =
+                    match self.prove(extended, nonce_bytes) {
+                        Ok(proven) => proven,
+                        Err(e) => {
+                            eprintln!("Error generating proof: {:?}", e);
+                            return Some(Value::from("Error generating proof"));
+                        }
+                    };
+
+                // Also generate the Vec<Vec<AttributeKOV>> for the preimages. Leave any unselected
+                // attributes as default.
+                let preimages = self
+                    .entries
+                    .iter()
+                    .map(|entry| {
+                        entry
+                            .iter()
+                            .map(|kov| {
+                                if kov.selected {
+                                    kov.clone()
+                                } else {
+                                    AttributeKOV::default()
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+
+                let proof_package = crate::offer::Context::Proof {
+                    proof,
+                    selected,
+                    preimages,
+                };
+
+                Some(Value::from(proof_package.to_urlsafe()))
             }
             _ => None,
         }
