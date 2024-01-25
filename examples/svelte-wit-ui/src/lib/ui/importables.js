@@ -44,6 +44,71 @@ export function buildCodeString(namespace) {
 `;
 }
 
+export function buildWalletActions() {
+	// Stub these with noop:
+	//
+	// /// Returns the active Nym of the component.
+	// get-nym-proof: func(nonce: nonce) -> result<list<u8>, string>;
+	//
+	// /// Issue a credential Entry to a Nym with maximum entries.
+	// issue: func(nymproof: list<u8>, attributes: list<attribute>, maxentries: u8, nonce: option<list<u8>>) -> result<list<u8>, string>;
+	//
+	// /// Create an offer for a credential with its given entries and a given configuration.
+	// offer: func(cred: list<u8>, config: offer-config) -> result<list<u8>, string>;
+	//
+	// /// Accept a credential offer and return the accepte Credential bytes
+	// accept: func(offer: list<u8>) -> result<list<u8>, string>;
+	//
+	// /// Export a function that proves selected attributes in a given credential
+	// prove: func(values: provables) -> result<list<u8>, string>;
+	//
+	// /// Export a function that verifies a proof against a public key, nonce and selected attributes
+	// verify: func(values: verifiables) -> result<bool, string>;
+	return `
+    export function getNymProof(nonce) {
+      // return a Uint8Array
+      return new Uint8Array(69).fill(42);
+    }
+
+    export function issue(nymproof, attributes, maxentries, nonce) {
+      // return a Uint8Array dummy cred
+      return new Uint8Array([${dummyCred}]);
+    }
+
+    export function offer(cred, config) {
+      // return a Uint8Array
+      return new Uint8Array([${dummyCred}]);
+    }
+
+    export function accept(offer) {
+      // return a Uint8Array
+      return new Uint8Array(${dummyCred});
+    }
+
+    export function extend(cred, entry) {
+      // return a Uint8Array tuple
+      return new Uint8Array([${dummyCred}], [${dummyCred}]);
+    }
+
+    export function prove(values) {
+      // return a Uint8Array
+      return {
+        proof: new Uint8Array(69).fill(42),
+        // selected is Arr[Arr[Arr[u8]]]
+        selected: [
+          [
+           new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+          ],
+        ],
+      }
+    }
+
+    export function verify(values) {
+      true
+    }
+  `;
+}
+
 let dummyCred = [
 	165, 101, 115, 105, 103, 109, 97, 164, 97, 122, 152, 48, 24, 139, 24, 29, 24, 43, 24, 115, 24,
 	243, 5, 4, 24, 233, 24, 81, 24, 200, 19, 24, 94, 24, 236, 24, 87, 24, 241, 24, 222, 24, 129, 24,
@@ -309,55 +374,3 @@ let dummyCred = [
 	100, 24, 223, 16, 24, 79, 24, 174, 24, 33, 24, 218, 24, 246, 24, 224, 24, 85, 24, 202, 24, 76, 24,
 	245, 24, 248, 24, 235, 24, 71, 24, 24, 22, 24, 208, 24, 194, 24, 181, 24, 50, 24, 133, 24, 127
 ];
-
-export function buildWalletActions() {
-	// Stub these with noop:
-	//
-	// /// Returns the active Nym of the component.
-	// get-nym-proof: func(nonce: nonce) -> result<list<u8>, string>;
-	//
-	// /// Issue a credential Entry to a Nym with maximum entries.
-	// issue: func(nymproof: list<u8>, attributes: list<attribute>, maxentries: u8, nonce: option<list<u8>>) -> result<list<u8>, string>;
-	//
-	// /// Create an offer for a credential with its given entries and a given configuration.
-	// offer: func(cred: list<u8>, config: offer-config) -> result<list<u8>, string>;
-	//
-	// /// Accept a credential offer and return the accepte Credential bytes
-	// accept: func(offer: list<u8>) -> result<list<u8>, string>;
-	//
-	// /// Export a function that proves selected attributes in a given credential
-	// prove: func(values: provables) -> result<list<u8>, string>;
-	//
-	// /// Export a function that verifies a proof against a public key, nonce and selected attributes
-	// verify: func(values: verifiables) -> result<bool, string>;
-	return `
-    export function getNymProof(nonce) {
-      // return a Uint8Array
-      return new Uint8Array(69).fill(42);
-    }
-
-    export function issue(nymproof, attributes, maxentries, nonce) {
-      // return a Uint8Array dummy cred
-      return new Uint8Array([${dummyCred}]);
-    }
-
-    export function offer(cred, config) {
-      // return a Uint8Array
-      return new Uint8Array([${dummyCred}]);
-    }
-
-    export function accept(offer) {
-      // return a Uint8Array
-      return new Uint8Array(${dummyCred});
-    }
-
-    export function prove(values) {
-      // return a Uint8Array
-      return new Uint8Array(69).fill(42);
-    }
-
-    export function verify(values) {
-      true
-    }
-  `;
-}
