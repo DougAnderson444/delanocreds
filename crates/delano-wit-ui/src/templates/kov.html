@@ -15,17 +15,17 @@
         <!--   data-context-value='{ "ctx": { "tag": "select", "val": {{loop.index0}} } }' -->
         <!--   {% if attr.selected|safe|select("==", "true") %}checked{% endif %} -->
         <!-- /> -->
-    <div class="flex items-center my-0 mx-1 sm:mx-2 ">
-      <label class="relative inline-flex items-center cursor-pointer text-center">
-          <input 
-          type="checkbox" 
-          value="{{attr.selected}}"
-          class="sr-only peer"
-          id="{{item.id|on('change')}}"
-          data-context-name="{{item.context}}"
-          data-context-value='{ "ctx": { "idx": {{entryloop}}, "val": { "tag": "selected", "val": {{loop.index0}} } } }'
-          {% if attr.selected is true %}checked{% endif %}
-      >
+      <div class="flex items-center my-0 mx-1 sm:mx-2 ">
+        <label class="relative inline-flex items-center cursor-pointer text-center">
+            <input 
+            type="checkbox" 
+            value="{{attr.selected}}"
+            class="sr-only peer"
+            id="{{item.id|on('change')}}"
+            data-context-name="{{item.context}}"
+            data-context-value='{ "ctx": { "idx": {{entryloop}}, "val": { "tag": "selected", "val": {{loop.index0}} } } }'
+            {% if attr.selected is true %}checked{% endif %}
+        >
           <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
         </label>
       </div>
@@ -38,12 +38,14 @@
           data-context-name="{{item.context}}"
           data-context-value='{ "ctx": { "idx": {{entryloop}}, "val": { "tag": "key", "val": {{loop.index0}} } } }'
           value="{{attr.key}}"
+          {% if editable is defined and editable is false %}disabled{% endif %}
         />
         <select
           id="{{ item.id|on('change') }}"
           data-context-name="{{item.context}}"
           data-context-value='{ "ctx": { "idx": {{entryloop}}, "val": { "tag": "op", "val": {{loop.index0}} } } }'
           class="p-1 bg-blue-500 text-white font-semibold"
+          {% if editable is defined and editable is false %}disabled{% endif %}
         >
           <!-- In minijinja, I need to check if attr.op|select("==", "="), then insert the word "selected" if true for >,<, and = -->
           <option value="=" {% if attr.op|safe|select("==", "=") %}selected{% endif %}>equals</option>
@@ -57,6 +59,7 @@
           data-context-name="{{item.context}}"
           data-context-value='{ "ctx": { "idx": {{entryloop}}, "val": { "tag": "value", "val": {{loop.index0}} } } }'
           value="{{attr.value}}"
+          {% if editable is defined and editable is false %}disabled{% endif %}
         />
         <!-- <div class="flex-grow-0 mx-2"> -->
         <!--   <button -->

@@ -1,17 +1,17 @@
 <!-- Set selectable to true for this page, as the proof is selective-->
 {% set selectable = true %}
 <!---->
-{% if loaded and loaded.entries|length > 0 %}
+<!---->
+{% if loaded and loaded.hints|length > 0 %}
 <div class="" id="{{app.id}}">
   <h2 class="text-xl font-bold">Proof Builder</h2>
   <p class="text-black">Extend, select, and prove!</p>
   <div class="flex flex-col w-full items-center">
     <div class="rounded shadow p-2 bg-blue-50">
       <!-- Main loop -->
-      {% for entry in loaded.entries %}
+      {% for entry in loaded.hints %}
       <!-- Set vars -->
-      {% with item = loaded, context = loaded.context, entryloop = loop.index0
-      %}
+      {% with item = loaded, entryloop = loop.index0 %}
       <!-- sub loop -->
       {% for attr in entry %}
       <!-- Main content include-->
@@ -27,7 +27,7 @@
     <div class="text-xl mt-4">Extend:</div>
     <!-- Now we show the Last loaded Entry if the index is larger that credential.entries -->
     <!---->
-    {% if loaded.entries|length >= credential.entries|length %}
+    {% if loaded.hints|length >= credential.entries|length %}
     <button
       id="{{ app.id|on('click') }}"
       class="border-4 hover:bg-green-500 hover:text-white hover:border-neutral-50 font-bold py-2 px-4 rounded text-xl"
@@ -38,13 +38,13 @@
     </button>
     {% else %}
     <div class="rounded p-2 bg-green-100">
-      <!--Loop through all entry with index greater than entries -->
-      {% for entry in credential.entries[loaded.entries|length:] %}
+      <!--Loop through all entry with index greater than hints -->
+      {% for entry in credential.entries[loaded.hints|length:] %}
       <!---->
       {% with item = credential, context = credential.context, entryloop =
       loop.index0 + credential.entries|length - 1 %}
       <!---->
-      {% for attr in credential.entries[loaded.entries|length] %}
+      {% for attr in credential.entries[loaded.hints|length] %}
       <!---->
       {% include "kov.html" %}
       <!---->

@@ -1,16 +1,22 @@
 <div id="app" class="p-2 max-w-lg mx-auto">
   <h1 class="text-red-600 text-2xl font-bold">{{app.name}}</h1>
-  <!---->
-  {% if loaded is undefined %}
+  <!-- Create a Credential -->
+  {% if loaded.cred is undefined and loaded.proof is undefined %}
   <div>
     <div>{% include "create.html" %}</div>
     <div>{% include "maxentries.html" %}</div>
   </div>
-  {% else %}
-  <!-- Use a loaded offer to extend, select and prove -->
+  {% elif loaded.cred is defined %}
+  <!-- Use a loaded credential to extend, select and prove -->
   <div>
     <div>{% include "accept.html" %}</div>
   </div>
+  <!-- Verify a Credential -->
+  {% elif loaded.proof is defined %}
+  <div>
+    <div>{% include "verify.html" %}</div>
+  </div>
+  <!-- TODO  -->
   {% endif %}
   <div>{% include "output.html" %}</div>
 </div>

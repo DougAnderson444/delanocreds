@@ -1,0 +1,29 @@
+<!-- Cannot edit a Proof verification (there's no need) -->
+{% set editable = false %}
+<!---->
+{% if loaded and loaded.preimages|length > 0 %}
+<div class="" id="{{app.id}}">
+  <h2 class="text-xl font-bold">Proof Verifier</h2>
+  <p class="text-black">Inspect, validate, and verify!</p>
+  <div class="flex flex-col w-full items-center">
+    <div class="rounded shadow p-2 bg-blue-50">
+      <!-- Main loop -->
+      {% for entry in loaded.preimages %}
+      <!-- Set vars -->
+      {% with item = loaded, context = loaded.context, entryloop = loop.index0
+      %}
+      <!-- sub loop -->
+      {% for attr in entry %}
+      <!-- Main content include-->
+      {% include "kov.html" %}
+      <!---->
+      {% endfor %}
+      <!---->
+      {% endwith %}
+      <!---->
+      {% endfor %}
+    </div>
+    <!---->
+  </div>
+</div>
+{% endif %}
