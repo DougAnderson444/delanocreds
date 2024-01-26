@@ -226,7 +226,7 @@ impl StructObject for CredentialStruct {
                     })
                     .collect::<Vec<_>>();
 
-                let offer = crate::offer::Context::Offer { cred: offer, hints };
+                let offer = crate::api::Loaded::Offer { cred: offer, hints };
                 Some(Value::from(offer.to_urlsafe()))
             }
             "proof" => {
@@ -284,7 +284,7 @@ impl StructObject for CredentialStruct {
                     })
                     .collect::<Vec<_>>();
 
-                let proof_package = crate::offer::Context::Proof {
+                let proof_package = crate::api::Loaded::Proof {
                     proof,
                     selected,
                     preimages,
@@ -310,11 +310,11 @@ impl StructObject for CredentialStruct {
 
 /// Wrap the [context_types::Attribute] in a struct that implements StructObject
 #[derive(Debug, Clone)]
-pub struct AttributeStruct(context_types::Attribute);
+pub struct AttributeStruct(context_types::Kov);
 
 impl Default for AttributeStruct {
     fn default() -> Self {
-        Self(context_types::Attribute {
+        Self(context_types::Kov {
             key: "name".to_string(),
             op: "=".to_string(),
             value: "value".to_string(),
@@ -345,60 +345,45 @@ impl From<CredentialStruct> for wurbo::prelude::Value {
     }
 }
 
-impl From<Option<context_types::Loadables>> for CredentialStruct {
-    fn from(maybe_loadables: Option<context_types::Loadables>) -> Self {
-        match maybe_loadables {
-            Some(loadables) => Self::from(loadables),
-            None => Self::default(),
-        }
-    }
-}
-
 /// From WIT context Loadables type, which consist of a cred field and a hints field, which are list<list<Attribute>>
-impl From<context_types::Loadables> for CredentialStruct {
-    fn from(loadables: context_types::Loadables) -> Self {
-        // get credential from bytes so we can get the length of max entries
-        match (
-            Credential::from_bytes(&loadables.cred),
-            loadables.hints.as_ref(),
-        ) {
-            (Ok(cred), Some(entry_hints)) => {
-                // extract update key from cred
-                let update_key = cred.update_key;
-                // if update key is None, max entries is 0
-                // if update key is Some, max entries is the length of the update key
-                let max_entries = update_key.map(|k| k.len()).unwrap_or_default();
+impl From<api::Loaded> for CredentialStruct {
+    fn from(ctx: api::Loaded) -> Self {
+        match ctx {
+            api::Loaded::Offer { cred, hints } => {
+                match Credential::from_bytes(&cred) {
+                    Ok(credential) => {
+                        // extract update key from cred
+                        let update_key = credential.update_key;
+                        // if update key is None, max entries is 0
+                        // if update key is Some, max entries is the length of the update key
+                        let max_entries = update_key.map(|k| k.len()).unwrap_or_default();
 
-                Self {
-                    credential: Some(loadables.cred),
-                    entries: entry_hints
-                        .iter()
-                        .map(|a| {
-                            a.iter()
-                                .map(|a| AttributeKOV::from(a.clone()))
-                                .collect::<Vec<_>>()
-                        })
-                        .collect::<Vec<_>>(),
-                    // max entries is in the Cred, it's the length of the update_key, if any.
-                    max_entries: max_entries as usize,
+                        Self {
+                            credential: Some(cred),
+                            entries: hints,
+                            // max entries is in the Cred, it's the length of the update_key, if any.
+                            max_entries: max_entries as usize,
+                        }
+                    }
+                    _ => Self::default(),
                 }
             }
-            _ => {
-                eprintln!("Error deserializing credential",);
-                Self::default()
-            }
+            // If we got a Proof, then we just want to verify the preimages match the selected,
+            // show them, and verify the proof.
+            // api::Context::Proof {
+            //     proof,
+            //     selected,
+            //     preimages,
+            // } => {
+            //
+            // }
+            _ => Self::default(),
         }
     }
 }
 
-impl From<&context_types::Loadables> for CredentialStruct {
-    fn from(loadables: &context_types::Loadables) -> Self {
-        Self::from(loadables.clone())
-    }
-}
-
-impl From<context_types::Attribute> for AttributeStruct {
-    fn from(context: context_types::Attribute) -> Self {
+impl From<context_types::Kov> for AttributeStruct {
+    fn from(context: context_types::Kov) -> Self {
         Self(context)
     }
 }
@@ -409,14 +394,14 @@ impl From<AttributeStruct> for wurbo::prelude::Value {
     }
 }
 
-impl From<AttributeStruct> for context_types::Attribute {
+impl From<AttributeStruct> for context_types::Kov {
     fn from(context: AttributeStruct) -> Self {
         context.0
     }
 }
 
 impl Deref for AttributeStruct {
-    type Target = context_types::Attribute;
+    type Target = context_types::Kov;
 
     fn deref(&self) -> &Self::Target {
         &self.0

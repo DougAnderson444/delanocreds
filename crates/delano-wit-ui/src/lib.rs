@@ -1,10 +1,9 @@
 cargo_component_bindings::generate!();
 
+mod api;
 mod attributes;
 mod credential;
 mod input;
-// mod issuer;
-mod offer;
 mod output;
 mod page;
 mod util;
@@ -34,6 +33,7 @@ const INDEX_HTML: &str = "index.html";
 const CREATE_HTML: &str = "create.html";
 const OUTPUT_HTML: &str = "output.html";
 const ACCEPT_HTML: &str = "accept.html";
+const VERIFY_HTML: &str = "verify.html";
 
 /// We need to provide the templates for the macro to pull in
 fn get_templates() -> Templates {
@@ -45,12 +45,12 @@ fn get_templates() -> Templates {
             Entry::new(CREATE_HTML, include_str!("templates/create.html")),
             // "maxentries.html"
             Entry::new("maxentries.html", include_str!("templates/maxentries.html")),
-            // offer.html
-            Entry::new("offer.html", include_str!("templates/offer.html")),
             // kov.html
             Entry::new("kov.html", include_str!("templates/kov.html")),
             // accept.html
             Entry::new(ACCEPT_HTML, include_str!("templates/accept.html")),
+            // verify.html
+            Entry::new(VERIFY_HTML, include_str!("templates/verify.html")),
         ]),
     )
 }
@@ -64,7 +64,7 @@ prelude_bindgen! {WurboGuest, Component, StructContext, Context, LAST_STATE}
 struct StructContext {
     app: StructPage,
     credential: CredentialStruct,
-    loaded: Option<context_types::Loadables>,
+    loaded: api::Loaded,
     output: OutputStruct,
     target: Option<String>,
 }
@@ -82,15 +82,9 @@ impl StructObject for StructContext {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
             "app" => Some(Value::from_struct_object(self.app.clone())),
-            "output" => Some(Value::from_struct_object(self.output.clone())),
             "credential" => Some(Value::from_struct_object(self.credential.clone())),
-            // self.as_ref().map(|v| v.name.clone()).unwrap_or_default(),
-            "loaded" => match self.loaded.as_ref() {
-                Some(loadables) => Some(Value::from_struct_object(CredentialStruct::from(
-                    loadables.clone(),
-                ))),
-                None => None,
-            },
+            "loaded" => Some(Value::from_struct_object(self.loaded.clone())),
+            "output" => Some(Value::from_struct_object(self.output.clone())),
             _ => None,
         }
     }
@@ -106,20 +100,32 @@ impl From<&context_types::Context> for StructContext {
             context_types::Context::AllContent(everything) => {
                 StructContext::from(everything.clone())
             }
-            // context_types::Context::Issuing(issuer) => {
-            //     StructContext::from(CredentialStruct::from(issuer))
-            //         .with_target(ATTRIBUTES_HTML.to_string())
-            // }
             context_types::Context::Addattribute => {
                 StructContext::from(CredentialStruct::from_latest().push_attribute())
                     .with_target(INDEX_HTML.to_string())
             }
-            context_types::Context::Editattribute(kvctx) => StructContext::from(
-                // StructContext::from(IssuerStruct::from_latest().edit_attribute(kvctx))
-                //     .with_target(OUTPUT_HTML.to_string()),
-                StructContext::from(CredentialStruct::from_latest().edit_attribute(kvctx))
-                    .with_target(OUTPUT_HTML.to_string()),
-            ),
+            context_types::Context::Editattribute(kvctx) => {
+                let updated_cred_struct = CredentialStruct::from_latest().edit_attribute(kvctx);
+
+                let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+                if let api::Loaded::Offer { hints, cred } = &mut state.loaded {
+                    hints
+                        .iter_mut()
+                        .zip(updated_cred_struct.entries.iter())
+                        .for_each(|(hint, entry)| {
+                            *hint = entry.clone();
+                        });
+                    state.loaded = api::Loaded::Offer {
+                        cred: cred.to_vec(),
+                        hints: hints.clone(),
+                    };
+                }
+
+                StructContext {
+                    loaded: state.loaded,
+                    ..StructContext::from(updated_cred_struct).with_target(OUTPUT_HTML.to_string())
+                }
+            }
             context_types::Context::Editmaxentries(max) => {
                 StructContext::from(CredentialStruct::with_max_entries(max))
                     .with_target(OUTPUT_HTML.to_string())
@@ -138,9 +144,10 @@ impl From<context_types::Everything> for StructContext {
     fn from(context: context_types::Everything) -> Self {
         StructContext {
             app: StructPage::from(context.page),
-            credential: CredentialStruct::from(context.load.clone()),
+            credential: CredentialStruct::from(api::Loaded::from(context.load.clone())),
             output: OutputStruct::default(),
-            loaded: context.load,
+            // TODO: Loadables::from(context.load), // <== parse the variant into the matching struct
+            loaded: context.load.into(),
             target: None,
         }
     }
@@ -151,14 +158,6 @@ impl From<CredentialStruct> for StructContext {
         let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
         state.credential = ctx;
         // state.offer =
-        state
-    }
-}
-
-impl From<context_types::Loadables> for StructContext {
-    fn from(loadables: context_types::Loadables) -> Self {
-        let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        state.loaded = Some(loadables);
         state
     }
 }
