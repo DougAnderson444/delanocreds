@@ -34,5 +34,5 @@ derives = []
 
 # wasmtime needs these deps linked here to compile ./tests/mod.rs
 [package.metadata.component.target.dependencies]
-"delano:wallet" = { path = "../delano-wallet/wit" }
+"delano:wallet" = { path = "wit/deps/wallet" }
 "seed-keeper:wallet" = { path = "../delano-wallet/wit/deps/seed-keeper-wallet" }
