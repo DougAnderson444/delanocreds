@@ -45,6 +45,9 @@ jobs:
       - name: Install cargo component
         run: echo yes | cargo binstall cargo-component
 
+      - name: Build Wallet
+        run: cd crates/delano-wallet && cargo component build
+
       - name: Cargo component build Workspace
         run: cargo component build --workspace
 
