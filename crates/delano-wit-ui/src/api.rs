@@ -126,8 +126,6 @@ mod tests {
     use delanocreds::CBORCodec;
     use delanocreds::{Credential, Issuer, Nym};
 
-    use super::*;
-
     /// A dummy Credential for testing and development
     /// Created from [delanocreds::Credential]
     fn dummy_cred() -> Credential {
