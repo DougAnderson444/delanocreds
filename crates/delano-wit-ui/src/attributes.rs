@@ -181,8 +181,8 @@ impl From<CredentialStruct> for Vec<Vec<AttributeKOV>> {
     }
 }
 
-impl From<context_types::Attribute> for AttributeKOV {
-    fn from(attribute: context_types::Attribute) -> Self {
+impl From<context_types::Kov> for AttributeKOV {
+    fn from(attribute: context_types::Kov) -> Self {
         Self {
             key: AttributeKey(attribute.key),
             op: Operator::try_from(attribute.op).unwrap_or_default(),
@@ -263,8 +263,8 @@ impl From<Hint> for AttributeKOV {
     }
 }
 
-impl From<context_types::Attribute> for Hint {
-    fn from(attribute: context_types::Attribute) -> Self {
+impl From<context_types::Kov> for Hint {
+    fn from(attribute: context_types::Kov) -> Self {
         Self {
             key: AttributeKey(attribute.key),
             op: Operator::try_from(attribute.op).unwrap_or_default(),
@@ -272,7 +272,7 @@ impl From<context_types::Attribute> for Hint {
     }
 }
 
-impl From<Hint> for context_types::Attribute {
+impl From<Hint> for context_types::Kov {
     fn from(hint: Hint) -> Self {
         Self {
             key: hint.key.deref().clone(),
