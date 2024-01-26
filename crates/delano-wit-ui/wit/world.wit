@@ -10,16 +10,26 @@ interface context-types {
   }
 
   record issuer {
-    attributes: list<attribute>,
+    attributes: list<kov>,
     max-entries: u8,
   }
 
-  record loadables {
+  record offer {
     cred: list<u8>,
-    hints: option<list<list<attribute>>>
+    hints: option<list<list<kov>>>
   }
 
-  record attribute {
+  /// All details associated with a proof
+  record proof {
+    /// The proof itself
+    proof: list<u8>,
+    /// The selected Entries of attributes
+    selected: list<list<list<u8>>>,
+    /// The preimages
+    preimages: list<list<kov>>,
+  }
+
+  record kov {
     key: string,
     op: string,
     value: string,
@@ -28,7 +38,8 @@ interface context-types {
   record everything {
     page: option<page>,
     issue: option<issuer>,
-    load: option<loadables>,
+    /// The base64URLsafe unpadded encoded JSON string of the loadable data (offer or proof)
+    load: option<string>,
   }
 
   record input-ctx {
