@@ -1,7 +1,8 @@
 #![feature(once_cell_try)]
 
-cargo_component_bindings::generate!();
+// cargo_component_bindings::generate!();
 
+mod bindings;
 mod error;
 mod utils;
 

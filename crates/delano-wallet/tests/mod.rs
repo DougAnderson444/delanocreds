@@ -9,9 +9,9 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::preview2::{WasiCtx, WasiCtxBuilder, WasiView};
 
 use crate::bindgen::{delano::wallet, exports::delano::wallet::actions::IssueOptions};
 
@@ -20,14 +20,14 @@ struct MyCtx {
 }
 
 struct Context {
-    table: Table,
+    table: ResourceTable,
     wasi: WasiCtx,
 }
 impl WasiView for MyCtx {
-    fn table(&self) -> &Table {
+    fn table(&self) -> &ResourceTable {
         &self.wasi_ctx.table
     }
-    fn table_mut(&mut self) -> &mut Table {
+    fn table_mut(&mut self) -> &mut ResourceTable {
         &mut self.wasi_ctx.table
     }
     fn ctx(&self) -> &WasiCtx {
@@ -105,7 +105,7 @@ fn main() -> wasmtime::Result<(), TestError> {
     // link the WASI imports to our instantiation
     wasmtime_wasi::preview2::command::sync::add_to_linker(&mut linker)?;
 
-    let table = Table::new();
+    let table = ResourceTable::new();
     let wasi: WasiCtx = WasiCtxBuilder::new().inherit_stdout().args(&[""]).build();
     let state = MyCtx {
         wasi_ctx: Context { table, wasi },

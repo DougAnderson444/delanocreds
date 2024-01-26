@@ -6,17 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cargo-component-bindings = "0.6.0"
 wurbo = { version = "0.1.8" }
 base64ct = { version = "1.6.0", features = ["alloc"] }
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = { version = "1.0.107" }
 convert_case = "0.6.0"
 delanocreds = { workspace = true }
+wit-bindgen = { version = "0.16.0", default-features = false, features = ["realloc"] }
 
 [dev-dependencies]
-wasmtime = { version = "16", features = ['component-model'] }
-wasmtime-wasi = { version = "16.0.0" }
+wasmtime = { version = "17", features = ['component-model'] }
+wasmtime-wasi = { version = "17.0.0" }
 thiserror = "1.0"
 
 [lib]
