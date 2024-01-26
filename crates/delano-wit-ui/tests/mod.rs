@@ -84,8 +84,11 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
     fn prove(
         &mut self,
         _values: bindgen::delano::wallet::types::Provables,
-    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        Ok(Ok(vec![69u8; 32]))
+    ) -> Result<Result<bindgen::delano::wallet::types::Proven, String>, wasmtime::Error> {
+        Ok(Ok(bindgen::delano::wallet::types::Proven {
+            proof: vec![69u8; 32],
+            selected: vec![vec![vec![69u8; 32]]],
+        }))
     }
 
     /// Export a function that verifies a proof against a public key, nonce and selected attributes
@@ -94,6 +97,14 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
         _values: bindgen::delano::wallet::types::Verifiables,
     ) -> Result<Result<bool, String>, wasmtime::Error> {
         Ok(Ok(true))
+    }
+
+    fn extend(
+        &mut self,
+        _cred: Vec<u8>,
+        _entry: bindgen::delano::wallet::types::Entry,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        Ok(Ok(vec![69u8; 32]))
     }
 }
 
@@ -204,7 +215,7 @@ mod delano_wit_ui_tests {
                 description: "A wallet so you can sign your credentials.".to_string(),
             }),
             issue: None,
-            offer: None,
+            load: None,
         });
 
         let html = bindings
@@ -254,31 +265,6 @@ mod delano_wit_ui_tests {
 
         // Now there should be a match for the edited value
         assert!(html.contains(&edited_value));
-
-        // Should able to process an offer
-        let offer = wit_ui::wurbo_out::Context::Offer(context_types::Offer {
-            cred: Default::default(),
-            hints: Some(vec![vec![context_types::Hint {
-                key: "Age".to_string(),
-                op: ">".to_string(),
-            }]]),
-        });
-
-        // Render using offer context above
-        let html = bindings
-            .delano_wit_ui_wurbo_out()
-            .call_render(&mut store, &offer)??;
-
-        println!("\n*** OFFER ***:\n{}", html);
-
-        // Accept a credential offer and return the accepte Credential bytes
-        // accept: func(offer: list<u8>) -> result<list<u8>, string>;
-
-        // Export a function that proves selected attributes in a given credential
-        // prove: func(values: provables) -> result<list<u8>, string>;
-
-        // Export a function that verifies a proof against a public key, nonce and selected attributes
-        // verify: func(values: verifiables) -> result<bool, string>;
 
         Ok(())
     }
