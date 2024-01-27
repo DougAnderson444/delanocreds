@@ -3,7 +3,6 @@ mod bindings;
 mod api;
 mod attributes;
 mod credential;
-mod input;
 mod output;
 mod page;
 mod util;
