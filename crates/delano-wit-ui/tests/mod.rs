@@ -214,7 +214,6 @@ mod delano_wit_ui_tests {
                 version: "0.0.1".to_string(),
                 description: "A wallet so you can sign your credentials.".to_string(),
             }),
-            issue: None,
             load: None,
         });
 
