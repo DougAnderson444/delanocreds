@@ -32,8 +32,8 @@ impl Default for CredentialStruct {
 impl CredentialStruct {
     /// Reads the LAST_STATE and returns Self
     pub(crate) fn from_latest() -> Self {
-        let state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        state.credential
+        let last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+        last.state.credential
     }
 
     /// Extends the last Entry Vector of attributes by 1.
@@ -106,7 +106,7 @@ impl CredentialStruct {
     }
 
     /// Create (issue) credential using this struct's attributes
-    fn issue(&self) -> Result<Vec<u8>, String> {
+    pub(crate) fn issue(&self) -> Result<Vec<u8>, String> {
         let attr_vec = self.entries[self.entries.len() - 1]
             .iter()
             .map(|a| a.into_bytes())
@@ -116,7 +116,7 @@ impl CredentialStruct {
     }
 
     /// Offer this credential with no config
-    fn offer(&self, cred: Vec<u8>) -> Result<Vec<u8>, String> {
+    pub(crate) fn offer(&self, cred: Vec<u8>) -> Result<Vec<u8>, String> {
         wallet::actions::offer(
             &cred,
             &wallet::types::OfferConfig {
@@ -136,7 +136,7 @@ impl CredentialStruct {
     /// entry using the lest of the entries Vector for the extension.
     ///
     /// This yields an extended proof that can be used to prove attributes in the additional entry.
-    fn extend(&self, cred: Vec<u8>) -> Result<Vec<u8>, String> {
+    pub(crate) fn extend(&self, cred: Vec<u8>) -> Result<Vec<u8>, String> {
         // accept given credential
         // it'll fail to prove if the Entry attributes don't match the credential
         let accepted = wallet::actions::accept(&cred)?;
@@ -182,6 +182,74 @@ impl CredentialStruct {
 
         wallet::actions::prove(&provables)
     }
+
+    /// generate Proof Package
+    pub(crate) fn proof_package(&self) -> Option<Value> {
+        // To go from the current credential to a proof, we need to:
+        // 1) Extend the current credential with the additional entry
+        // 2) generate the proof with the extended credential
+
+        // if self.credential is None, we can't extend it, return None
+        let Some(cred) = &self.credential else {
+            return Some(Value::from("No credential loaded"));
+        };
+
+        let Ok(credential) = Credential::from_bytes(&cred) else {
+            return Some(Value::from("Invalid credential bytes"));
+        };
+
+        // we will extend the cred using self.entries n + 1, so if there is only 1 self.entries, return None
+        if self.entries.len() == 1 {
+            return None;
+        }
+
+        let extended = match self.extend(cred.clone()) {
+            Ok(extended) => extended,
+            Err(e) => {
+                eprintln!("Error extending credential: {:?}", e);
+                return Some(Value::from("Error extending credential"));
+            }
+        };
+
+        // generate a proof for the extended cred using selected attributeKOVs
+        let nonce = Nonce::default();
+        let nonce_bytes: Vec<u8> = nonce.into();
+        let wallet::types::Proven { proof, selected } = match self.prove(extended, nonce_bytes) {
+            Ok(proven) => proven,
+            Err(e) => {
+                eprintln!("Error generating proof: {:?}", e);
+                return Some(Value::from("Error generating proof"));
+            }
+        };
+
+        // Also generate the Vec<Vec<AttributeKOV>> for the preimages. Leave any unselected
+        // attributes as default.
+        let preimages = self
+            .entries
+            .iter()
+            .map(|entry| {
+                entry
+                    .iter()
+                    .map(|kov| {
+                        if kov.selected {
+                            kov.clone()
+                        } else {
+                            AttributeKOV::default()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let proof_package = crate::api::Loaded::Proof {
+            proof,
+            selected,
+            preimages,
+            issuer_public: credential.issuer_public.to_bytes().unwrap_or_default(),
+        };
+
+        Some(Value::from(proof_package.to_urlsafe()))
+    }
 }
 
 impl StructObject for CredentialStruct {
@@ -202,95 +270,6 @@ impl StructObject for CredentialStruct {
                     value: Default::default(),
                 });
                 Some(Value::from(util::variant_string(context_name)))
-            }
-            // "credential" => match self.issue() {
-            //     Ok(cred) => Some(Value::from(cred)),
-            //     Err(e) => {
-            //         eprintln!("Error issuing credential: {:?}", e);
-            //         None
-            //     }
-            // },
-            // offer is a link to the credential, including hints
-            "offer" => {
-                let cred = self.issue().unwrap_or_default();
-                let offer = self.offer(cred).unwrap_or_default();
-
-                // convert the attributes to hint
-                let hints: Vec<Vec<AttributeKOV>> = self
-                    .entries
-                    .iter()
-                    .map(|a| {
-                        a.iter()
-                            .map(|a| Hint::from(a.clone()).into())
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>();
-
-                let offer = crate::api::Loaded::Offer { cred: offer, hints };
-                Some(Value::from(offer.to_urlsafe()))
-            }
-            "proof" => {
-                // To go from the current credential to a proof, we need to:
-                // 1) Extend the current credential with the additional entry
-                // 2) generate the proof with the extended credential
-
-                // if self.credential is None, we can't extend it, return None
-                let cred = match &self.credential {
-                    Some(cred) => cred,
-                    None => return Some(Value::from("No credential loaded")),
-                };
-
-                // we have a cred, if there is only 1 self.entries, return None
-                if self.entries.len() == 1 {
-                    return None;
-                }
-
-                let extended = match self.extend(cred.clone()) {
-                    Ok(extended) => extended,
-                    Err(e) => {
-                        eprintln!("Error extending credential: {:?}", e);
-                        return Some(Value::from("Error extending credential"));
-                    }
-                };
-
-                // generate a proof for the extended cred using selected attributeKOVs
-                let nonce = Nonce::default();
-                let nonce_bytes: Vec<u8> = nonce.into();
-                let wallet::types::Proven { proof, selected } =
-                    match self.prove(extended, nonce_bytes) {
-                        Ok(proven) => proven,
-                        Err(e) => {
-                            eprintln!("Error generating proof: {:?}", e);
-                            return Some(Value::from("Error generating proof"));
-                        }
-                    };
-
-                // Also generate the Vec<Vec<AttributeKOV>> for the preimages. Leave any unselected
-                // attributes as default.
-                let preimages = self
-                    .entries
-                    .iter()
-                    .map(|entry| {
-                        entry
-                            .iter()
-                            .map(|kov| {
-                                if kov.selected {
-                                    kov.clone()
-                                } else {
-                                    AttributeKOV::default()
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>();
-
-                let proof_package = crate::api::Loaded::Proof {
-                    proof,
-                    selected,
-                    preimages,
-                };
-
-                Some(Value::from(proof_package.to_urlsafe()))
             }
             _ => None,
         }

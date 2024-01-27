@@ -34,7 +34,7 @@
         <input
           class="flex-1 border-2 border-blue-200 sm:rounded-l-md p-2 sm:w-1/3"
           type="text"
-          id="{{ item.id|on('keyup') }}"
+          id="{{ item.id|on('input') }}"
           data-context-name="{{item.context}}"
           data-context-value='{ "ctx": { "idx": {{entryloop}}, "val": { "tag": "key", "val": {{loop.index0}} } } }'
           value="{{attr.key}}"
@@ -55,7 +55,7 @@
         <input
           class="flex-1 border-2 border-blue-200 sm:rounded-r-md p-2 sm:w-1/3"
           type="text"
-          id="{{ item.id|on('keyup') }}"
+          id="{{ item.id|on('input') }}"
           data-context-name="{{item.context}}"
           data-context-value='{ "ctx": { "idx": {{entryloop}}, "val": { "tag": "value", "val": {{loop.index0}} } } }'
           value="{{attr.value}}"

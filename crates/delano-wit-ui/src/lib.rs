@@ -9,8 +9,6 @@ mod page;
 mod util;
 
 use credential::CredentialStruct;
-// use input::Input;
-// use issuer::IssuerStruct;
 use output::OutputStruct;
 use page::StructPage;
 
@@ -23,11 +21,8 @@ use bindings::delano::wit_ui::wurbo_in;
 use bindings::exports::delano::wit_ui::wurbo_out::Guest as WurboGuest;
 
 use std::ops::Deref;
-// use std::sync::OnceLock;
 
 struct Component;
-
-// static ACCEPT_ID: OnceLock<String> = OnceLock::new();
 
 const INDEX_HTML: &str = "index.html";
 const CREATE_HTML: &str = "create.html";
@@ -63,14 +58,13 @@ prelude_bindgen! {WurboGuest, Component, StructContext, Context, LAST_STATE}
 #[derive(Debug, Clone, Default)]
 struct StructContext {
     app: StructPage,
-    credential: CredentialStruct,
-    loaded: api::Loaded,
+    state: api::State,
     output: OutputStruct,
     target: Option<String>,
 }
 
 impl StructContext {
-    /// with this target
+    /// with this target template, instead of defaulting to entry or output template
     fn with_target(mut self, target: String) -> Self {
         self.target = Some(target);
         self
@@ -82,15 +76,14 @@ impl StructObject for StructContext {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
             "app" => Some(Value::from_struct_object(self.app.clone())),
-            "credential" => Some(Value::from_struct_object(self.credential.clone())),
-            "loaded" => Some(Value::from_struct_object(self.loaded.clone())),
+            "state" => Some(Value::from_struct_object(self.state.clone())),
             "output" => Some(Value::from_struct_object(self.output.clone())),
             _ => None,
         }
     }
     /// So that debug will show the values
     fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["app", "output", "credential", "loaded"])
+        Some(&["app", "state", "output"])
     }
 }
 
@@ -107,24 +100,23 @@ impl From<&context_types::Context> for StructContext {
             context_types::Context::Editattribute(kvctx) => {
                 let updated_cred_struct = CredentialStruct::from_latest().edit_attribute(kvctx);
 
-                let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-                if let api::Loaded::Offer { hints, cred } = &mut state.loaded {
+                // Update the hints to match the newly edited values
+                let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+                if let api::Loaded::Offer { hints, cred } = &mut last.state.loaded {
                     hints
                         .iter_mut()
                         .zip(updated_cred_struct.entries.iter())
                         .for_each(|(hint, entry)| {
                             *hint = entry.clone();
                         });
-                    state.loaded = api::Loaded::Offer {
+                    last.state.loaded = api::Loaded::Offer {
                         cred: cred.to_vec(),
                         hints: hints.clone(),
                     };
                 }
 
-                StructContext {
-                    loaded: state.loaded,
-                    ..StructContext::from(updated_cred_struct).with_target(OUTPUT_HTML.to_string())
-                }
+                last.state.credential = updated_cred_struct;
+                last.with_target(OUTPUT_HTML.to_string())
             }
             context_types::Context::Editmaxentries(max) => {
                 StructContext::from(CredentialStruct::with_max_entries(max))
@@ -144,10 +136,8 @@ impl From<context_types::Everything> for StructContext {
     fn from(context: context_types::Everything) -> Self {
         StructContext {
             app: StructPage::from(context.page),
-            credential: CredentialStruct::from(api::Loaded::from(context.load.clone())),
             output: OutputStruct::default(),
-            // TODO: Loadables::from(context.load), // <== parse the variant into the matching struct
-            loaded: context.load.into(),
+            state: api::State::from(context.load),
             target: None,
         }
     }
@@ -155,9 +145,8 @@ impl From<context_types::Everything> for StructContext {
 
 impl From<CredentialStruct> for StructContext {
     fn from(ctx: CredentialStruct) -> Self {
-        let mut state = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        state.credential = ctx;
-        // state.offer =
-        state
+        let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+        last.state.credential = ctx;
+        last
     }
 }

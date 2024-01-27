@@ -1,5 +1,6 @@
 use super::*;
 
+use delanocreds::Attribute;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
@@ -195,6 +196,13 @@ impl From<context_types::Kov> for AttributeKOV {
 impl From<AttributeKOV> for wurbo::prelude::Value {
     fn from(attribute: AttributeKOV) -> Self {
         Self::from_struct_object(attribute)
+    }
+}
+
+/// implement conversion from KOV to delanocreds::Attribute
+impl From<AttributeKOV> for delanocreds::Attribute {
+    fn from(kov: AttributeKOV) -> Self {
+        delanocreds::Attribute::from(kov.to_string())
     }
 }
 

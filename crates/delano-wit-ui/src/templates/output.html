@@ -1,6 +1,6 @@
 <div id="{{output.id}}" class="m-4">
   <ul class="border border-green-500 rounded m-2 w-full">
-    {% for entry in credential.entries %} {% for attr in entry %}
+    {% for entry in state.credential.entries %} {% for attr in entry %}
     <div class="flex flex-row w-full items-center">
       <div class="flex-1 p-2">{{attr.key}}</div>
       <div class="p-1 bg-blue-500 text-white font-semibold">{{attr.op}}</div>
@@ -13,15 +13,16 @@
     class="flex flex-row m-2 w-full items-center border border-green-500 rounded"
   >
     <div class="flex-1 p-2">Max Additional Entries</div>
-    <div class="flex-1 p-2">{{credential.max_entries}}</div>
+    <div class="flex-1 p-2">{{state.credential.max_entries}}</div>
   </div>
   <!-- Show Offer Link -->
+  {% if state.offer is defined %}
   <div class="border border-green-500 rounded m-2 w-full">
     <div class="flex flex-row w-full items-center">
       <div class="flex-1 p-2">Offer:</div>
       <div class="flex-1 p-2 break-all">
         <a
-          href="/#{{credential.offer}}"
+          href="/#{{state.offer}}"
           target="_blank"
           class="underline text-blue-500"
         >
@@ -34,14 +35,16 @@
       </div>
     </div>
   </div>
+  {% endif %}
+  <!-- Show Proof Link-->
+  {% if state.proof is defined %}
   <div class="border border-green-500 rounded m-2 w-full">
     <div class="flex flex-row w-full items-center">
       <div class="flex-1 p-2">Proof:</div>
       <!-- if .proof is less than 50 long, show first block. If longer, show second -->
-      {% if credential.proof is defined and credential.proof|length > 50 %}
       <div class="flex-1 p-2 break-all">
         <a
-          href="/#{{credential.proof}}"
+          href="/#{{state.proof}}"
           target="_blank"
           class="underline text-blue-500"
         >
@@ -52,9 +55,7 @@
           </button>
         </a>
       </div>
-      {% else %}
-      <div class="flex-1 p-2">{{credential.proof|tojson}}</div>
-      {% endif %}
     </div>
   </div>
+  {% endif %}
 </div>
