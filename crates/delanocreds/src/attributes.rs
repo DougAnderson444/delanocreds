@@ -102,8 +102,6 @@ impl Display for Attribute {
 
 /// Converts any type that can be converted to a byte slice into a Content Identifier (CID)
 /// using the SHAKE256 hash function with length 48.
-///
-/// This is an efficiency step to avoid re-hashing the raw input.
 pub fn attribute(bytes: impl AsRef<[u8]>) -> Attribute {
     let mhash = Code::Sha2_256.digest(bytes.as_ref());
     Attribute(Cid::new_v1(RAW, mhash))
