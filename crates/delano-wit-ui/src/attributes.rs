@@ -1,6 +1,5 @@
 use super::*;
 
-use delanocreds::Attribute;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
@@ -182,17 +181,6 @@ impl From<CredentialStruct> for Vec<Vec<AttributeKOV>> {
     }
 }
 
-impl From<context_types::Kov> for AttributeKOV {
-    fn from(attribute: context_types::Kov) -> Self {
-        Self {
-            key: AttributeKey(attribute.key),
-            op: Operator::try_from(attribute.op).unwrap_or_default(),
-            value: AttributeValue(attribute.value),
-            selected: true,
-        }
-    }
-}
-
 impl From<AttributeKOV> for wurbo::prelude::Value {
     fn from(attribute: AttributeKOV) -> Self {
         Self::from_struct_object(attribute)
@@ -267,25 +255,6 @@ impl From<Hint> for AttributeKOV {
             op: hint.op,
             value: AttributeValue("".to_string()),
             selected: true,
-        }
-    }
-}
-
-impl From<context_types::Kov> for Hint {
-    fn from(attribute: context_types::Kov) -> Self {
-        Self {
-            key: AttributeKey(attribute.key),
-            op: Operator::try_from(attribute.op).unwrap_or_default(),
-        }
-    }
-}
-
-impl From<Hint> for context_types::Kov {
-    fn from(hint: Hint) -> Self {
-        Self {
-            key: hint.key.deref().clone(),
-            op: hint.op.to_string(),
-            value: "".to_string(),
         }
     }
 }

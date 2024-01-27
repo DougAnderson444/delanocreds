@@ -1,12 +1,9 @@
 //! This module handles the temporary state that is created and mutated by the User Interface.
 //! From this module's [StructObject], we can either Create a Credential, Offer a Credential, Accept a Credential, Prove a Credential, or Verify a Credential.
 
-use self::attributes::Hint;
-
 use super::*;
 use crate::attributes::AttributeKOV;
 use delanocreds::{CBORCodec, Credential, Nonce};
-use std::ops::DerefMut;
 
 /// The Credential Struct
 #[derive(Debug, Clone)]
@@ -287,37 +284,6 @@ impl StructObject for CredentialStruct {
     }
 }
 
-/// Wrap the [context_types::Attribute] in a struct that implements StructObject
-#[derive(Debug, Clone)]
-pub struct AttributeStruct(context_types::Kov);
-
-impl Default for AttributeStruct {
-    fn default() -> Self {
-        Self(context_types::Kov {
-            key: "name".to_string(),
-            op: "=".to_string(),
-            value: "value".to_string(),
-        })
-    }
-}
-
-impl StructObject for AttributeStruct {
-    /// Fields are key, op, value.
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
-            "id" => Some(Value::from(utils::rand_id())),
-            "key" => Some(Value::from(self.key.clone())),
-            "op" => Some(Value::from(self.op.clone())),
-            "value" => Some(Value::from(self.value.clone())),
-            _ => None,
-        }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["id", "key", "op", "value"])
-    }
-}
-
 impl From<CredentialStruct> for wurbo::prelude::Value {
     fn from(context: CredentialStruct) -> Self {
         Self::from_struct_object(context)
@@ -347,50 +313,8 @@ impl From<api::Loaded> for CredentialStruct {
                     _ => Self::default(),
                 }
             }
-            // If we got a Proof, then we just want to verify the preimages match the selected,
-            // show them, and verify the proof.
-            // api::Context::Proof {
-            //     proof,
-            //     selected,
-            //     preimages,
-            // } => {
-            //
-            // }
             _ => Self::default(),
         }
-    }
-}
-
-impl From<context_types::Kov> for AttributeStruct {
-    fn from(context: context_types::Kov) -> Self {
-        Self(context)
-    }
-}
-
-impl From<AttributeStruct> for wurbo::prelude::Value {
-    fn from(context: AttributeStruct) -> Self {
-        Self::from_struct_object(context)
-    }
-}
-
-impl From<AttributeStruct> for context_types::Kov {
-    fn from(context: AttributeStruct) -> Self {
-        context.0
-    }
-}
-
-impl Deref for AttributeStruct {
-    type Target = context_types::Kov;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-// We need derefmut to mutate the KOV index
-impl DerefMut for AttributeStruct {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
