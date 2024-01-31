@@ -135,10 +135,27 @@ impl From<&context_types::Context> for StructContext {
 
 impl From<context_types::Everything> for StructContext {
     fn from(context: context_types::Everything) -> Self {
+        // persist the last state, if any
+        let last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+        let state = match last.state.loaded {
+            // If previous state loaded None, then use the current state loaded
+            api::Loaded::None => api::State::from(context.load),
+            // If previous state loaded anything, then use the previous state loaded
+            _ => {
+                let latest = api::State::from(context.load);
+                let previous = last.state.loaded;
+                // combine last.state and State::from(context.load)
+                api::State {
+                    loaded: previous,
+                    ..latest
+                }
+            }
+        };
+
         StructContext {
             app: StructPage::from(context.page),
             output: OutputStruct::default(),
-            state: api::State::from(context.load),
+            state,
             target: None,
         }
     }
