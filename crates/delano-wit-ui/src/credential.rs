@@ -18,7 +18,7 @@ impl Default for CredentialStruct {
     fn default() -> Self {
         Self {
             entries: vec![vec![AttributeKOV::default()]],
-            max_entries: 0,
+            max_entries: 1,
         }
     }
 }
