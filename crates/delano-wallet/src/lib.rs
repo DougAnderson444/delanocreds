@@ -111,7 +111,8 @@ impl Guest for Component {
             .get()
             .expect("ISSUER should be initialized by assert_issuer, but it wasn't");
 
-        let entry = Entry::try_from(attributes).map_err(|e| e.to_string())?;
+        let entry = Entry::try_from(attributes)
+            .map_err(|e| format!("Error converting attribute bytes into Entry: {:?}", e))?;
 
         let (nym_proof, nonce) = match options {
             Some(options) => {
@@ -123,7 +124,7 @@ impl Guest for Component {
             _ => {
                 // use our own nym_proof and nonce, self-issued credential
                 let nonce = nonce_by_len(&[42u8; 32]).expect("should be able to create nonce");
-                assert_nym().map_err(|e| e.to_string())?;
+                assert_nym().map_err(|e| format!("Error asserting nym: {:?}", e))?;
                 let nym = NYM.get().expect("NYM should be initialized");
                 let nym_proof = nym.nym_proof(&nonce);
                 (nym_proof, Some(nonce))
@@ -137,7 +138,7 @@ impl Guest for Component {
             .with_entry(entry)
             .max_entries(&maxentries.into())
             .issue_to(&nym_proof, nonce.as_ref())
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("Error issuing credential: {:?}", e))?;
 
         // serialize and return the cred
         let cred_bytes = cred
