@@ -10,7 +10,6 @@ use self::attributes::{AttributeKOV, Hint};
 
 use super::*;
 
-use base64ct::{Base64UrlUnpadded, Encoding};
 use delanocreds::Attribute;
 use serde::{Deserialize, Serialize};
 
@@ -78,7 +77,8 @@ impl StructObject for State {
             "credential" => Some(Value::from(self.builder.clone())),
             "offer" => match self.offer() {
                 Ok(Some(offer)) => Some(Value::from(offer)),
-                _ => None,
+                Ok(None) => Some(Value::from("Loaded is not empty")),
+                Err(e) => Some(Value::from(e)),
             },
             // if loaded is Offer, then we create a proof
             "proof" => match &self.proof() {
@@ -90,7 +90,7 @@ impl StructObject for State {
     }
     /// So that debug will show the values
     fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["loaded", "credential"])
+        Some(&["id", "loaded", "credential", "offer", "proof"])
     }
 }
 
