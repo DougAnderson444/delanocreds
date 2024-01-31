@@ -140,9 +140,10 @@ impl AttributeKOV {
         }
     }
 
-    /// Represent this KOV as byte vector
+    /// Represent this KOV as a [delanocreds::Attribute] byte vector
     pub fn into_bytes(&self) -> Vec<u8> {
-        format!("{} {} {}", *self.key, self.op.to_string(), *self.value).into_bytes()
+        // convert self.to_string() into [delanocreds::Attribute] byte vector
+        delanocreds::Attribute::from(self.clone()).into()
     }
 }
 
