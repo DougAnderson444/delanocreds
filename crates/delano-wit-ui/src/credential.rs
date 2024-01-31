@@ -8,8 +8,6 @@ use delanocreds::{CBORCodec, Credential, Nonce};
 /// The Credential Struct
 #[derive(Debug, Clone)]
 pub struct CredentialStruct {
-    /// The credential bytes received when loaded, if any
-    pub credential: Option<Vec<u8>>,
     /// The Credential's Attributes, as entered at each level
     pub entries: Vec<Vec<AttributeKOV>>,
     /// The Credential's Max Entries
@@ -21,7 +19,6 @@ impl Default for CredentialStruct {
         Self {
             entries: vec![vec![AttributeKOV::default()]],
             max_entries: 0,
-            credential: None,
         }
     }
 }
@@ -246,8 +243,8 @@ impl From<CredentialStruct> for wurbo::prelude::Value {
 }
 
 /// From WIT context Loadables type, which consist of a cred field and a hints field, which are list<list<Attribute>>
-impl From<api::Loaded> for CredentialStruct {
-    fn from(ctx: api::Loaded) -> Self {
+impl From<&api::Loaded> for CredentialStruct {
+    fn from(ctx: &api::Loaded) -> Self {
         match ctx {
             api::Loaded::Offer { cred, hints } => {
                 match Credential::from_bytes(&cred) {
@@ -259,8 +256,7 @@ impl From<api::Loaded> for CredentialStruct {
                         let max_entries = update_key.map(|k| k.len()).unwrap_or_default();
 
                         Self {
-                            credential: Some(cred),
-                            entries: hints,
+                            entries: hints.to_vec(),
                             // max entries is in the Cred, it's the length of the update_key, if any.
                             max_entries: max_entries as usize,
                         }

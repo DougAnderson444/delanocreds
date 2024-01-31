@@ -10,6 +10,7 @@ use self::attributes::{AttributeKOV, Hint};
 
 use super::*;
 
+use base64ct::{Base64UrlUnpadded, Encoding};
 use delanocreds::Attribute;
 use serde::{Deserialize, Serialize};
 
@@ -105,11 +106,11 @@ impl StructObject for State {
 impl From<String> for State {
     fn from(base64: String) -> Self {
         // Default of Loaded is None
-        let loaded = Loaded::from_urlsafe(&base64).unwrap_or_default();
-        let credential = CredentialStruct::from(api::Loaded::from(base64));
+        let decoded = Base64UrlUnpadded::decode_vec(&base64).unwrap_or_default();
+        let loaded = serde_json::from_slice(&decoded).unwrap_or_default();
         Self {
-            loaded,
-            builder: credential,
+            loaded: serde_json::from_slice(&decoded).unwrap_or_default(),
+            builder: CredentialStruct::from(&loaded),
         }
     }
 }
