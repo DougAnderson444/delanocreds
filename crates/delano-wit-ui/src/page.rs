@@ -14,7 +14,7 @@ pub(crate) struct StructPage(Option<context_types::Page>);
 impl StructObject for StructPage {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
-            "id" => Some(Value::from(utils::rand_id())),
+            "id" => Some(Value::from(rand_id())),
             "name" => Some(Value::from(
                 self.as_ref().map(|v| v.name.clone()).unwrap_or_default(),
             )),
@@ -27,12 +27,10 @@ impl StructObject for StructPage {
                     .unwrap_or_default(),
             )),
             "maxentries_id" => Some(Value::from(
-                MAXENTRIES_ID.get_or_init(|| utils::rand_id()).to_owned(),
+                MAXENTRIES_ID.get_or_init(|| rand_id()).to_owned(),
             )),
             "attributes_html_id" => Some(Value::from(
-                ATTRIBUTES_HTML_ID
-                    .get_or_init(|| utils::rand_id())
-                    .to_owned(),
+                ATTRIBUTES_HTML_ID.get_or_init(|| rand_id()).to_owned(),
             )),
             _ => None,
         }

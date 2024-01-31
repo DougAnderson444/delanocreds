@@ -7,6 +7,8 @@ mod output;
 mod page;
 mod util;
 
+pub use api::Loaded;
+
 use credential::CredentialStruct;
 use output::OutputStruct;
 use page::StructPage;
@@ -114,7 +116,7 @@ impl From<&context_types::Context> for StructContext {
                     };
                 }
 
-                last.state.credential = updated_cred_struct;
+                last.state.builder = updated_cred_struct;
                 last.with_target(OUTPUT_HTML.to_string())
             }
             context_types::Context::Editmaxentries(max) => {
@@ -145,7 +147,7 @@ impl From<context_types::Everything> for StructContext {
 impl From<CredentialStruct> for StructContext {
     fn from(ctx: CredentialStruct) -> Self {
         let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        last.state.credential = ctx;
+        last.state.builder = ctx;
         last
     }
 }

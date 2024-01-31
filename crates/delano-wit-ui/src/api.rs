@@ -21,42 +21,68 @@ pub(crate) struct State {
     /// The loaded data
     pub(crate) loaded: Loaded,
     /// The CredentialStruct that we build from the loaded data
-    pub(crate) credential: CredentialStruct,
+    pub(crate) builder: CredentialStruct,
+}
+
+impl State {
+    /// Generate offer from this State is there is nothing loaded.
+    fn offer(&self) -> Result<Option<String>, String> {
+        match self.loaded {
+            Loaded::None => {
+                // use self.credential
+                let cred = self.builder.issue()?;
+                let offer = self.builder.offer(cred)?;
+
+                // convert the attributes to hint
+                let hints: Vec<Vec<AttributeKOV>> = self
+                    .builder
+                    .entries
+                    .iter()
+                    .map(|a| {
+                        a.iter()
+                            .map(|a| Hint::from(a.clone()).into())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+
+                let offer = crate::api::Loaded::Offer { cred: offer, hints };
+                Ok(Some(offer.to_urlsafe().map_err(|e| e.to_string())?))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Generate proof from this State if there is an offer loaded.
+    fn proof(&self) -> Result<Option<String>, String> {
+        match &self.loaded {
+            Loaded::Offer { cred, .. } => {
+                // accept the loaded credential offer
+                let accepted = wallet::actions::accept(&cred)?;
+                let cred = self.builder.extend(accepted)?;
+                let proof_package = self.builder.proof_package(&cred)?;
+                Ok(Some(proof_package.to_urlsafe().map_err(|e| e.to_string())?))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 impl StructObject for State {
     /// Remember to add match arms for any new fields.
     fn get_field(&self, name: &str) -> Option<Value> {
+        // TODO: Show issues/errors as error variant?
+        // if offer or proof have messages, show them?
         match name {
-            "id" => Some(Value::from(utils::rand_id())),
+            "id" => Some(Value::from(rand_id())),
             "loaded" => Some(Value::from(self.loaded.clone())),
-            "credential" => Some(Value::from(self.credential.clone())),
-            "offer" => match self.loaded {
-                Loaded::None => {
-                    // use self.credential
-                    let cred = self.credential.issue().unwrap_or_default();
-                    let offer = self.credential.offer(cred).unwrap_or_default();
-
-                    // convert the attributes to hint
-                    let hints: Vec<Vec<AttributeKOV>> = self
-                        .credential
-                        .entries
-                        .iter()
-                        .map(|a| {
-                            a.iter()
-                                .map(|a| Hint::from(a.clone()).into())
-                                .collect::<Vec<_>>()
-                        })
-                        .collect::<Vec<_>>();
-
-                    let offer = crate::api::Loaded::Offer { cred: offer, hints };
-                    Some(Value::from(offer.to_urlsafe()))
-                }
+            "credential" => Some(Value::from(self.builder.clone())),
+            "offer" => match self.offer() {
+                Ok(Some(offer)) => Some(Value::from(offer)),
                 _ => None,
             },
             // if loaded is Offer, then we create a proof
-            "proof" => match &self.loaded {
-                Loaded::Offer { .. } => self.credential.proof_package(),
+            "proof" => match &self.proof() {
+                Ok(Some(proof)) => Some(Value::from(proof.clone())),
                 _ => None,
             },
             _ => None,
@@ -70,9 +96,13 @@ impl StructObject for State {
 
 impl From<String> for State {
     fn from(base64: String) -> Self {
-        let loaded = Loaded::from_urlsafe(&base64);
+        // Default of Loaded is None
+        let loaded = Loaded::from_urlsafe(&base64).unwrap_or_default();
         let credential = CredentialStruct::from(api::Loaded::from(base64));
-        Self { loaded, credential }
+        Self {
+            loaded,
+            builder: credential,
+        }
     }
 }
 
@@ -115,25 +145,13 @@ pub enum Loaded {
     None,
 }
 
-impl Loaded {
-    /// Function that serializes the Context to bytes (serde_json) then encodes it as base64.
-    pub fn to_urlsafe(&self) -> String {
-        let serialized = serde_json::to_string(&self).unwrap_or_default();
-        Base64UrlUnpadded::encode_string(serialized.as_bytes())
-    }
-
-    /// Decode the base64 string, then deserialize the bytes into a Context.
-    pub fn from_urlsafe(base64: &str) -> Self {
-        let decoded = Base64UrlUnpadded::decode_vec(base64).unwrap_or_default();
-        serde_json::from_slice(&decoded).unwrap_or_default()
-    }
-}
+impl Base64JSON for Loaded {}
 
 impl StructObject for Loaded {
     /// Remember to add match arms for any new fields.
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
-            "id" => Some(Value::from(utils::rand_id())),
+            "id" => Some(Value::from(rand_id())),
             "context" => match self {
                 // Offer is the only Loaded context that can be edited
                 Self::Offer { .. } => {
@@ -234,8 +252,8 @@ impl From<Option<String>> for Loaded {
 impl From<String> for Loaded {
     fn from(base64: String) -> Self {
         // There are two places this can fail: decoding from base64, and deserializing the bytes.
-        // If either fails, return Context::None
-        Loaded::from_urlsafe(&base64)
+        // If either fails, return the default of `None`
+        Loaded::from_urlsafe(&base64).unwrap_or_default()
     }
 }
 

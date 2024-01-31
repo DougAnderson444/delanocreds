@@ -12,9 +12,7 @@ impl StructObject for OutputStruct {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
             // use OnceLock as output id should not changes after first set
-            "id" => Some(Value::from(
-                OUTPUT_ID.get_or_init(|| utils::rand_id()).to_owned(),
-            )),
+            "id" => Some(Value::from(OUTPUT_ID.get_or_init(|| rand_id()).to_owned())),
             _ => None,
         }
     }

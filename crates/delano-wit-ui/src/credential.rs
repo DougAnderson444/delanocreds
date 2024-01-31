@@ -30,7 +30,7 @@ impl CredentialStruct {
     /// Reads the LAST_STATE and returns Self
     pub(crate) fn from_latest() -> Self {
         let last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        last.state.credential
+        last.state.builder
     }
 
     /// Extends the last Entry Vector of attributes by 1.
@@ -124,7 +124,7 @@ impl CredentialStruct {
         )
     }
 
-    /// Extend the loaded credential with the given addtional attribute Entry.
+    /// Extend the accepted credential with the given addtional attribute Entry.
     /// When we use this UI to load a credential that is given to use, the UI
     /// allows a user to "Extend" the credential with an additional Entry of 1 or more attributes.
     ///
@@ -133,27 +133,36 @@ impl CredentialStruct {
     /// entry using the lest of the entries Vector for the extension.
     ///
     /// This yields an extended proof that can be used to prove attributes in the additional entry.
-    pub(crate) fn extend(&self, cred: Vec<u8>) -> Result<Vec<u8>, String> {
-        // accept given credential
-        // it'll fail to prove if the Entry attributes don't match the credential
-        let accepted = wallet::actions::accept(&cred)?;
+    pub(crate) fn extend(&self, accepted: Vec<u8>) -> Result<Vec<u8>, String> {
+        // we will extend the cred using self.entries n + 1, so if there is only 1 self.entries, return what was given to us
+        if self.entries.len() < 2 {
+            return Ok(accepted);
+        }
 
         // extend the accepted credential with the last entry in self.entries as wallet::types::Entry
         let last_entry = self.entries[self.entries.len() - 1]
             .iter()
-            .map(|kov| {
-                let bytes = delanocreds::Attribute::new(kov.to_string()).to_bytes();
-                bytes
-            })
+            .map(|kov| delanocreds::Attribute::new(kov.to_string()).to_bytes())
             .collect::<Vec<_>>();
         wallet::actions::extend(&accepted, &last_entry)
     }
 
-    /// Generate a proof and selected Entrys using the given credential and nonce
-    fn prove(&self, credential: Vec<u8>, nonce: Vec<u8>) -> Result<wallet::types::Proven, String> {
-        let mut selected = Vec::new();
+    /// generate Proof Package
+    pub(crate) fn proof_package(&self, cred: &[u8]) -> Result<crate::api::Loaded, String> {
+        // To go from the current credential to a proof, we need to:
+        // 1) Extend the current credential with the additional entry
+        // 2) generate the proof with the extended credential
 
-        let entries = self
+        // generate a proof for the extended cred using selected attributeKOVs
+        let nonce = Nonce::default();
+        let nonce_bytes: Vec<u8> = nonce.into();
+
+        let mut selected_attrs = Vec::new();
+
+        // Convert to bytes in preparation for the proof.
+        // Also generate the Vec<Vec<AttributeKOV>> for the preimages. Leaves any unselected
+        // attributes as default.
+        let (entries, preimages): (Vec<Vec<Vec<u8>>>, Vec<Vec<AttributeKOV>>) = self
             .entries
             .iter()
             .map(|entry| {
@@ -161,91 +170,37 @@ impl CredentialStruct {
                     .iter()
                     .map(|kov| {
                         let bytes = delanocreds::Attribute::new(kov.to_string()).to_bytes();
+                        let mut preimage = AttributeKOV::default();
                         if kov.selected {
-                            selected.push(bytes.clone());
+                            selected_attrs.push(bytes.clone());
+                            preimage = kov.clone();
                         }
-                        bytes
+                        (bytes, preimage)
                     })
-                    .collect::<Vec<_>>()
+                    .unzip()
             })
-            .collect::<Vec<_>>();
+            .unzip();
 
-        let provables: wallet::types::Provables = wallet::types::Provables {
-            credential,
+        let provables = wallet::types::Provables {
+            credential: cred.to_vec(),
             entries,
-            selected,
-            nonce,
+            selected: selected_attrs,
+            nonce: nonce_bytes,
         };
 
-        wallet::actions::prove(&provables)
-    }
-
-    /// generate Proof Package
-    pub(crate) fn proof_package(&self) -> Option<Value> {
-        // To go from the current credential to a proof, we need to:
-        // 1) Extend the current credential with the additional entry
-        // 2) generate the proof with the extended credential
-
-        // if self.credential is None, we can't extend it, return None
-        let Some(cred) = &self.credential else {
-            return Some(Value::from("No credential loaded"));
-        };
-
-        let Ok(credential) = Credential::from_bytes(&cred) else {
-            return Some(Value::from("Invalid credential bytes"));
-        };
-
-        // we will extend the cred using self.entries n + 1, so if there is only 1 self.entries, return None
-        if self.entries.len() == 1 {
-            return None;
-        }
-
-        let extended = match self.extend(cred.clone()) {
-            Ok(extended) => extended,
-            Err(e) => {
-                eprintln!("Error extending credential: {:?}", e);
-                return Some(Value::from("Error extending credential"));
-            }
-        };
-
-        // generate a proof for the extended cred using selected attributeKOVs
-        let nonce = Nonce::default();
-        let nonce_bytes: Vec<u8> = nonce.into();
-        let wallet::types::Proven { proof, selected } = match self.prove(extended, nonce_bytes) {
-            Ok(proven) => proven,
-            Err(e) => {
-                eprintln!("Error generating proof: {:?}", e);
-                return Some(Value::from("Error generating proof"));
-            }
-        };
-
-        // Also generate the Vec<Vec<AttributeKOV>> for the preimages. Leave any unselected
-        // attributes as default.
-        let preimages = self
-            .entries
-            .iter()
-            .map(|entry| {
-                entry
-                    .iter()
-                    .map(|kov| {
-                        if kov.selected {
-                            kov.clone()
-                        } else {
-                            AttributeKOV::default()
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-
-        let proof_package = crate::api::Loaded::Proof {
+        let wallet::types::Proven {
             proof,
-            selected,
-            preimages,
-            issuer_public: credential.issuer_public.to_bytes().unwrap_or_default(),
-        };
+            selected: selected_entries,
+        } = wallet::actions::prove(&provables)?;
 
-        Some(Value::from(proof_package.to_urlsafe()))
+        let cred_struct = Credential::from_bytes(cred).map_err(|e| e.to_string())?;
+
+        Ok(crate::api::Loaded::Proof {
+            proof,
+            selected: selected_entries,
+            preimages,
+            issuer_public: cred_struct.issuer_public.to_bytes().unwrap_or_default(),
+        })
     }
 }
 
@@ -253,7 +208,7 @@ impl StructObject for CredentialStruct {
     fn get_field(&self, name: &str) -> Option<Value> {
         match name {
             // assigns a random id attribute to the button element, upon which we can apply
-            "id" => Some(Value::from(utils::rand_id())),
+            "id" => Some(Value::from(rand_id())),
             "entries" => Some(Value::from(self.entries.clone())),
             "max_entries" => Some(Value::from(self.max_entries)),
             "context" => {
