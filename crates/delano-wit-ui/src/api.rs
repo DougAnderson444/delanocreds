@@ -90,9 +90,10 @@ impl StructObject for State {
                 Err(e) => Some(Value::from(e)),
             },
             // if loaded is Offer, then we create a proof
-            "proof" => match &self.proof() {
+            "proof" => match self.proof() {
                 Ok(Some(proof)) => Some(Value::from(proof.clone())),
-                _ => None,
+                Ok(None) => Some(Value::from("No offer is Loaded")),
+                Err(e) => Some(Value::from(e)),
             },
             _ => None,
         }
