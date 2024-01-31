@@ -29,8 +29,14 @@ impl State {
         match self.loaded {
             Loaded::None => {
                 // use self.credential
-                let cred = self.builder.issue()?;
-                let offer = self.builder.offer(cred)?;
+                let cred = self
+                    .builder
+                    .issue()
+                    .map_err(|e| format!("Issue failed in offer: {}", e))?;
+                let offer = self
+                    .builder
+                    .offer(cred)
+                    .map_err(|e| format!("Offer failed in offer: {}", e))?;
 
                 // convert the attributes to hint
                 let hints: Vec<Vec<AttributeKOV>> = self
@@ -45,7 +51,9 @@ impl State {
                     .collect::<Vec<_>>();
 
                 let offer = crate::api::Loaded::Offer { cred: offer, hints };
-                Ok(Some(offer.to_urlsafe().map_err(|e| e.to_string())?))
+                Ok(Some(offer.to_urlsafe().map_err(|e| {
+                    format!("URLSafe offer failed: {:?}", e).to_string()
+                })?))
             }
             _ => Ok(None),
         }

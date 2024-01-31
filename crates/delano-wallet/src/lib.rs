@@ -186,13 +186,16 @@ impl Guest for Component {
         let mut offer_builder = nym.offer_builder(&cred, &entries);
 
         if let Some(additional_entry) = config.additional_entry {
-            offer_builder
-                .additional_entry(Entry::try_from(additional_entry).map_err(|e| e.to_string())?);
+            offer_builder.additional_entry(
+                Entry::try_from(additional_entry)
+                    .map_err(|e| format!("Additional entry failed {}", e.to_string()))?,
+            );
         }
 
         for entry in redact {
             offer_builder.without_attribute(
-                delanocreds::Attribute::try_from(entry).map_err(|e| e.to_string())?,
+                delanocreds::Attribute::try_from(entry)
+                    .map_err(|e| format!("Redacting failed {}", e.to_string()))?,
             );
         }
 
@@ -269,9 +272,10 @@ impl Guest for Component {
         // Iterate over values.selected and use `select_attribute` to add the selected attributes
         // to the proof builder
         for selected in values.selected {
-            buildr.select_attribute(
-                delanocreds::Attribute::try_from(selected).map_err(|e| e.to_string())?,
-            );
+            buildr
+                .select_attribute(delanocreds::Attribute::try_from(selected).map_err(|e| {
+                    format!("Error in prove converting selected to Attribute: {e}")
+                })?);
         }
 
         let nonce: Nonce = utils::nonce_by_len(&values.nonce)?;
