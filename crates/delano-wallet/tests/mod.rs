@@ -84,7 +84,7 @@ pub fn workspace_dir() -> PathBuf {
 }
 
 #[test]
-fn main() -> wasmtime::Result<(), TestError> {
+fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
     // get the target/wasm32-wasi/debug/CARGO_PKG_NAME.wasm file
     let pkg_name = std::env::var("CARGO_PKG_NAME")?.replace('-', "_");
     let workspace = workspace_dir();
