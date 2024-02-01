@@ -1,14 +1,12 @@
 <script>
 	import { onMount, tick } from 'svelte';
-	import * as wurbo from 'wurbo';
+	import { Wurbo, wurboIn } from 'wurbo';
 	// When we use $page.url.hash, responding to chnages in the hash becomes very easy.
 	import { page } from '$app/stores';
 
 	// Import wasm component bytes as a url
 	import wasmURL from '../../../../../target/wasm32-wasi/release/delano_wit_ui.wasm?url';
-	import * as importables from './importables.js';
-
-	export let load;
+	import { buildWalletActions } from './importables.js';
 
 	/**
 	 * The rendered component as a string of HTML
@@ -20,27 +18,22 @@
 	 *
 	 * @type {{ render: (arg0: string) => string | null; listen: () => void; }}
 	 */
-	let mod;
+	let wurbo;
 
 	onMount(async () => {
-		// ensure you are in the Browser environment to rollup your WIT Component
-		// const { load } = await import('rollup-plugin-wit-component');
-
-		let listener = new wurbo.Listener();
-
 		// get your wasm bytes from your storage source
 		let wasmBytes = await fetch(wasmURL).then((res) => res.arrayBuffer());
 
 		// define the import handles you are giving to your component
 		let all_importables = [
-			{ 'delano:wit-ui/wurbo-in': importables.buildCodeString(listener.namespace) },
+			{ 'delano:wit-ui/wurbo-in': wurboIn },
 			{
-				'delano:wallet/actions@0.1.0': importables.buildWalletActions()
+				'delano:wallet/actions@0.1.0': buildWalletActions()
 			}
 		];
 
 		// load the import handles into the Wasm component and get the ES module returned
-		mod = await load(wasmBytes, all_importables);
+		wurbo = new Wurbo({ arrayBuffer: wasmBytes, importables: all_importables });
 
 		// get the string after the hash (slice 1)
 		let api = null;
@@ -60,29 +53,18 @@
 					description: 'A wallet app for Delanocreds'
 				},
 				load: api
-				// : {
-				// 	cred: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]),
-				// 	// TypedArray of {key: op: } objects
-				// 	hints: [
-				// 		{ key: 'Name', op: '=' },
-				// 		{ key: 'Age', op: '>' }
-				// 	]
-				// }
 			}
 		};
-		renderedHTML = mod.wurboOut.render(data);
-
-		// lisen for events from the component
-		listener.listen(mod);
+		renderedHTML = await wurbo.render(data);
 	});
 
 	// Once the HTML is rendered and the module is loaded, we can activate the event emitters
-	$: if (renderedHTML && mod)
+	$: if (renderedHTML && wurbo)
 		(async () => {
 			// wait for the DOM to reflect the updates first
 			await tick();
 			// once the DOM has our elements loaded, we can activate the event emitters
-			mod.wurboOut.activate();
+			wurbo.activate();
 		})();
 </script>
 
