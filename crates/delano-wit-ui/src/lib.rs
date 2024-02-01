@@ -165,7 +165,6 @@ impl From<CredentialStruct> for StructContext {
     fn from(ctx: CredentialStruct) -> Self {
         let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
         last.state.builder = ctx;
-        println!("StructCxt with last: {:?}", last);
         last
     }
 }
