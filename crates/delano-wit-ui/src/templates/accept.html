@@ -23,6 +23,9 @@
       {% endfor %}
     </div>
     <!-- the context must match the context variant in the WIT world, this is how it gets routed to the renderer -->
+    <!---->
+    <!-- Only show the extend button if extendale (state.credential.max_entries is greater than )-->
+    {% if state.loaded.hints|length < state.credential.max_entries %}
     <div class="text-xl mt-4">Extend:</div>
     <!-- Now we show the Last loaded Entry if the index is larger that credential.entries -->
     <!---->
@@ -63,6 +66,9 @@
       </button>
     </div>
     {% endif %}
+    <!---->
+    {% endif %}
+    <!---->
   </div>
 </div>
 {% endif %}
