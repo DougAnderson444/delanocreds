@@ -22,6 +22,10 @@ pub(crate) struct State {
     pub(crate) loaded: Loaded,
     /// The CredentialStruct that we build from the loaded data
     pub(crate) builder: CredentialStruct,
+    /// The offer
+    pub(crate) offer: Option<String>,
+    /// The proof, if any
+    pub(crate) proof: Option<String>,
 }
 
 impl State {
@@ -31,7 +35,23 @@ impl State {
         Self {
             loaded: last.state.loaded,
             builder: last.state.builder,
+            // Offer is only generated when user triggers generation
+            offer: Default::default(),
+            // Proof is only generated when user triggers generation
+            proof: Default::default(),
         }
+    }
+
+    /// Mutates and returns Self after calling offer() and handling any results
+    pub(crate) fn with_offer(mut self) -> Self {
+        self.offer = self.offer().unwrap_or_default();
+        self
+    }
+
+    /// Mutates and returns Self after calling proof() and handling any results
+    pub(crate) fn with_proof(mut self) -> Self {
+        self.proof = self.proof().unwrap_or_default();
+        self
     }
 
     /// Generate offer from this State is there is nothing loaded.
@@ -96,16 +116,13 @@ impl StructObject for State {
             "id" => Some(Value::from(rand_id())),
             "loaded" => Some(Value::from(self.loaded.clone())),
             "credential" => Some(Value::from(self.builder.clone())),
-            "offer" => match self.offer() {
-                Ok(Some(offer)) => Some(Value::from(offer)),
-                Ok(None) => Some(Value::from("Not creating an offer")),
-                Err(e) => Some(Value::from(e)),
+            "offer" => match self.offer {
+                Some(ref offer) => Some(Value::from(offer.clone())),
+                None => Some(Value::from("No offer generated")),
             },
-            // if loaded is Offer, then we create a proof
-            "proof" => match self.proof() {
-                Ok(Some(proof)) => Some(Value::from(proof.clone())),
-                Ok(None) => Some(Value::from("No offer is Loaded")),
-                Err(e) => Some(Value::from(e)),
+            "proof" => match self.proof {
+                Some(ref proof) => Some(Value::from(proof.clone())),
+                None => Some(Value::from("No proof generated")),
             },
             _ => None,
         }
@@ -124,6 +141,8 @@ impl From<String> for State {
         Self {
             loaded: serde_json::from_slice(&decoded).unwrap_or_default(),
             builder: CredentialStruct::from(&loaded),
+            offer: Default::default(),
+            proof: Default::default(),
         }
     }
 }

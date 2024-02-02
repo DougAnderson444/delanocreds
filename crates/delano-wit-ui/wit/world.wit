@@ -48,6 +48,10 @@ interface context-types {
     newentry,
     editattribute(kvctx),
     editmaxentries(u8),
+    // Attempt to generate an offer
+    generateoffer,
+    // Attempt to generate a proof
+    generateproof,
   }
 }
 

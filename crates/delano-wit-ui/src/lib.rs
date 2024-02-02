@@ -123,11 +123,22 @@ impl From<&context_types::Context> for StructContext {
                 StructContext::from(CredentialStruct::with_max_entries(max))
                     .with_target(OUTPUT_HTML.to_string())
             }
+            // AKA "Extend"
             // Creates a New Entry in the credential. This can only be done once (ie. only 1
             // additional Entry can be added)
             context_types::Context::Newentry => {
                 StructContext::from(CredentialStruct::from_latest().push_entry())
                     .with_target(INDEX_HTML.to_string())
+            }
+            // Generate an Offer with the current data
+            context_types::Context::Generateoffer => {
+                StructContext::from(api::State::from_latest().with_offer())
+                    .with_target(OUTPUT_HTML.to_string())
+            }
+            // Generate a Proof with the current data
+            context_types::Context::Generateproof => {
+                StructContext::from(api::State::from_latest().with_proof())
+                    .with_target(OUTPUT_HTML.to_string())
             }
         }
     }
@@ -165,6 +176,15 @@ impl From<CredentialStruct> for StructContext {
     fn from(ctx: CredentialStruct) -> Self {
         let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
         last.state.builder = ctx;
+        println!("StructCxt with last: {:?}", last);
+        last
+    }
+}
+
+impl From<api::State> for StructContext {
+    fn from(state: api::State) -> Self {
+        let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+        last.state = state;
         last
     }
 }
