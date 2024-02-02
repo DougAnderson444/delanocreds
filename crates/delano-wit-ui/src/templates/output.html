@@ -21,6 +21,10 @@
     <div class="flex flex-row w-full items-center">
       <div class="flex-1 p-2">Offer:</div>
       <div class="flex-1 p-2 break-all">
+        <!-- If .offer is less than 50 long, show first block. If longer, show second -->
+        {% if state.offer|length < 150 %}
+        <div class="">{{state.offer}}</div>
+        {% else %}
         <a
           href="/#{{state.offer}}"
           target="_blank"
@@ -32,6 +36,7 @@
             Offer
           </button>
         </a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -43,6 +48,9 @@
       <div class="flex-1 p-2">Proof:</div>
       <!-- if .proof is less than 50 long, show first block. If longer, show second -->
       <div class="flex-1 p-2 break-all">
+        {% if state.proof|length < 150 %}
+        <div class="">{{state.proof}}</div>
+        {% else %}
         <a
           href="/#{{state.proof}}"
           target="_blank"
@@ -54,9 +62,9 @@
             Proof
           </button>
         </a>
+        {% endif %}
       </div>
     </div>
   </div>
   {% endif %}
 </div>
-State: {{state|tojson}}
