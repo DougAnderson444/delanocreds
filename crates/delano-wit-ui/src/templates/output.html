@@ -1,84 +1,117 @@
 <div id="{{output.id}}" class="m-4">
-  <!---->
+  <!-- If not proof page (Create or Extend) -->
   {% if state.loaded.preimages is undefined %}
-  <ul class="border border-green-500 rounded m-2 w-full">
-    {% for entry in state.credential.entries %} {% for attr in entry %}
-    <div class="flex flex-row w-full items-center">
-      <div class="flex-1 p-2">{{attr.key}}</div>
-      <div class="p-1 bg-blue-500 text-white font-semibold">{{attr.op}}</div>
-      <div class="flex-1 p-2">{{attr.value}}</div>
+  <div>
+    <ul class="border border-green-500 rounded m-2 w-full">
+      {% for entry in state.credential.entries %} {% for attr in entry %}
+      <div class="flex flex-row w-full items-center">
+        <div class="flex-1 p-2">{{attr.key}}</div>
+        <div class="p-1 bg-blue-500 text-white font-semibold">{{attr.op}}</div>
+        <div class="flex-1 p-2">{{attr.value}}</div>
+      </div>
+      {% endfor %} {% endfor %}
+    </ul>
+    <!-- Show max entries -->
+    <div
+      class="flex flex-row m-2 w-full items-center border border-green-500 rounded"
+    >
+      <div class="flex-1 p-2">Max Total Entries</div>
+      <div class="flex-1 p-2">{{state.credential.max_entries}}</div>
     </div>
-    {% endfor %} {% endfor %}
-  </ul>
-  <!-- Show max entries -->
-  <div
-    class="flex flex-row m-2 w-full items-center border border-green-500 rounded"
-  >
-    <div class="flex-1 p-2">Max Total Entries</div>
-    <div class="flex-1 p-2">{{state.credential.max_entries}}</div>
   </div>
-  {% endif %}
-  <!-- Show Offer Link -->
-  {% if state.offer is defined and state.offer|length > 150 %}
-  <div class="border border-green-500 rounded m-2 w-full">
-    <div class="flex flex-row w-full items-center">
-      <div class="flex-1 p-2">Offer:</div>
-      <div class="flex-1 p-2 break-all">
-        <a
-          href="/#{{state.offer}}"
-          target="_blank"
-          class="underline text-blue-500"
-        >
+  <div>
+    <div class="border border-green-500 rounded m-2 w-full">
+      <div class="flex flex-row w-full items-center">
+        <!-- If no hints, Generate Offer Button -->
+        {% if state.loaded.hints is undefined %}
+        <div class="flex-1 p-2">Generate Offer</div>
+        <div class="flex-1 p-2">
           <button
+            id="{{app.id|on('click')}}"
+            data-context-name="generateoffer"
             class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
           >
-            Offer
+            Generate New Offer
           </button>
-        </a>
-      </div>
-    </div>
-  </div>
-  {% endif %}
-  <!-- Show Proof Link-->
-  {% if state.proof is defined and state.proof|length > 150 %}
-  <div class="border border-green-500 rounded m-2 w-full">
-    <div class="flex flex-row w-full items-center">
-      <div class="flex-1 p-2">Proof:</div>
-      <!-- if .proof is less than 50 long, show first block. If longer, show second -->
-      <div class="flex-1 p-2 break-all">
-        {% if state.proof|length < 150 %}
-        <div class="">{{state.proof}}</div>
+        </div>
+        <!-- Else, generate proof button -->
         {% else %}
-        <a
-          href="/#{{state.proof}}"
-          target="_blank"
-          class="underline text-blue-500"
-        >
+        <div class="flex-1 p-2">Generate Proof</div>
+        <div class="flex-1 p-2">
           <button
+            id="{{app.id|on('click')}}"
+            data-context-name="generateproof"
             class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
           >
-            Proof
+            Generate Proof
           </button>
-        </a>
-        {% endif %}
+          {% endif %}
+        </div>
       </div>
     </div>
-  </div>
-  {% endif %}
-  <!-- If state.loaded.preimages is defined, show state.loaded.verified (true/false/ error string) for Issuer VK (VK is TODO) -->
-  {% if state.loaded.preimages is defined %}
-  <div class="border border-green-500 rounded m-2 w-full">
-    <div class="flex flex-row w-full items-center">
-      <div class="flex-1 p-2">Verified?</div>
-      <div class="flex-1 p-2 break-all">
-        <!-- If verified is true bool, show in Tailwind bold black slightly bigger. Else, red text -->
-        {% if state.loaded.verified is true %}
-        <div class="text-black font-bold text-xl">VERIFIED</div>
-        {% else %}
-        <div class="text-red-600">{{state.loaded.verified}}</div>
-        {% endif %}
+    {% endif %}
+    <!-- Show Offer Link -->
+    {% if state.offer is defined and state.offer|length > 150 %}
+    <div class="border border-green-500 rounded m-2 w-full">
+      <div class="flex flex-row w-full items-center">
+        <div class="flex-1 p-2">Offer:</div>
+        <div class="flex-1 p-2 break-all">
+          <a
+            href="/#{{state.offer}}"
+            target="_blank"
+            class="underline text-blue-500"
+          >
+            <button
+              class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
+            >
+              Offer
+            </button>
+          </a>
+        </div>
       </div>
     </div>
+    {% endif %}
+    <!-- Show Proof Link-->
+    {% if state.proof is defined and state.proof|length > 150 %}
+    <div class="border border-green-500 rounded m-2 w-full">
+      <div class="flex flex-row w-full items-center">
+        <div class="flex-1 p-2">Proof:</div>
+        <!-- if .proof is less than 50 long, show first block. If longer, show second -->
+        <div class="flex-1 p-2 break-all">
+          {% if state.proof|length < 150 %}
+          <div class="">{{state.proof}}</div>
+          {% else %}
+          <a
+            href="/#{{state.proof}}"
+            target="_blank"
+            class="underline text-blue-500"
+          >
+            <button
+              class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
+            >
+              Proof
+            </button>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    <!-- If state.loaded.preimages is defined, show state.loaded.verified (true/false/ error string) for Issuer VK (VK is TODO) -->
+    {% if state.loaded.preimages is defined %}
+    <div class="border border-green-500 rounded m-2 w-full">
+      <div class="flex flex-row w-full items-center">
+        <div class="flex-1 p-2">Verified?</div>
+        <div class="flex-1 p-2 break-all">
+          <!-- If verified is true bool, show in Tailwind bold black slightly bigger. Else, red text -->
+          {% if state.loaded.verified is true %}
+          <div class="text-black font-bold text-xl">VERIFIED</div>
+          {% else %}
+          <div class="text-red-600">{{state.loaded.verified}}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
