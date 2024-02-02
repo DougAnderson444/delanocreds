@@ -98,7 +98,7 @@ impl StructObject for State {
             "credential" => Some(Value::from(self.builder.clone())),
             "offer" => match self.offer() {
                 Ok(Some(offer)) => Some(Value::from(offer)),
-                Ok(None) => Some(Value::from("Loaded is not empty")),
+                Ok(None) => Some(Value::from("Not creating an offer")),
                 Err(e) => Some(Value::from(e)),
             },
             // if loaded is Offer, then we create a proof
