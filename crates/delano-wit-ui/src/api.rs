@@ -25,8 +25,17 @@ pub(crate) struct State {
 }
 
 impl State {
+    /// Creates a new State from the LAST_STATE
+    pub(crate) fn from_latest() -> Self {
+        let last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+        Self {
+            loaded: last.state.loaded,
+            builder: last.state.builder,
+        }
+    }
+
     /// Generate offer from this State is there is nothing loaded.
-    fn offer(&self) -> Result<Option<String>, String> {
+    pub(crate) fn offer(&self) -> Result<Option<String>, String> {
         match self.loaded {
             Loaded::None => {
                 // use self.credential
@@ -64,11 +73,14 @@ impl State {
     fn proof(&self) -> Result<Option<String>, String> {
         match &self.loaded {
             Loaded::Offer { cred, .. } => {
-                // accept the loaded credential offer
                 let accepted = wallet::actions::accept(&cred)?;
                 let cred = self.builder.extend(accepted)?;
                 let proof_package = self.builder.proof_package(&cred)?;
-                Ok(Some(proof_package.to_urlsafe().map_err(|e| e.to_string())?))
+                match proof_package.verify() {
+                    Ok(true) => Ok(Some(proof_package.to_urlsafe().map_err(|e| e.to_string())?)),
+                    Ok(false) => Err("Proof failed to verify".to_string()),
+                    Err(e) => Err(format!("Proof failed to verify: {}", e)),
+                }
             }
             _ => Ok(None),
         }
@@ -142,7 +154,7 @@ pub enum Loaded {
     Proof {
         /// The proof byte vector
         proof: Vec<u8>,
-        /// The selected Entry attributes, as CID bytes, in the right sequence to be verified.
+        /// The selected Entry attributes, as CID bytes, in the right sequence.
         selected: Vec<Vec<Vec<u8>>>,
         /// The selected Entry Attributes are hashes, so we can provide the preimage here. The UI
         /// can then compare these preimage hints to the selected values to verify they match.
@@ -156,6 +168,60 @@ pub enum Loaded {
 }
 
 impl Base64JSON for Loaded {}
+
+impl Loaded {
+    /// Verify if self is Loaded::Proof
+    pub fn verify(&self) -> Result<bool, String> {
+        // To verify proofs, selected, and preimages to be validated, we need:
+        // 1) The preimages need to be hashed and compared to the selected. If they match,
+        //    preimages are valid.
+        // 2) The proof and selected need to be run through wallet:;actions::verify to see if
+        //    they are valid.
+        // 3) TODO: The user should also check the Issuer's public key included in the proof
+        //    against the Issuer's public key they have on file / find online (web resolve).
+        match self {
+            Self::Proof {
+                selected,
+                preimages,
+                proof,
+                issuer_public,
+            } => {
+                // Step 1) Hash preimages & compare to selected
+                // Iterate through each preimage converting them into delanocreds::Attribute,
+                // then compare them to the selected.
+                let preimages_valid =
+                    preimages
+                        .iter()
+                        .zip(selected.iter())
+                        .all(|(preimage, selected)| {
+                            // Convert the preimage into a delanocreds::Attribute
+                            let preimage = preimage
+                                .iter()
+                                .map(|kov| Attribute::from(kov.to_string()).to_bytes())
+                                .collect::<Vec<Vec<u8>>>();
+
+                            // Hash the preimage
+                            // Compare the preimage hash to the selected
+                            preimage == *selected
+                        });
+
+                // Step 2) Verify the proof using wallet::actions::verify
+                let verifiables = wallet::actions::Verifiables {
+                    proof: proof.clone(),
+                    issuer_public: issuer_public.clone(),
+                    nonce: None,
+                    selected: selected.clone(),
+                };
+                let Ok(verification_result) = wallet::actions::verify(&verifiables) else {
+                    return Err("Verify failed. Were your verifiables valid?".to_string());
+                };
+                // If both are true, then the proof is valid.
+                Ok(preimages_valid && verification_result)
+            }
+            _ => Err("Loaded is not a Proof".to_string()),
+        }
+    }
+}
 
 impl StructObject for Loaded {
     /// Remember to add match arms for any new fields.
@@ -187,53 +253,9 @@ impl StructObject for Loaded {
                 Self::Proof { preimages, .. } => Some(Value::from(preimages.clone())),
                 _ => None,
             },
-            // To verify proofs, selected, and preimages to be validated, we need:
-            // 1) The preimages need to be hashed and compared to the selected. If they match,
-            //    preimages are valid.
-            // 2) The proof and selected need to be run through wallet:;actions::verify to see if
-            //    they are valid.
-            // 3) TODO: The user should also check the Issuer's public key included in the proof
-            //    against the Issuer's public key they have on file / find online (web resolve).
-            "verified" => match self {
-                Self::Proof {
-                    selected,
-                    preimages,
-                    proof,
-                    issuer_public,
-                } => {
-                    // Step 1) Hash preimages & compare to selected
-                    // Iterate through each preimage converting them into delanocreds::Attribute,
-                    // then compare them to the selected.
-                    let preimages_valid =
-                        preimages
-                            .iter()
-                            .zip(selected.iter())
-                            .all(|(preimage, selected)| {
-                                // Convert the preimage into a delanocreds::Attribute
-                                let preimage = preimage
-                                    .iter()
-                                    .map(|kov| Attribute::from(kov.to_string()).to_bytes())
-                                    .collect::<Vec<Vec<u8>>>();
-
-                                // Hash the preimage
-                                // Compare the preimage hash to the selected
-                                preimage == *selected
-                            });
-
-                    // Step 2) Verify the proof using wallet::actions::verify
-                    let verifiables = wallet::actions::Verifiables {
-                        proof: proof.clone(),
-                        issuer_public: issuer_public.clone(),
-                        nonce: None,
-                        selected: selected.clone(),
-                    };
-                    let Ok(verification_result) = wallet::actions::verify(&verifiables) else {
-                        return Some(Value::from("Verify failed. Were your verifiables valid?"));
-                    };
-                    // If both are true, then the proof is valid.
-                    Some(Value::from(preimages_valid && verification_result))
-                }
-                _ => None,
+            "verified" => match self.verify() {
+                Ok(verified) => Some(Value::from(verified)),
+                Err(e) => Some(Value::from(e)),
             },
             _ => None,
         }

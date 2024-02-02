@@ -39,6 +39,7 @@ impl CredentialStruct {
 
     /// Entends the Vector of entries by 1.
     pub(crate) fn push_entry(mut self) -> Self {
+        // TODO: assert existing entries are valid by creating a proof and verifying it
         self.entries.push(vec![AttributeKOV::default()]);
         self
     }
