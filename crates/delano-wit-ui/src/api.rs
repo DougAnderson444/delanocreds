@@ -42,6 +42,26 @@ impl State {
         }
     }
 
+    /// Takes the given attrs and update credential entries and hints.
+    pub(crate) fn update_attributes(mut self, kvctx: &context_types::Kvctx) -> Self {
+        self.builder.edit_attribute(kvctx);
+
+        // Update the hints to match the newly edited values
+        if let api::Loaded::Offer { hints, cred } = &mut self.loaded {
+            hints
+                .iter_mut()
+                .zip(self.builder.entries.iter())
+                .for_each(|(hint, entry)| {
+                    *hint = entry.clone();
+                });
+            self.loaded = api::Loaded::Offer {
+                cred: cred.to_vec(),
+                hints: hints.clone(),
+            };
+        }
+        self
+    }
+
     /// Mutates and returns Self after calling offer() and handling any results
     pub(crate) fn with_offer(mut self) -> Self {
         self.offer = self.offer().unwrap_or_default();
@@ -50,7 +70,12 @@ impl State {
 
     /// Mutates and returns Self after calling proof() and handling any results
     pub(crate) fn with_proof(mut self) -> Self {
-        self.proof = self.proof().unwrap_or_default();
+        let proof = match self.proof() {
+            Ok(proof) => proof,
+            Err(e) => Some(e),
+        };
+        println!("Proof: {:?}", proof);
+        self.proof = proof;
         self
     }
 
@@ -98,12 +123,17 @@ impl State {
                 let proof_package = self.builder.proof_package(&cred)?;
                 match proof_package.verify() {
                     Ok(true) => Ok(Some(proof_package.to_urlsafe().map_err(|e| e.to_string())?)),
-                    Ok(false) => Err("Proof failed to verify".to_string()),
-                    Err(e) => Err(format!("Proof failed to verify: {}", e)),
+                    Ok(false) => Err("That proof is invalid!".to_string()),
+                    Err(e) => Err(format!("Verify function failed: {}", e)),
                 }
             }
             _ => Ok(None),
         }
+    }
+
+    pub(crate) fn with_cred(mut self, builder: CredentialStruct) -> Self {
+        self.builder = builder;
+        self
     }
 }
 

@@ -95,39 +95,22 @@ impl From<&context_types::Context> for StructContext {
                 StructContext::from(everything.clone())
             }
             context_types::Context::Addattribute => {
-                StructContext::from(CredentialStruct::from_latest().push_attribute())
+                StructContext::from(api::State::from_latest().builder.push_attribute())
                     .with_target(INDEX_HTML.to_string())
             }
             context_types::Context::Editattribute(kvctx) => {
-                let updated_cred_struct = CredentialStruct::from_latest().edit_attribute(kvctx);
-
-                // Update the hints to match the newly edited values
-                let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-                if let api::Loaded::Offer { hints, cred } = &mut last.state.loaded {
-                    hints
-                        .iter_mut()
-                        .zip(updated_cred_struct.entries.iter())
-                        .for_each(|(hint, entry)| {
-                            *hint = entry.clone();
-                        });
-                    last.state.loaded = api::Loaded::Offer {
-                        cred: cred.to_vec(),
-                        hints: hints.clone(),
-                    };
-                }
-
-                last.state.builder = updated_cred_struct;
-                last.with_target(OUTPUT_HTML.to_string())
+                StructContext::from(api::State::from_latest().update_attributes(kvctx))
+                    .with_target(OUTPUT_HTML.to_string())
             }
             context_types::Context::Editmaxentries(max) => {
-                StructContext::from(CredentialStruct::with_max_entries(max))
+                StructContext::from(api::State::from_latest().builder.with_max_entries(max))
                     .with_target(OUTPUT_HTML.to_string())
             }
             // AKA "Extend"
             // Creates a New Entry in the credential. This can only be done once (ie. only 1
             // additional Entry can be added)
             context_types::Context::Newentry => {
-                StructContext::from(CredentialStruct::from_latest().push_entry())
+                StructContext::from(api::State::from_latest().builder.push_entry())
                     .with_target(INDEX_HTML.to_string())
             }
             // Generate an Offer with the current data
@@ -176,7 +159,8 @@ impl From<CredentialStruct> for StructContext {
     fn from(ctx: CredentialStruct) -> Self {
         let mut last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
         last.state.builder = ctx;
-        println!("StructCxt with last: {:?}", last);
+        last.state.offer = None;
+        last.state.proof = None;
         last
     }
 }

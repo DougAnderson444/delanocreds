@@ -45,19 +45,18 @@ impl CredentialStruct {
     }
     /// Use the given context to extract the variant (key, op, or value) and the index
     /// of the attribute to update.
-    pub(crate) fn edit_attribute(mut self, kvctx: &context_types::Kvctx) -> Self {
+    pub(crate) fn edit_attribute(&mut self, kvctx: &context_types::Kvctx) {
         // ensure self.attributes has 1 empty vec if it's empty
         if self.entries.is_empty() {
             self.entries.push(vec![AttributeKOV::default()]);
         }
-        let edited_attributes = match kvctx.ctx {
+        match kvctx.ctx {
             context_types::Entry {
                 idx,
                 val: context_types::Kovindex::Key(i),
             } => {
                 self.entries[idx as usize][i as usize].key =
                     attributes::AttributeKey(kvctx.value.clone());
-                self.entries
             }
             context_types::Entry {
                 idx,
@@ -65,7 +64,6 @@ impl CredentialStruct {
             } => {
                 self.entries[idx as usize][i as usize].op =
                     attributes::Operator::try_from(kvctx.value.clone()).unwrap_or_default();
-                self.entries
             }
             context_types::Entry {
                 idx,
@@ -73,31 +71,20 @@ impl CredentialStruct {
             } => {
                 self.entries[idx as usize][i as usize].value =
                     attributes::AttributeValue(kvctx.value.clone());
-                self.entries
             }
             context_types::Entry {
                 idx,
                 val: context_types::Kovindex::Selected(i),
             } => {
                 self.entries[idx as usize][i as usize].selected = !kvctx.value.is_empty();
-                self.entries
             }
         };
-        Self {
-            entries: edited_attributes.to_vec(),
-            max_entries: self.max_entries,
-            ..self
-        }
     }
 
     /// Create a new CredentialStruct with the given max entries and the latest state
-    pub(crate) fn with_max_entries(max: &u8) -> Self {
-        let cred = Self::from_latest();
-        Self {
-            max_entries: *max as usize,
-            entries: cred.entries.clone(),
-            ..cred
-        }
+    pub(crate) fn with_max_entries(mut self, max: &u8) -> Self {
+        self.max_entries = *max as usize;
+        self
     }
 
     /// Create (issue) credential using this struct's attributes
