@@ -76,8 +76,13 @@ mod tests {
     fn test_default_with() {
         let attrs = vec![b"a".to_vec(), "b".as_bytes().to_vec()];
         let entry = vec![attrs.clone()];
-        let key = PublishingKey::default().with_attributes(entry.clone());
+        let issuer_key = vec![b"123".to_vec()];
+        let key = PublishingKey::default()
+            .with_attributes(entry.clone())
+            .with_issuer_key(issuer_key.clone());
+
         assert_eq!(key.attributes(), &entry);
+        assert_eq!(key.issuer_key(), &issuer_key);
 
         // hash to cid
         let cid = key.cid();
