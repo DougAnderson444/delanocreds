@@ -4,27 +4,32 @@ use cid::multibase;
 use cid::multihash::{Code, MultihashDigest};
 use cid::Cid;
 
-#[derive(borsh::BorshSerialize, PartialEq, Debug, Default)]
+#[derive(borsh::BorshSerialize, PartialEq, Debug)]
 pub struct PublishingKey<T>
 where
-    T: AsRef<[u8]> + Default,
+    T: AsRef<[u8]>,
 {
     // Attribute preimages, a Vec of Vac of any type that impls AsRef<[u8]>
     attributes: Vec<Vec<T>>,
     issuer_key: Vec<Vec<u8>>,
 }
 
-impl<T> PublishingKey<T>
+impl<T> Default for PublishingKey<T>
 where
-    T: AsRef<[u8]> + Default + borsh::BorshSerialize,
+    T: AsRef<[u8]>,
 {
-    pub fn new(attributes: Vec<Vec<T>>, issuer_key: Vec<Vec<u8>>) -> Self {
+    fn default() -> Self {
         Self {
-            attributes,
-            issuer_key,
+            attributes: vec![],
+            issuer_key: vec![],
         }
     }
+}
 
+impl<T> PublishingKey<T>
+where
+    T: AsRef<[u8]> + borsh::BorshSerialize,
+{
     /// Set the attributes
     pub fn with_attributes(mut self, attributes: Vec<Vec<T>>) -> Self {
         self.attributes = attributes;
@@ -69,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_default_with() {
-        let attrs = vec!["a".to_owned()];
+        let attrs = vec![b"a".to_vec(), "b".as_bytes().to_vec()];
         let entry = vec![attrs.clone()];
         let key = PublishingKey::default().with_attributes(entry.clone());
         assert_eq!(key.attributes(), &entry);
