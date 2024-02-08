@@ -15,6 +15,16 @@ pub enum VK {
     G2(G2Projective),
 }
 
+impl VK {
+    /// Convert the [VK] to bytes
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            VK::G1(g1) => g1.to_compressed().as_ref().to_vec(),
+            VK::G2(g2) => g2.to_compressed().as_ref().to_vec(),
+        }
+    }
+}
+
 /// A Verification Key [VK] in compressed form as [VKCompressed]
 #[derive(Debug, Clone, PartialEq)]
 pub enum VKCompressed {
