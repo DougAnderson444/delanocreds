@@ -7,6 +7,8 @@ pub mod vk;
 // #[cfg(feature = "derive")]
 pub mod kdf;
 
+pub mod publish;
+
 // Test the README.md code snippets
 #[cfg(doctest)]
 pub struct ReadmeDoctests;
