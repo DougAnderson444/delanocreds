@@ -3,8 +3,6 @@ name = "delano-wit-ui"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 wurbo = { version = "0.1.9" }
 base64ct = { version = "1.6.0", features = ["alloc"] }
@@ -12,6 +10,7 @@ serde = { version = "1.0.130", features = ["derive"] }
 serde_json = { version = "1.0.107" }
 convert_case = "0.6.0"
 delanocreds = { workspace = true }
+delano-keys = { workspace = true }
 wit-bindgen = { version = "0.16.0", default-features = false, features = ["realloc"] }
 
 [dev-dependencies]
