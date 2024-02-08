@@ -309,4 +309,21 @@ impl Guest for Component {
 
         Ok(is_verified)
     }
+
+    /// Returns the Issuer Public Key
+    fn issuer_public() -> Result<Vec<Vec<u8>>, String> {
+        assert_issuer().map_err(|e| e.to_string())?;
+        let issuer = ISSUER
+            .get()
+            .expect("ISSUER should be initialized by assert_issuer, but it wasn't");
+
+        let bytes: Vec<Vec<u8>> = issuer
+            .public
+            .vk
+            .iter()
+            .map(|vk| vk.to_bytes())
+            .collect::<Vec<Vec<u8>>>();
+
+        Ok(bytes)
+    }
 }

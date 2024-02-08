@@ -80,6 +80,9 @@ interface actions {
     /// Export a function that verifies a proof against a public key, nonce and selected attributes
     verify: func(values: verifiables) -> result<bool, string>;
 
+    /// Returns the Issuer's public key if it exists, otherwise returns an error.
+    issuer-public: func() -> result<list<list<u8>>, string>;
+
 }
 
 /// A Delanocreds world for the component to target.
