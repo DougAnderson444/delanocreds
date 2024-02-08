@@ -106,6 +106,10 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
     ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
         Ok(Ok(vec![69u8; 32]))
     }
+
+    fn issuer_public(&mut self) -> wasmtime::Result<Result<Vec<Vec<u8>>, String>> {
+        Ok(Ok(vec![vec![69u8; 32]]))
+    }
 }
 
 impl bindgen::delano::wit_ui::wurbo_in::Host for MyCtx {
