@@ -9,9 +9,13 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 blastkids = { workspace = true } 
 bls12_381_plus = { workspace = true, features = ["alloc"] }
-borsh = { version = "1.3.1", features = ["derive"] }
-borsh-derive = "1.3.1"
+bincode = "1.3.3"
 cid = "0.10.1"
 secrecy = "0.8.0"
 serde = { version = "1.0.130", features = ["derive"], optional = true }
 getrandom = "0.2"
+
+# serde default feature
+[features]
+default = ["serde"]
+

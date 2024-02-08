@@ -4,56 +4,67 @@ use cid::multibase;
 use cid::multihash::{Code, MultihashDigest};
 use cid::Cid;
 
-#[derive(borsh::BorshSerialize, PartialEq, Debug)]
-pub struct PublishingKey<T>
+/// A Key for publishing an AttributeKOV and Issuer Key
+/// The Key is hashed to a CID, which can be published to a network for discovery.
+///
+/// # Example
+///
+/// ```
+/// use delano_keys::publish::PublishingKey;
+/// let key = PublishingKey::default()
+///    .with_attributes(&vec![vec![b"hello".to_vec(), b"world".to_vec()]])
+///    .with_issuer_key(&vec![b"123".to_vec()])
+///    .cid();
+///
+/// assert_eq!(key.to_string().starts_with("baf"), true);
+/// ```
+#[derive(serde::Serialize, PartialEq, Eq, Debug)]
+pub struct PublishingKey<'a, T>
 where
     T: AsRef<[u8]>,
 {
     // Attribute preimages, a Vec of Vac of any type that impls AsRef<[u8]>
-    attributes: Vec<Vec<T>>,
-    issuer_key: Vec<Vec<u8>>,
+    attributes: Option<&'a Vec<Vec<T>>>,
+    issuer_key: Option<&'a Vec<Vec<u8>>>,
 }
 
-impl<T> Default for PublishingKey<T>
+impl<'a, T> Default for PublishingKey<'a, T>
 where
     T: AsRef<[u8]>,
 {
     fn default() -> Self {
         Self {
-            attributes: vec![],
-            issuer_key: vec![],
+            attributes: None,
+            issuer_key: None,
         }
     }
 }
 
-impl<T> PublishingKey<T>
+impl<'a, T> PublishingKey<'a, T>
 where
-    T: AsRef<[u8]> + borsh::BorshSerialize,
+    T: AsRef<[u8]> + serde::Serialize,
 {
+    /// Creates a new PublishingKey builder
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Set the attributes
-    pub fn with_attributes(mut self, attributes: Vec<Vec<T>>) -> Self {
-        self.attributes = attributes;
+    pub fn with_attributes(mut self, attributes: &'a Vec<Vec<T>>) -> Self {
+        self.attributes = Some(attributes);
         self
     }
 
     /// Set the issuer key
-    pub fn with_issuer_key(mut self, issuer_key: Vec<Vec<u8>>) -> Self {
-        self.issuer_key = issuer_key;
+    pub fn with_issuer_key(mut self, issuer_key: &'a Vec<Vec<u8>>) -> Self {
+        self.issuer_key = Some(issuer_key);
         self
-    }
-
-    pub fn attributes(&self) -> &Vec<Vec<T>> {
-        &self.attributes
-    }
-
-    pub fn issuer_key(&self) -> &Vec<Vec<u8>> {
-        &self.issuer_key
     }
 
     // Hashes the Serialized value of Self using Borsh bytes
     pub fn cid(&self) -> Cid {
         const RAW: u64 = 0x55;
-        let bytes = borsh::to_vec(self).unwrap();
+        let bytes = bincode::serialize(self).unwrap();
         let hash = Code::Sha2_256.digest(&bytes);
         Cid::new_v1(RAW, hash)
     }
@@ -77,17 +88,11 @@ mod tests {
         let attrs = vec![b"a".to_vec(), "b".as_bytes().to_vec()];
         let entry = vec![attrs.clone()];
         let issuer_key = vec![b"123".to_vec()];
-        let key = PublishingKey::default()
-            .with_attributes(entry.clone())
-            .with_issuer_key(issuer_key.clone());
+        let cid = PublishingKey::default()
+            .with_attributes(&entry)
+            .with_issuer_key(&issuer_key)
+            .cid();
 
-        assert_eq!(key.attributes(), &entry);
-        assert_eq!(key.issuer_key(), &issuer_key);
-
-        // hash to cid
-        let cid = key.cid();
-        // assert string starts with bafy
-        println!("{}", cid.to_string());
         assert_eq!(cid.to_string().starts_with("baf"), true);
     }
 }
