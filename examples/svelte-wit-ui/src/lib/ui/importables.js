@@ -106,6 +106,12 @@ export function buildWalletActions() {
     export function verify(values) {
       true
     }
+
+    // export issuerPublic
+    export function issuerPublic() {
+      // 3 nested typedarrays
+      return [ new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) ]
+    }
   `;
 }
 
