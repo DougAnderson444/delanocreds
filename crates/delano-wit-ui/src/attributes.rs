@@ -195,6 +195,12 @@ impl From<AttributeKOV> for delanocreds::Attribute {
     }
 }
 
+impl From<&AttributeKOV> for delanocreds::Attribute {
+    fn from(kov: &AttributeKOV) -> Self {
+        delanocreds::Attribute::from(kov.to_string())
+    }
+}
+
 /// Hints are only the key and operator values
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Hint {

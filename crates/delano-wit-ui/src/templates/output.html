@@ -1,117 +1,125 @@
-<div id="{{output.id}}" class="m-4">
+<div id="{{output.id}}" class="flex-1 flex flex-col w-full m-0">
   <!-- If not proof page (Create or Extend) -->
   {% if state.loaded.preimages is undefined %}
-  <div>
-    <ul class="border border-green-500 rounded m-2 w-full">
-      {% for entry in state.credential.entries %} {% for attr in entry %}
-      <div class="flex flex-row w-full items-center">
-        <div class="flex-1 p-2">{{attr.key}}</div>
-        <div class="p-1 bg-blue-500 text-white font-semibold">{{attr.op}}</div>
-        <div class="flex-1 p-2">{{attr.value}}</div>
+  <div class="rounded m-2">
+    <div class="flex flex-row-reverse w-full items-center">
+      <!-- If no hints, Generate Offer Button -->
+      {% if state.loaded.hints is undefined and state.credential.entries[0] is
+      defined and state.credential.entries[0][0].key|safe|length > 0 %}
+      <div class="flex-row-reverse p-2">
+        <button
+          id="{{app.id|on('click')}}"
+          data-context-name="generateoffer"
+          class="bg-amber-500 rounded p-2 text-white font-semibold shadow-md"
+        >
+          Add Contact
+        </button>
       </div>
-      {% endfor %} {% endfor %}
-    </ul>
-    <!-- Show max entries -->
-    <div
-      class="flex flex-row m-2 w-full items-center border border-green-500 rounded"
-    >
-      <div class="flex-1 p-2">Max Total Entries</div>
-      <div class="flex-1 p-2">{{state.credential.max_entries}}</div>
+      <!-- Else, generate proof button -->
+      {% elif state.loaded.hints is defined %}
+      <div class="flex-row-reverse p-2">
+        <button
+          id="{{app.id|on('click')}}"
+          data-context-name="generateproof"
+          class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
+        >
+          Generate Proof
+        </button>
+      </div>
+      {% endif %}
     </div>
   </div>
-  <div>
-    <div class="border border-green-500 rounded m-2 w-full">
-      <div class="flex flex-row w-full items-center">
-        <!-- If no hints, Generate Offer Button -->
-        {% if state.loaded.hints is undefined %}
-        <div class="flex-1 p-2">Generate Offer</div>
-        <div class="flex-1 p-2">
-          <button
-            id="{{app.id|on('click')}}"
-            data-context-name="generateoffer"
-            class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
-          >
-            Generate New Offer
-          </button>
-        </div>
-        <!-- Else, generate proof button -->
+  {% endif %}
+  <!-- Show Proof Link-->
+  {% if state.proof is defined and state.loaded.hints is defined %}
+  <div class="border border-green-500 rounded m-2">
+    <div class="flex flex-row w-full items-center">
+      <div class="flex-1 p-2">Proof:</div>
+      <!-- if .proof is less than 50 long, show first block. If longer, show second -->
+      <div class="flex-1 p-2 break-all">
+        {% if state.proof|length < 150 %}
+        <div class="">{{state.proof}}</div>
         {% else %}
-        <div class="flex-1 p-2">Generate Proof</div>
-        <div class="flex-1 p-2">
+        <a
+          href="/#{{state.proof}}"
+          target="_blank"
+          class="underline text-blue-500"
+        >
           <button
-            id="{{app.id|on('click')}}"
-            data-context-name="generateproof"
             class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
           >
-            Generate Proof
+            Proof
           </button>
-          {% endif %}
-        </div>
+        </a>
+        {% endif %}
       </div>
     </div>
-    {% endif %}
-    <!-- Show Offer Link -->
-    {% if state.offer is defined and state.offer|length > 150 %}
-    <div class="border border-green-500 rounded m-2 w-full">
-      <div class="flex flex-row w-full items-center">
-        <div class="flex-1 p-2">Offer:</div>
-        <div class="flex-1 p-2 break-all">
+  </div>
+  {% endif %}
+  <!-- If state.loaded.preimages is defined, show state.loaded.verified (true/false/ error string) for Issuer VK (VK is TODO) -->
+  {% if state.loaded.preimages is defined %}
+  <div class="border border-green-500 rounded m-2">
+    <div class="flex flex-row w-full items-center">
+      <div class="flex-1 p-2">Verified?</div>
+      <div class="flex-1 p-2 break-all">
+        <!-- If verified is true bool, show in Tailwind bold black slightly bigger. Else, red text -->
+        {% if state.loaded.verified is true %}
+        <div class="text-black font-bold text-xl">VERIFIED</div>
+        {% else %}
+        <div class="text-red-600">{{state.loaded.verified}}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <!-- If history -->
+  {% if state.history is defined and state.history|length > 0 %}
+  <div class="flex-1 pt-4 pb-1 text-lg">Past Invites:</div>
+  <div class="bg-amber-50 rounded m-2 shadow-lg">
+    <div class="flex flex-col w-full items-center break-all">
+      {% for invite in state.history|reverse %}
+      <!-- Show flexbox of invite.attributes.{key, op, value} and a link to state.history.offer string as button -->
+      <div
+        class="flex flex-row w-full items-center {{loop.cycle('bg-amber-500/10', 'bg-amber-50/10')}}"
+      >
+        <div class="flex-1 p-2">
+          {% for entry in invite.attributes %}
+          <div class="">
+            {% for attr in entry %}
+            <div class="flex flex-row w-full items-center">
+              <div class="p-2">{{attr.key}}</div>
+              {% if attr.op != "=" %}
+              <div class="p-1 bg-blue-500 text-white font-semibold">
+                {{attr.op}}
+              </div>
+              {% endif %}
+              <div class="p-2">{{attr.value}}</div>
+            </div>
+            {% endfor %}
+            <!-- tiemstamp, small mono font-->
+            <div class="text-xs text-gray-500 font-mono">
+              {{invite.timestamp}}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="flex-0 p-2 break-all">
           <a
-            href="/#{{state.offer}}"
+            href="/#{{invite.offer}}"
             target="_blank"
             class="underline text-blue-500"
           >
             <button
               class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
             >
-              Offer
+              Invite
             </button>
           </a>
         </div>
       </div>
+      {% endfor %}
     </div>
     {% endif %}
-    <!-- Show Proof Link-->
-    {% if state.proof is defined %}
-    <div class="border border-green-500 rounded m-2 w-full">
-      <div class="flex flex-row w-full items-center">
-        <div class="flex-1 p-2">Proof:</div>
-        <!-- if .proof is less than 50 long, show first block. If longer, show second -->
-        <div class="flex-1 p-2 break-all">
-          {% if state.proof|length < 150 %}
-          <div class="">{{state.proof}}</div>
-          {% else %}
-          <a
-            href="/#{{state.proof}}"
-            target="_blank"
-            class="underline text-blue-500"
-          >
-            <button
-              class="shadow bg-blue-500 rounded p-2 text-white font-semibold"
-            >
-              Proof
-            </button>
-          </a>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    {% endif %}
-    <!-- If state.loaded.preimages is defined, show state.loaded.verified (true/false/ error string) for Issuer VK (VK is TODO) -->
-    {% if state.loaded.preimages is defined %}
-    <div class="border border-green-500 rounded m-2 w-full">
-      <div class="flex flex-row w-full items-center">
-        <div class="flex-1 p-2">Verified?</div>
-        <div class="flex-1 p-2 break-all">
-          <!-- If verified is true bool, show in Tailwind bold black slightly bigger. Else, red text -->
-          {% if state.loaded.verified is true %}
-          <div class="text-black font-bold text-xl">VERIFIED</div>
-          {% else %}
-          <div class="text-red-600">{{state.loaded.verified}}</div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    {% endif %}
+    <!---->
   </div>
 </div>

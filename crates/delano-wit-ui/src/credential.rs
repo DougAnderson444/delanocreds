@@ -18,7 +18,7 @@ impl Default for CredentialStruct {
     fn default() -> Self {
         Self {
             entries: vec![vec![AttributeKOV::default()]],
-            max_entries: 1,
+            max_entries: 2,
         }
     }
 }
@@ -127,7 +127,7 @@ impl CredentialStruct {
         // extend the accepted credential with the last entry in self.entries as wallet::types::Entry
         let last_entry = self.entries[self.entries.len() - 1]
             .iter()
-            .map(|kov| delanocreds::Attribute::new(kov.to_string()).to_bytes())
+            .map(|kov| delanocreds::Attribute::from(kov).to_bytes())
             .collect::<Vec<_>>();
         wallet::actions::extend(&accepted, &last_entry)
     }

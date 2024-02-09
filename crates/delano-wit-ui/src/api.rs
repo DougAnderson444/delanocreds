@@ -11,13 +11,33 @@ use self::attributes::{AttributeKOV, Hint};
 use super::*;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use chrono::prelude::*;
+use delano_keys::publish::PublishingKey;
 use delanocreds::Attribute;
 use serde::{Deserialize, Serialize};
+
+/// History is created when an offer is made, and is used to track the status of the offer.
+/// It's a list of the offers that have been made, and the status of each offer.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct History {
+    /// The attributes of this offer
+    pub(crate) attributes: Vec<Vec<AttributeKOV>>,
+    /// The [delano_keys::VK] used to sign the offer
+    pub(crate) issuer_vk: Vec<Vec<u8>>,
+    /// Publishing Key
+    pub(crate) publish_key: Vec<u8>,
+    /// The offer bytes as urlsafe base64
+    offer: String,
+    /// Timestamp
+    timestamp: String,
+}
 
 /// State is the data that was [Loaded] and the [CredentialStruct] that we build using that loaded
 /// and added data.
 #[derive(Default, Debug, Clone)]
 pub(crate) struct State {
+    /// Tracks the generate history of invite offers, so we can check status and get latest values.
+    pub(crate) history: Vec<History>,
     /// The loaded data
     pub(crate) loaded: Loaded,
     /// The CredentialStruct that we build from the loaded data
@@ -33,6 +53,7 @@ impl State {
     pub(crate) fn from_latest() -> Self {
         let last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
         Self {
+            history: last.state.history,
             loaded: last.state.loaded,
             builder: last.state.builder,
             // Offer is only generated when user triggers generation
@@ -80,7 +101,7 @@ impl State {
     }
 
     /// Generate offer from this State is there is nothing loaded.
-    pub(crate) fn offer(&self) -> Result<Option<String>, String> {
+    pub(crate) fn offer(&mut self) -> Result<Option<String>, String> {
         match self.loaded {
             Loaded::None => {
                 // use self.credential
@@ -106,9 +127,45 @@ impl State {
                     .collect::<Vec<_>>();
 
                 let offer = crate::api::Loaded::Offer { cred: offer, hints };
-                Ok(Some(offer.to_urlsafe().map_err(|e| {
-                    format!("URLSafe offer failed: {:?}", e).to_string()
-                })?))
+
+                // We also want to track this offer in the history
+                // So we can 1) Look up the key for values, and
+                // 2) Remind the person with hints/attrs if needed
+                //
+                // We need:
+                // 1) The attributes as Vec<Vec<AttributeKOV>>, for reference
+                // 2) The Publishing Key from delano-keys crate, for lookups
+                // 3) Timestamp (for info only), for reference
+                let Ok(issuer_key) = wallet::actions::issuer_public() else {
+                    return Err("Issuer public key failed".to_string());
+                };
+                let publish_key = PublishingKey::default()
+                    .with_attributes(
+                        &self
+                            .builder
+                            .entries
+                            .iter()
+                            .map(|a| a.iter().map(|a| a.into_bytes()).collect::<Vec<Vec<u8>>>())
+                            .collect::<Vec<Vec<Vec<u8>>>>(),
+                    )
+                    .with_issuer_key(&issuer_key)
+                    .cid();
+
+                let offered = offer
+                    .to_urlsafe()
+                    .map_err(|e| format!("URLSafe offer failed: {:?}", e).to_string())?;
+
+                let history = History {
+                    attributes: self.builder.entries.clone(),
+                    issuer_vk: issuer_key,
+                    publish_key: publish_key.into(),
+                    offer: offered.clone(),
+                    timestamp: Utc::now().to_rfc3339(),
+                };
+
+                self.history.push(history);
+
+                Ok(Some(offered))
             }
             _ => Ok(None),
         }
@@ -154,6 +211,7 @@ impl StructObject for State {
                 Some(ref proof) => Some(Value::from(proof.clone())),
                 None => Some(Value::from("No proof generated")),
             },
+            "history" => Some(Value::from_serializable(&self.history.clone())),
             _ => None,
         }
     }
@@ -169,6 +227,7 @@ impl From<String> for State {
         let decoded = Base64UrlUnpadded::decode_vec(&base64).unwrap_or_default();
         let loaded = serde_json::from_slice(&decoded).unwrap_or_default();
         Self {
+            history: Default::default(),
             loaded: serde_json::from_slice(&decoded).unwrap_or_default(),
             builder: CredentialStruct::from(&loaded),
             offer: Default::default(),
