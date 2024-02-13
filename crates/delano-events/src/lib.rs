@@ -25,8 +25,8 @@ pub enum Context {
 /// The serialized publish message, which is a key string and value bytes serialized
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublishMessage {
-    key: String,
-    value: Vec<u8>,
+    pub key: String,
+    pub value: Vec<u8>,
 }
 
 impl<T> From<Publishables<T>> for PublishMessage
