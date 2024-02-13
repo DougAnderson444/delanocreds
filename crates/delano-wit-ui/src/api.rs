@@ -194,7 +194,7 @@ impl State {
     pub(crate) fn publish_proof(self) -> Self {
         println!("Publishing proof");
         // TODO: Handle failures better
-        let Some(Loaded::Proof(ref provables)) = self.proof else {
+        let Ok(Some(Loaded::Proof(ref provables))) = self.proof() else {
             println!("No proof to publish");
             return self;
         };
