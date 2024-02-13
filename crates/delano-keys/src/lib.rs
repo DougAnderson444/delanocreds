@@ -6,7 +6,6 @@
 pub mod vk;
 
 /// Requires `deterministic` feature
-#[cfg(feature = "deterministic")]
 pub mod kdf;
 
 /// Requires `publish` feature

@@ -17,6 +17,5 @@ getrandom = "0.2"
 
 [features]
 default = ["serde"]
-deterministic = ["blastkids", "bls12_381_plus", "serde"]
 vk = ["blastkids", "bls12_381_plus", "serde"]
 publish = ["cid"]
