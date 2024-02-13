@@ -11,7 +11,7 @@ use super::*;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::prelude::*;
-use delano_events::{Context, Provables};
+use delano_events::{Context, Provables, PublishMessage};
 use delano_keys::publish::{IssuerKey, OfferedPreimages, PublishingKey};
 use delanocreds::Attribute;
 use serde::{Deserialize, Serialize};
@@ -210,9 +210,12 @@ impl State {
             ),
             provables.clone(),
         );
+
+        let publish_message = PublishMessage::from(publishables);
+
         // serde_json and base64 encode the publishables
         // We do this instead of string because JavaScript doesn't handle string from Uint8Array well.
-        let serde_publishables = serde_json::to_vec(&publishables).unwrap_or_default();
+        let serde_publishables = serde_json::to_vec(&publish_message).unwrap_or_default();
         let base64_publishables = base64ct::Base64Url::encode_string(&serde_publishables);
 
         let message_data = Context::Message(base64_publishables.to_string());

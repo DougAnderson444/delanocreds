@@ -2,6 +2,7 @@
 
 use delano_keys::publish::PublishingKey;
 use serde::{Deserialize, Serialize};
+use serde_json;
 
 // Test the README.md code snippets
 #[cfg(doctest)]
@@ -21,17 +22,37 @@ pub enum Context {
     Message(String),
 }
 
-/// The Messages eitted.
+/// The serialized publish message, which is a key string and value bytes serialized
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(tag = "tag", content = "val")]
-#[non_exhaustive]
-pub enum Message<T> {
-    /// The Proof key values pair, serialized as base64 to avoid missing TypedArray issued in JavaScript
-    /// with Uint8Array.
-    ///
-    ///
-    Publishables(Publishables<T>),
+pub struct PublishMessage {
+    key: String,
+    value: Vec<u8>,
+}
+
+impl<T> From<Publishables<T>> for PublishMessage
+where
+    T: serde::Serialize,
+{
+    fn from(publishables: Publishables<T>) -> Self {
+        Self {
+            key: publishables.key(),
+            value: serde_json::to_vec(&publishables.value()).unwrap_or_default(),
+        }
+    }
+}
+
+impl<T> TryFrom<PublishMessage> for Publishables<T>
+where
+    T: for<'de> serde::Deserialize<'de>,
+{
+    type Error = serde_json::Error;
+
+    fn try_from(publish_message: PublishMessage) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: publish_message.key,
+            value: serde_json::from_slice(&publish_message.value)?,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,8 +77,8 @@ where
     }
 
     /// Getter for the key
-    pub fn key(&self) -> &str {
-        &self.key
+    pub fn key(&self) -> String {
+        self.key.clone()
     }
 
     /// Getter for the value
