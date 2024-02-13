@@ -51,6 +51,14 @@
             Proof
           </button>
         </a>
+        <!--emit Publish event -->
+        <button
+          id="{{app.id|on('click')}}"
+          data-context-name="publishproof"
+          class="shadow bg-green-500 rounded p-2 text-white font-semibold"
+        >
+          Publish
+        </button>
         {% endif %}
       </div>
     </div>
