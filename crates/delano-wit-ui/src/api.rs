@@ -192,7 +192,6 @@ impl State {
 
     /// Publish the proof to the network by emiting a serialized message of the Key and Provables
     pub(crate) fn publish_proof(self) -> Self {
-        println!("Publishing proof");
         // TODO: Handle failures better
         let Ok(Some(Loaded::Proof(ref provables))) = self.proof() else {
             println!("No proof to publish");
@@ -223,7 +222,6 @@ impl State {
 
         let message_data = Context::Message(base64_publishables.to_string());
         let message = serde_json::to_string(&message_data).unwrap_or_default();
-        println!("Publishing: {}", message);
         wurbo_in::emit(&message);
         self
     }
