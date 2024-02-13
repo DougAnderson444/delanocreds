@@ -19,7 +19,6 @@ rayon = "1.8.0"
 log = "0.4"
 env_logger = "0.10.0"
 base64 = { workspace = true }
-blastkids = { workspace = true }
 thiserror = "1.0.49"
 ciborium = "0.2.1"
 
