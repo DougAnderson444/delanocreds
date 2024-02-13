@@ -5,14 +5,14 @@
 //! used to format and serialize the data as it's passed around.
 //!
 //! WIT interface types are kebab case, and all types must be serializable and deserializable.
-
 use self::attributes::{AttributeKOV, Hint};
 
 use super::*;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::prelude::*;
-use delano_keys::publish::PublishingKey;
+use delano_events::{Context, Provables};
+use delano_keys::publish::{IssuerKey, OfferedPreimages, PublishingKey};
 use delanocreds::Attribute;
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +45,7 @@ pub(crate) struct State {
     /// The offer
     pub(crate) offer: Option<String>,
     /// The proof, if any
-    pub(crate) proof: Option<String>,
+    pub(crate) proof: Option<Loaded>,
 }
 
 impl State {
@@ -93,9 +93,11 @@ impl State {
     pub(crate) fn with_proof(mut self) -> Self {
         let proof = match self.proof() {
             Ok(proof) => proof,
-            Err(e) => Some(e),
+            Err(e) => {
+                println!("Error generating proof: {}", e);
+                return self;
+            }
         };
-        println!("Proof: {:?}", proof);
         self.proof = proof;
         self
     }
@@ -139,17 +141,11 @@ impl State {
                 let Ok(issuer_key) = wallet::actions::issuer_public() else {
                     return Err("Issuer public key failed".to_string());
                 };
-                let publish_key = PublishingKey::default()
-                    .with_attributes(
-                        &self
-                            .builder
-                            .entries
-                            .iter()
-                            .map(|a| a.iter().map(|a| a.into_bytes()).collect::<Vec<Vec<u8>>>())
-                            .collect::<Vec<Vec<Vec<u8>>>>(),
-                    )
-                    .with_issuer_key(&issuer_key)
-                    .cid();
+                let publish_key = PublishingKey::new(
+                    &delano_keys::publish::OfferedPreimages(&self.builder.entries),
+                    &delano_keys::publish::IssuerKey(&issuer_key),
+                )
+                .cid();
 
                 let offered = offer
                     .to_urlsafe()
@@ -172,14 +168,15 @@ impl State {
     }
 
     /// Generate proof from this State if there is an offer loaded.
-    fn proof(&self) -> Result<Option<String>, String> {
+    fn proof(&self) -> Result<Option<Loaded>, String> {
         match &self.loaded {
             Loaded::Offer { cred, .. } => {
                 let accepted = wallet::actions::accept(&cred)?;
                 let cred = self.builder.extend(accepted)?;
                 let proof_package = self.builder.proof_package(&cred)?;
                 match proof_package.verify() {
-                    Ok(true) => Ok(Some(proof_package.to_urlsafe().map_err(|e| e.to_string())?)),
+                    // TODO: move url fn to with_proof fn
+                    Ok(true) => Ok(Some(proof_package)),
                     Ok(false) => Err("That proof is invalid!".to_string()),
                     Err(e) => Err(format!("Verify function failed: {}", e)),
                 }
@@ -190,6 +187,37 @@ impl State {
 
     pub(crate) fn with_cred(mut self, builder: CredentialStruct) -> Self {
         self.builder = builder;
+        self
+    }
+
+    /// Publish the proof to the network by emiting a serialized message of the Key and Provables
+    pub(crate) fn publish_proof(self) -> Self {
+        // TODO: Handle failures better
+        let Some(Loaded::Proof(ref provables)) = self.proof else {
+            return self;
+        };
+        let Ok(issuer_key) = wallet::actions::issuer_public() else {
+            return self;
+        };
+        // Emit key-value pair.
+        // The key is a delano-keys::PublishingKey using only the first Entry of attributes in the
+        // offered credential (entry zero).
+        // The value is proof with provables
+        let publishables = delano_events::Publishables::new(
+            PublishingKey::new(
+                &OfferedPreimages(&self.builder.entries[0]),
+                &IssuerKey(&issuer_key),
+            ),
+            provables.clone(),
+        );
+        // serde_json and base64 encode the publishables
+        // We do this instead of string because JavaScript doesn't handle string from Uint8Array well.
+        let serde_publishables = serde_json::to_vec(&publishables).unwrap_or_default();
+        let base64_publishables = base64ct::Base64Url::encode_string(&serde_publishables);
+
+        let message_data = Context::Message(base64_publishables.to_string());
+        let message = serde_json::to_string(&message_data).unwrap_or_default();
+        wurbo_in::emit(&message);
         self
     }
 }
@@ -208,7 +236,10 @@ impl StructObject for State {
                 None => Some(Value::from("No offer generated")),
             },
             "proof" => match self.proof {
-                Some(ref proof) => Some(Value::from(proof.clone())),
+                Some(ref proof) => match proof.to_urlsafe() {
+                    Ok(urlsafe_proof) => Some(Value::from(urlsafe_proof)),
+                    Err(e) => Some(Value::from(e.to_string())),
+                },
                 None => Some(Value::from("No proof generated")),
             },
             "history" => Some(Value::from_serializable(&self.history.clone())),
@@ -259,18 +290,7 @@ pub enum Loaded {
         /// The Hints
         hints: Vec<Vec<AttributeKOV>>,
     },
-    Proof {
-        /// The proof byte vector
-        proof: Vec<u8>,
-        /// The selected Entry attributes, as CID bytes, in the right sequence.
-        selected: Vec<Vec<Vec<u8>>>,
-        /// The selected Entry Attributes are hashes, so we can provide the preimage here. The UI
-        /// can then compare these preimage hints to the selected values to verify they match.
-        preimages: Vec<Vec<AttributeKOV>>,
-        /// We will also include the Issuer's Public Parameters from the Credential, so the holder
-        /// can verify against the Issuer's public key.
-        issuer_public: Vec<u8>,
-    },
+    Proof(Provables<AttributeKOV>),
     #[default]
     None,
 }
@@ -288,12 +308,12 @@ impl Loaded {
         // 3) TODO: The user should also check the Issuer's public key included in the proof
         //    against the Issuer's public key they have on file / find online (web resolve).
         match self {
-            Self::Proof {
+            Self::Proof(Provables::<AttributeKOV> {
                 selected,
-                preimages,
+                selected_preimages: preimages,
                 proof,
                 issuer_public,
-            } => {
+            }) => {
                 // Step 1) Hash preimages & compare to selected
                 // Iterate through each preimage converting them into delanocreds::Attribute,
                 // then compare them to the selected.
@@ -303,14 +323,18 @@ impl Loaded {
                         .zip(selected.iter())
                         .all(|(preimage, selected)| {
                             // Convert the preimage into a delanocreds::Attribute
-                            let preimage = preimage
-                                .iter()
-                                .map(|kov| Attribute::from(kov.to_string()).to_bytes())
-                                .collect::<Vec<Vec<u8>>>();
-
                             // Hash the preimage
                             // Compare the preimage hash to the selected
-                            preimage == *selected
+                            *selected
+                                == preimage
+                                    .iter()
+                                    .map(|kov| {
+                                        Attribute::from(
+                                            AttributeKOV::try_from(kov.clone()).unwrap_or_default(),
+                                        )
+                                        .to_bytes()
+                                    })
+                                    .collect::<Vec<Vec<u8>>>()
                         });
 
                 // Step 2) Verify the proof using wallet::actions::verify
@@ -358,7 +382,22 @@ impl StructObject for Loaded {
                 _ => None,
             },
             "preimages" => match self {
-                Self::Proof { preimages, .. } => Some(Value::from(preimages.clone())),
+                Self::Proof(Provables::<AttributeKOV> {
+                    selected_preimages: preimages,
+                    ..
+                }) => {
+                    let de_preimages: Vec<Vec<AttributeKOV>> = preimages
+                        .iter()
+                        .map(|entry| {
+                            entry
+                                .iter()
+                                .map(|a| AttributeKOV::try_from(a.clone()).unwrap_or_default())
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>();
+
+                    Some(Value::from(de_preimages.clone()))
+                }
                 _ => None,
             },
             "verified" => match self.verify() {

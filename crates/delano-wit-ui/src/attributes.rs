@@ -1,5 +1,6 @@
 use super::*;
 
+use delanocreds::CBORCodec;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
@@ -115,8 +116,13 @@ pub struct AttributeKOV {
     pub value: AttributeValue,
     /// Selected, whether the user has selected this attribute for inclusion in the credential
     /// proof
+    /// Skip in serialization
+    #[serde(skip)]
+    /// Default to true
     pub selected: bool,
 }
+
+impl CBORCodec for AttributeKOV {}
 
 impl Default for AttributeKOV {
     fn default() -> Self {
@@ -198,6 +204,14 @@ impl From<AttributeKOV> for delanocreds::Attribute {
 impl From<&AttributeKOV> for delanocreds::Attribute {
     fn from(kov: &AttributeKOV) -> Self {
         delanocreds::Attribute::from(kov.to_string())
+    }
+}
+
+/// Uses serde to deserialize from bytes.Uses default if deserialization fails.
+impl From<Vec<u8>> for AttributeKOV {
+    fn from(bytes: Vec<u8>) -> Self {
+        // Deserialize from bytes using CBORCodec
+        Self::from_bytes(&bytes).unwrap_or_default()
     }
 }
 

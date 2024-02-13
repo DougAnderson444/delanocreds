@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::attributes::AttributeKOV;
+use delano_events::Provables;
 use delanocreds::{CBORCodec, Credential, Nonce};
 
 /// The Credential Struct
@@ -180,12 +181,12 @@ impl CredentialStruct {
 
         let cred_struct = Credential::from_bytes(cred).map_err(|e| e.to_string())?;
 
-        Ok(crate::api::Loaded::Proof {
+        Ok(api::Loaded::Proof(Provables {
             proof,
-            selected: selected_entries,
-            preimages,
             issuer_public: cred_struct.issuer_public.to_bytes().unwrap_or_default(),
-        })
+            selected: selected_entries,
+            selected_preimages: preimages,
+        }))
     }
 }
 

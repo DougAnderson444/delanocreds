@@ -29,7 +29,7 @@ package = "delano:wit-ui"
 # It's not documented, but you can use `package.metadata.component.bindings` to
 # set additional derive attributes for the generated bindings:
 [package.metadata.component.bindings]
-derives = ["serde::Serialize", "serde::Deserialize"]
+# derives = ["serde::Serialize", "serde::Deserialize"]
 
 [package.metadata.component.dependencies]
 

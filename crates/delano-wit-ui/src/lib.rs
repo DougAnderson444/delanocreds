@@ -123,6 +123,11 @@ impl From<&context_types::Context> for StructContext {
                 StructContext::from(api::State::from_latest().with_proof())
                     .with_target(OUTPUT_HTML.to_string())
             }
+            context_types::Context::Publishproof => {
+                // emit publish event
+                StructContext::from(api::State::from_latest().publish_proof())
+                    .with_target(OUTPUT_HTML.to_string())
+            }
         }
     }
 }
