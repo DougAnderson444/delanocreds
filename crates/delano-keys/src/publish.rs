@@ -10,61 +10,59 @@ use cid::Cid;
 /// # Example
 ///
 /// ```
-/// use delano_keys::publish::PublishingKey;
-/// let key = PublishingKey::default()
-///    .with_attributes(&vec![vec![b"hello".to_vec(), b"world".to_vec()]])
-///    .with_issuer_key(&vec![b"123".to_vec()])
-///    .cid();
+/// use delano_keys::publish::{PublishingKey, OfferedPreimages, IssuerKey};
 ///
+/// let key = PublishingKey::new(
+///                    &OfferedPreimages(&vec![b"hello".to_vec(), b"world".to_vec()]),
+///                    &IssuerKey(&vec![b"123".to_vec()]))
+///                    .cid();
 /// assert_eq!(key.to_string().starts_with("baf"), true);
 /// ```
-#[derive(serde::Serialize, PartialEq, Eq, Debug)]
-pub struct PublishingKey<'a, T>
-where
-    T: AsRef<[u8]>,
-{
-    // Attribute preimages, a Vec of Vac of any type that impls AsRef<[u8]>
-    attributes: Option<&'a Vec<Vec<T>>>,
-    issuer_key: Option<&'a Vec<Vec<u8>>>,
+#[derive(serde::Serialize)]
+pub struct PublishingKey<'a, T> {
+    preimages: &'a OfferedPreimages<'a, T>,
+    /// The Issuer's Verification Key
+    issuer_key: &'a IssuerKey<'a>,
 }
 
-impl<'a, T> Default for PublishingKey<'a, T>
-where
-    T: AsRef<[u8]>,
-{
-    fn default() -> Self {
-        Self {
-            attributes: None,
-            issuer_key: None,
-        }
-    }
-}
+/// Newtype wrapper to ensure client puts the correct type into the PublishingKey
+/// These are the preimage attributes that were given with the invite offer.
+/// The Offer preimages are only the values for the first Entry, so we only need a Vec<T>
+#[derive(serde::Serialize)]
+pub struct OfferedPreimages<'a, T>(pub &'a Vec<T>);
+
+/// The Issier's verification Key, wrapped in a Newtype to ensure client puts the correct type into the PublishingKey
+#[derive(serde::Serialize)]
+pub struct IssuerKey<'a>(pub &'a Vec<Vec<u8>>);
 
 impl<'a, T> PublishingKey<'a, T>
 where
-    T: AsRef<[u8]> + serde::Serialize,
+    T: serde::Serialize,
 {
     /// Creates a new PublishingKey builder
-    pub fn new() -> Self {
-        Self::default()
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use delano_keys::publish::{PublishingKey, OfferedPreimages, IssuerKey};
+    /// let cid = PublishingKey::new(
+    ///                     &OfferedPreimages(&vec![b"hello".to_vec(), b"world".to_vec()]),
+    ///                     &IssuerKey(&vec![b"123".to_vec()]))
+    ///                     .cid();
+    ///
+    /// assert_eq!(cid.to_string().starts_with("baf"), true);
+    /// ```
+    pub fn new(preimages: &'a OfferedPreimages<T>, issuer_key: &'a IssuerKey) -> Self {
+        Self {
+            preimages,
+            issuer_key,
+        }
     }
 
-    /// Set the attributes
-    pub fn with_attributes(mut self, attributes: &'a Vec<Vec<T>>) -> Self {
-        self.attributes = Some(attributes);
-        self
-    }
-
-    /// Set the issuer key
-    pub fn with_issuer_key(mut self, issuer_key: &'a Vec<Vec<u8>>) -> Self {
-        self.issuer_key = Some(issuer_key);
-        self
-    }
-
-    // Hashes the Serialized value of Self using Borsh bytes
+    // Hashes the Serialized value of Self
     pub fn cid(&self) -> Cid {
         const RAW: u64 = 0x55;
-        let bytes = bincode::serialize(self).unwrap();
+        let bytes = serde_json::to_vec(&self).unwrap_or_default();
         let hash = Code::Sha2_256.digest(&bytes);
         Cid::new_v1(RAW, hash)
     }
@@ -88,10 +86,7 @@ mod tests {
         let attrs = vec![b"a".to_vec(), "b".as_bytes().to_vec()];
         let entry = vec![attrs.clone()];
         let issuer_key = vec![b"123".to_vec()];
-        let cid = PublishingKey::default()
-            .with_attributes(&entry)
-            .with_issuer_key(&issuer_key)
-            .cid();
+        let cid = PublishingKey::new(&OfferedPreimages(&entry), &IssuerKey(&issuer_key)).cid();
 
         assert_eq!(cid.to_string().starts_with("baf"), true);
     }
