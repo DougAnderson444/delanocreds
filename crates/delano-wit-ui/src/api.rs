@@ -192,11 +192,14 @@ impl State {
 
     /// Publish the proof to the network by emiting a serialized message of the Key and Provables
     pub(crate) fn publish_proof(self) -> Self {
+        println!("Publishing proof");
         // TODO: Handle failures better
         let Some(Loaded::Proof(ref provables)) = self.proof else {
+            println!("No proof to publish");
             return self;
         };
         let Ok(issuer_key) = wallet::actions::issuer_public() else {
+            println!("Issuer public key failed");
             return self;
         };
         // Emit key-value pair.
@@ -220,6 +223,7 @@ impl State {
 
         let message_data = Context::Message(base64_publishables.to_string());
         let message = serde_json::to_string(&message_data).unwrap_or_default();
+        println!("Publishing: {}", message);
         wurbo_in::emit(&message);
         self
     }
@@ -243,7 +247,7 @@ impl StructObject for State {
                     Ok(urlsafe_proof) => Some(Value::from(urlsafe_proof)),
                     Err(e) => Some(Value::from(e.to_string())),
                 },
-                None => Some(Value::from("No proof generated")),
+                None => Some(Value::from("Click to generate a proof.")),
             },
             "history" => Some(Value::from_serializable(&self.history.clone())),
             _ => None,
