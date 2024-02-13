@@ -8,7 +8,7 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 blastkids = { version = "0.1.4", optional = true } 
-bls12_381_plus = { workspace = true, features = ["alloc"], optional = true }
+bls12_381_plus = { version = "0.8.11", features = ["expose-fields", "alloc"], optional = true }
 cid = { version = "0.10.1", optional = true }
 secrecy = "0.8.0"
 serde = { version = "1.0.130", features = ["derive"], optional = true }
@@ -20,3 +20,7 @@ default = ["serde"]
 deterministic = ["blastkids", "bls12_381_plus", "serde"]
 vk = ["blastkids", "bls12_381_plus", "serde"]
 publish = ["cid"]
+
+# waiting https://github.com/mikelodder7/bls12_381_plus/pull/4
+[patch.crates-io]
+bls12_381_plus = { git = "https://github.com/DougAnderson444/bls12_381_plus", branch = "fix-reduce-error-wasm32" }
