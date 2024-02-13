@@ -7,7 +7,8 @@ delanocreds = { path = "crates/delanocreds" }
 delano-keys = { path = "crates/delano-keys" }
 delano-wit-ui = { path = "crates/delano-wit-ui" }
 delano-events = { path = "crates/delano-events" }
-bls12_381_plus = { version = "0.8.11", features = ["expose-fields", "alloc"] }
+bls12_381_plus = { version = "0.8.13", git="https://github.com/mikelodder7/bls12_381_plus.git", rev = "91a399e9a5f326816f13a0feab898ff40a7a1599", features = ["expose-fields", "alloc"] }
+
 secrecy = "0.8"
 base64 = "0.21.4"
 
@@ -22,6 +23,3 @@ overflow-checks = false
 panic = 'abort'          # Abort on panic
 rpath = false
 strip = true             # Automatically strip symbols from the binary.
-
-[patch.crates-io]
-bls12_381_plus = { git = "https://github.com/DougAnderson444/bls12_381_plus", branch = "fix-reduce-error-wasm32" }
