@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 lazy_static = "1.4.0"
 delanocreds = { path ="../delanocreds" }
-delano-keys = { workspace = true }
+delano-keys = { workspace = true, features = ["deterministic"] }
 thiserror = "1.0"
 wit-bindgen = { version = "0.16.0", default-features = false, features = ["realloc"] }
 
