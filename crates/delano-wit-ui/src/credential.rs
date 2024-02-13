@@ -245,7 +245,11 @@ impl From<&api::Loaded> for CredentialStruct {
                         let max_entries = update_key.map(|k| k.len()).unwrap_or_default();
 
                         Self {
-                            entries: hints.to_vec(),
+                            // iterate mutbly and set each selected to true
+                            entries: hints
+                                .iter()
+                                .map(|a| a.iter().map(|a| a.clone().selected()).collect())
+                                .collect(),
                             // max entries is in the Cred, it's the length of the update_key, if any.
                             max_entries: max_entries as usize,
                         }

@@ -115,10 +115,6 @@ pub struct AttributeKOV {
     /// Value
     pub value: AttributeValue,
     /// Selected, whether the user has selected this attribute for inclusion in the credential
-    /// proof
-    /// Skip in serialization
-    #[serde(skip)]
-    /// Default to true
     pub selected: bool,
 }
 
@@ -150,6 +146,12 @@ impl AttributeKOV {
     pub fn into_bytes(&self) -> Vec<u8> {
         // convert self.to_string() into [delanocreds::Attribute] byte vector
         delanocreds::Attribute::from(self.clone()).into()
+    }
+
+    /// Sets the selected field to true
+    pub(crate) fn selected(mut self) -> Self {
+        self.selected = true;
+        self
     }
 }
 
