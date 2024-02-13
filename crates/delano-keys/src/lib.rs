@@ -1,12 +1,16 @@
 #![doc = include_str!("../README.md")]
 
 /// The Verification Key Module
+/// Requires `vk` feature
+#[cfg(feature = "vk")]
 pub mod vk;
 
-// only if feature derive is enabled
-// #[cfg(feature = "derive")]
+/// Requires `deterministic` feature
+#[cfg(feature = "deterministic")]
 pub mod kdf;
 
+/// Requires `publish` feature
+#[cfg(feature = "publish")]
 pub mod publish;
 
 // Test the README.md code snippets
