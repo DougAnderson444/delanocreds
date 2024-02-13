@@ -2,7 +2,6 @@
 
 /// The Verification Key Module
 /// Requires `vk` feature
-#[cfg(feature = "vk")]
 pub mod vk;
 
 /// Requires `deterministic` feature

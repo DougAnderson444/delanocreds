@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 bls12_381_plus = { workspace = true } 
-delano-keys = { workspace = true, features = ["serde", "vk"] }
+delano-keys = { workspace = true }
 anyhow = "1.0.70"
 cid = "0.10.1"
 secrecy = "0.8.0"
