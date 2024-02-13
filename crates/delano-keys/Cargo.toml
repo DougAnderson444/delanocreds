@@ -9,14 +9,14 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 blastkids = { workspace = true, optional = true } 
 bls12_381_plus = { workspace = true, features = ["alloc"], optional = true }
-cid = "0.10.1"
+cid = { version = "0.10.1", optional = true }
 secrecy = "0.8.0"
 serde = { version = "1.0.130", features = ["derive"], optional = true }
 serde_json = "1.0"
 getrandom = "0.2"
 
-# serde default feature
 [features]
 default = ["serde"]
 deterministic = ["blastkids", "bls12_381_plus", "serde"]
 vk = ["blastkids", "bls12_381_plus", "serde"]
+publish = ["cid"]
