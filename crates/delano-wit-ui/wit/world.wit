@@ -52,6 +52,8 @@ interface context-types {
     generateoffer,
     // Attempt to generate a proof
     generateproof,
+    // emit a publish event with the proof data
+    publishproof,
   }
 }
 
@@ -70,6 +72,9 @@ interface wurbo-in {
 
   // Add an event listener to the given element
   addeventlistener: func(details: listen-details);
+
+  // Emit events from this component. Messages should be serialized JSON strings of Event type.
+  emit: func(message: string);
 
 }
 
