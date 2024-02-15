@@ -218,7 +218,7 @@ impl State {
         // serde_json and base64 encode the publishables
         // We do this instead of string because JavaScript doesn't handle string from Uint8Array well.
         let serde_publishables = serde_json::to_vec(&publish_message).unwrap_or_default();
-        let base64_publishables = base64ct::Base64Url::encode_string(&serde_publishables);
+        let base64_publishables = Base64UrlUnpadded::encode_string(&serde_publishables);
 
         let message_data = Context::Message(base64_publishables.to_string());
         let message = serde_json::to_string(&message_data).unwrap_or_default();
