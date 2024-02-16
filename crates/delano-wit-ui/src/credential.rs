@@ -174,17 +174,14 @@ impl CredentialStruct {
             nonce: nonce_bytes,
         };
 
-        let wallet::types::Proven {
-            proof,
-            selected: selected_entries,
-        } = wallet::actions::prove(&provables)?;
+        let wallet::types::Proven { proof, selected } = wallet::actions::prove(&provables)?;
 
         let cred_struct = Credential::from_bytes(cred).map_err(|e| e.to_string())?;
 
         Ok(api::Loaded::Proof(Provables {
             proof,
             issuer_public: cred_struct.issuer_public.to_bytes().unwrap_or_default(),
-            selected: selected_entries,
+            selected,
             selected_preimages: preimages,
         }))
     }
