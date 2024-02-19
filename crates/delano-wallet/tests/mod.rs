@@ -153,8 +153,6 @@ fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
         selected: selected.clone(),
     };
 
-    eprintln!("verifiables: {:?}", verifiables);
-
     assert!(bindings
         .delano_wallet_actions()
         .call_verify(&mut store, &verifiables)?
