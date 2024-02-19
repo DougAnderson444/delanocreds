@@ -213,7 +213,7 @@ impl From<&AttributeKOV> for delanocreds::Attribute {
 impl From<Vec<u8>> for AttributeKOV {
     fn from(bytes: Vec<u8>) -> Self {
         // Deserialize from bytes using CBORCodec
-        Self::from_bytes(&bytes).unwrap_or_default()
+        Self::from_cbor(&bytes).unwrap_or_default()
     }
 }
 
