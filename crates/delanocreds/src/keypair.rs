@@ -9,8 +9,9 @@ use crate::entry::entry_to_scalar;
 use crate::entry::{Entry, MaxEntries};
 use crate::set_commits::{Commitment, CrossSetCommitment};
 use crate::set_commits::{ParamSetCommitment, ParamSetCommitmentCompressed};
-use crate::zkp::Nonce;
-use crate::{config, error};
+use crate::utils::{try_decompress_g1, try_decompress_g2, try_into_scalar};
+use crate::zkp::{DamgardTransformCompressed, Nonce, PedersenOpenCompressed};
+use crate::{config, error, CredentialCompressed};
 use crate::{
     zkp::PedersenOpen,
     zkp::Schnorr,
@@ -18,19 +19,15 @@ use crate::{
 };
 
 use anyhow::Result;
+pub use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
 use bls12_381_plus::group::{Curve, Group, GroupEncoding};
-use bls12_381_plus::{
-    G1Affine, G1Compressed, G1Projective, G2Affine, G2Compressed, G2Projective, Gt,
-};
+use bls12_381_plus::{G1Affine, G1Projective, G2Affine, G2Projective, Gt};
 pub use delano_keys::vk::{VKCompressed, VK};
 use rand::rngs::ThreadRng;
 pub use secrecy::{ExposeSecret, Secret};
 use serde::{Deserialize, Serialize};
-use serde_with::base64::{Base64, UrlSafe};
-use serde_with::formats::Unpadded;
-use serde_with::serde_as;
 use spseq_uc::Credential;
 use spseq_uc::UpdateError;
 use std::fmt::Display;
@@ -125,7 +122,7 @@ pub struct Issuer {
 
 pub trait CBORCodec {
     /// Serializes to CBOR bytes
-    fn to_bytes(&self) -> Result<Vec<u8>, error::Error>
+    fn to_cbor(&self) -> Result<Vec<u8>, error::Error>
     where
         Self: Sized + Serialize,
     {
@@ -140,7 +137,7 @@ pub trait CBORCodec {
     }
 
     /// Deserialize from CBOR bytes
-    fn from_bytes(bytes: &[u8]) -> Result<Self, error::Error>
+    fn from_cbor(bytes: &[u8]) -> Result<Self, error::Error>
     where
         for<'a> Self: Sized + Deserialize<'a>,
     {
@@ -154,14 +151,13 @@ pub trait CBORCodec {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct IssuerPublic {
     pub parameters: ParamSetCommitment,
     pub vk: Vec<VK>,
 }
 
-impl CBORCodec for IssuerPublic {}
+impl CBORCodec for IssuerPublicCompressed {}
 
 impl IssuerPublic {
     /// Compacts the [VK] to a single G1 and single G2, then serilizes them to [IssuerPublicCompressed]
@@ -172,8 +168,8 @@ impl IssuerPublic {
             .iter()
             .take(2)
             .map(|vk| match vk {
-                VK::G1(vk) => VKCompressed::G1(vk.to_bytes()),
-                VK::G2(vk) => VKCompressed::G2(vk.to_bytes()),
+                VK::G1(vk) => VKCompressed::G1(vk.to_compressed().to_vec()),
+                VK::G2(vk) => VKCompressed::G2(vk.to_compressed().to_vec()),
             })
             .collect::<Vec<_>>();
 
@@ -184,11 +180,27 @@ impl IssuerPublic {
     }
 }
 
-#[serde_as]
+/// The serializable compressed version of [IssuerPublic]. Minimum size is 288 + 336 = 624 bytes.
+/// grows linearly with the number of entries ([MaxEntries].
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IssuerPublicCompressed {
+    /// If Max Cardinality is t, then length is: (48 (G1) + 96 (G2)) * (t + 1)
+    /// | Size G1 | Size G2 | Max Cardinality | Size of Public Parameters |
+    /// |---------|---------|------------------|---------------------------|
+    /// | 48      | 96      | 1                | 288                       |
+    /// | 48      | 96      | 2                | 432                       |
+    /// | 48      | 96      | 4                | 720                       |
+    /// | 48      | 96      | 8                | 1296                      |
     pub parameters: ParamSetCommitmentCompressed,
-    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
+    /// Verification keys are length: G1.len + (G2.len * (MaxEntries + 2))
+    /// So a single Entry would have VK length: 48 + 96 * (1 + 2) = 336
+    /// | Size G1 | Size G2 | Max Entries | Size of VK |
+    /// |---------|---------|-------------|------------|
+    /// | 48      | 96      | 1           | 336        |
+    /// | 48      | 96      | 2           | 432        |
+    /// | 48      | 96      | 4           | 624        |
+    /// | 48      | 96      | 8           | 1008       |
     pub vk: Vec<VKCompressed>,
 }
 
@@ -224,35 +236,35 @@ impl TryFrom<IssuerPublicCompressed> for IssuerPublic {
     type Error = error::Error;
 
     fn try_from(item: IssuerPublicCompressed) -> Result<Self, Self::Error> {
+        // each vk VK::G1(G1Projective::try_from(vk_g1)?
         let vk = item
             .vk
             .iter()
             .map(|vk| match vk {
-                VKCompressed::G1(vk) => {
-                    let g1_maybe = G1Affine::from_bytes(vk);
+                VKCompressed::G1(vk_g1) => {
+                    let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+                    bytes.copy_from_slice(&vk_g1);
+                    let vk_g1_maybe = G1Affine::from_compressed(&bytes);
 
-                    if g1_maybe.is_none().into() {
-                        return Err("Invalid G1 point".to_string());
+                    if vk_g1_maybe.is_none().into() {
+                        return Err(error::Error::InvalidG1Point);
                     }
 
-                    Ok(VK::G1(
-                        g1_maybe.expect("it'll be fine, it passed the check").into(),
-                    ))
+                    Ok(VK::G1(G1Projective::from(vk_g1_maybe.unwrap())))
                 }
-                VKCompressed::G2(vk) => {
-                    let g2 = G2Affine::from_bytes(vk);
+                VKCompressed::G2(vk_g2) => {
+                    let mut bytes = [0u8; G2Affine::COMPRESSED_BYTES];
+                    bytes.copy_from_slice(&vk_g2);
+                    let vk_g2_maybe = G2Affine::from_compressed(&bytes);
 
-                    if g2.is_none().into() {
-                        return Err("Invalid G2 point".to_string());
+                    if vk_g2_maybe.is_none().into() {
+                        return Err(error::Error::InvalidG2Point);
                     }
 
-                    Ok(VK::G2(
-                        g2.expect("it'll be fine, it passed the check").into(),
-                    ))
+                    Ok(VK::G2(G2Projective::from(vk_g2_maybe.unwrap())))
                 }
             })
-            .collect::<Result<Vec<_>, _>>()
-            .expect("G1 and G2 to be fine if they passed the checks");
+            .collect::<Result<Vec<_>, Self::Error>>()?;
 
         Ok(Self {
             parameters: item.parameters.try_into()?,
@@ -298,7 +310,13 @@ impl Issuer {
     /// Generates a new [Issuer] given a [Secret] and a [ParamSetCommitment]
     ///
     /// Use this function to generate a new Issuer when you have both secret keys
-    /// and previously generated public parameters
+    /// and previously generated public parameters.
+    ///
+    /// This function also generates the Verification Key (vk) for the Issuer. The length of
+    /// the Verification Key is equal to the length of the Secret key + 1. The Secret Key is
+    /// the length of the number of messages + 2. Therefore, the VK is the length of the number
+    /// of messages + 3. Since only the first VK is a G1 and the rest are G2, the total length
+    /// is: G1.len + (G2.len * (MaxEntries + 2))
     pub fn new_with_params(sk: Secret<Vec<Scalar>>, params: ParamSetCommitment) -> Self {
         let mut vk: Vec<VK> = sk
             .expose_secret()
@@ -338,10 +356,10 @@ impl Issuer {
             return Err(IssuerError::InvalidNymProof);
         }
         // check if delegate keys is provided
-        let cred = self.sign(&nym_proof.public_key, attr_vector, k_prime)?;
+        let cred = self.sign(&nym_proof.public_key.into(), attr_vector, k_prime)?;
         assert!(verify(
             &self.public.vk,
-            &nym_proof.public_key,
+            &nym_proof.public_key.into(),
             &cred.commitment_vector,
             &cred.sigma
         ));
@@ -539,16 +557,15 @@ pub struct NymPublic {
 /// - `public_key`: RandomizedPubKey, public key of the Nym
 /// - `response`: Scalar, response of the user
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NymProof {
     /// [Scalar] is used to generate the [NymProof]
     pub challenge: Scalar,
     /// [PedersenOpen] is used to open the [NymProof] Pedersen Commitment
     pub pedersen_open: PedersenOpen,
     /// The [G1Projective] Pedersen Commitment of the [NymProof]
-    pub pedersen_commit: G1Projective,
+    pub pedersen_commit: G1Affine,
     /// [G1Projective] Public key for this [Nym]
-    pub public_key: G1Projective,
+    pub public_key: G1Affine,
     /// [Scalar] response of the [NymProof]
     pub response: Scalar,
     /// [DamgardTransform] is used to annouce the [crate::zkp::PedersenCommit] and [PedersenOpen],
@@ -556,7 +573,89 @@ pub struct NymProof {
     pub damgard: DamgardTransform,
 }
 
-impl CBORCodec for NymProof {}
+/// Only serde the compressed version of the [NymProof]. 320 bytes of data.
+///
+/// Size summary of NymProofCompressed:
+/// | Field             | Size (bytes) |
+/// |-------------------|--------------|
+/// | challenge         | 32           |
+/// | pedersen_open     | 112          |
+/// | pedersen_commit   | 48           |
+/// | public_key        | 48           |
+/// | response          | 32           |
+/// | damgard           | 48           |
+/// | Total             | 320          |
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NymProofCompressed {
+    pub challenge: Vec<u8>,
+    pub pedersen_open: PedersenOpenCompressed,
+    pub pedersen_commit: Vec<u8>,
+    pub public_key: Vec<u8>,
+    pub response: Vec<u8>,
+    pub damgard: DamgardTransformCompressed,
+}
+
+impl CBORCodec for NymProofCompressed {}
+
+/// From [NymProof] to [NymProofCompressed]
+impl From<NymProof> for NymProofCompressed {
+    fn from(item: NymProof) -> Self {
+        Self {
+            challenge: item.challenge.into(),
+            pedersen_open: PedersenOpenCompressed::from(item.pedersen_open),
+            pedersen_commit: item.pedersen_commit.to_compressed().to_vec(),
+            public_key: item.public_key.to_compressed().to_vec(),
+            response: item.response.into(),
+            damgard: DamgardTransformCompressed::from(item.damgard),
+        }
+    }
+}
+
+/// TryFrom [NymProofCompressed] to [NymProof]
+impl TryFrom<NymProofCompressed> for NymProof {
+    type Error = error::Error;
+
+    fn try_from(item: NymProofCompressed) -> Result<Self, Self::Error> {
+        let challenge = try_into_scalar(item.challenge)?;
+        let response = try_into_scalar(item.response)?;
+        let damgard = DamgardTransform::try_from(item.damgard)?;
+
+        let pedersen_open = PedersenOpen::try_from(item.pedersen_open)?;
+        let pedersen_commit = {
+            let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+            bytes.copy_from_slice(&item.pedersen_commit);
+            let maybe_g1 = G1Affine::from_compressed(&bytes);
+
+            if maybe_g1.is_none().into() {
+                return Err(error::Error::InvalidG1Point);
+            } else {
+                G1Projective::from(maybe_g1.unwrap())
+            }
+        };
+
+        let public_key = {
+            let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+            bytes.copy_from_slice(&item.public_key);
+            let maybe_g1 = G1Affine::from_compressed(&bytes);
+
+            if maybe_g1.is_none().into() {
+                return Err(error::Error::InvalidG1Point);
+            } else {
+                G1Projective::from(maybe_g1.unwrap())
+            }
+        };
+
+        Ok(Self {
+            challenge,
+            pedersen_open,
+            pedersen_commit: pedersen_commit.into(),
+            public_key: public_key.into(),
+            response,
+            damgard,
+        })
+    }
+}
 
 impl<Stage> Nym<Stage> {
     /// Derive a [Nym] from a given secret that references a big endien 32 byte array which [Zeroize]s it's
@@ -768,6 +867,8 @@ impl<Stage> Nym<Stage> {
         match &vk[0] {
             VK::G1(vk0) => {
                 orphan.t += vk0 * self.secret.expose_secret();
+                // orphan.t =
+                //     (G1Projective::from(orphan.t) + vk0 * self.secret.expose_secret()).into();
                 Ok(orphan)
             }
             _ => Err(error::Error::InvalidVerificationKey {
@@ -831,8 +932,12 @@ impl<Stage> Nym<Stage> {
 
         CredProof {
             sigma: cred_p.sigma,
-            commitment_vector: cred_p.commitment_vector,
-            witness_pi,
+            commitment_vector: cred_p
+                .commitment_vector
+                .iter()
+                .map(|c| c.to_affine())
+                .collect(),
+            witness_pi: witness_pi.into(),
             nym_proof: nym.nym_proof(nonce),
         }
     }
@@ -866,7 +971,7 @@ impl<Stage> Nym<Stage> {
             challenge,
             pedersen_open,
             pedersen_commit,
-            public_key: self.public.key,
+            public_key: self.public.key.into(),
             response,
             damgard: self.public.damgard.clone(),
         }
@@ -941,6 +1046,7 @@ impl Nym<Randomized> {
         // update component t of signature to remove the old key
         if let VK::G1(vk0) = &vk[0] {
             sigma.t += (vk0 * self.secret.expose_secret()).neg();
+            // sigma.t = (G1Projective::from(sigma.t) + vk0 * self.secret.expose_secret()).into();
             sigma
         } else {
             panic!("Invalid verification key"); // TODO: Remove panics, switch to Result
@@ -953,8 +1059,7 @@ impl Nym<Randomized> {
 /// - `y_g1`: The public key of the user
 /// - `y_hat`: The public key of the user
 /// - `t`: The signature of the user
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Signature {
     z: G1Projective,
     y_g1: G1Projective,
@@ -982,27 +1087,23 @@ impl FromStr for Signature {
 }
 
 /// [SignatureCompressed] is a compressed version of [Signature]
-#[serde_as]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SignatureCompressed {
-    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    z: G1Compressed,
-    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    y_g1: G1Compressed,
-    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    y_hat: G2Compressed,
-    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    t: G1Compressed,
+    pub z: Vec<u8>,
+    pub y_g1: Vec<u8>,
+    pub y_hat: Vec<u8>,
+    pub t: Vec<u8>,
 }
 
 /// To convert a [Signature] to a [SignatureCompressed]
 impl From<Signature> for SignatureCompressed {
     fn from(sig: Signature) -> Self {
         SignatureCompressed {
-            z: sig.z.to_bytes(),
-            y_g1: sig.y_g1.to_bytes(),
-            y_hat: sig.y_hat.to_bytes(),
-            t: sig.t.to_bytes(),
+            z: sig.z.to_bytes().into(),
+            y_g1: sig.y_g1.to_bytes().into(),
+            y_hat: sig.y_hat.to_bytes().into(),
+            t: sig.t.to_bytes().into(),
         }
     }
 }
@@ -1012,34 +1113,31 @@ impl TryFrom<SignatureCompressed> for Signature {
     type Error = error::Error;
 
     fn try_from(sig: SignatureCompressed) -> Result<Self, Self::Error> {
-        let z = G1Projective::from_bytes(&sig.z);
-        let y_g1 = G1Projective::from_bytes(&sig.y_g1);
-        let y_hat = G2Projective::from_bytes(&sig.y_hat);
-        let t = G1Projective::from_bytes(&sig.t);
+        let z = try_decompress_g1(sig.z)?.into();
+        let y_g1 = try_decompress_g1(sig.y_g1)?.into();
+        let y_hat = try_decompress_g2(sig.y_hat)?.into();
+        let t = try_decompress_g1(sig.t)?.into();
 
-        if z.is_none().into()
-            || y_g1.is_none().into()
-            || y_hat.is_none().into()
-            || t.is_none().into()
-        {
-            return Err(error::Error::InvalidSignature("Invalid Signature".into()));
-        }
-
-        Ok(Signature {
-            z: z.unwrap(),
-            y_g1: y_g1.unwrap(),
-            y_hat: y_hat.unwrap(),
-            t: t.unwrap(),
-        })
+        Ok(Signature { z, y_g1, y_hat, t })
     }
 }
 
 /// Newtype wrapper for a [Credential] which has an orphan [Signature]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Offer(Credential);
 
-impl CBORCodec for Offer {}
+impl AsRef<Credential> for Offer {
+    fn as_ref(&self) -> &Credential {
+        &self.0
+    }
+}
+
+/// OfferCompressed: Only the compressed versions should be serializable
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct OfferCompressed(CredentialCompressed);
+
+impl CBORCodec for OfferCompressed {}
 
 impl Deref for Offer {
     type Target = Credential;
@@ -1049,10 +1147,33 @@ impl Deref for Offer {
     }
 }
 
+impl From<Offer> for OfferCompressed {
+    fn from(offer: Offer) -> Self {
+        OfferCompressed(offer.0.into())
+    }
+}
+
+/// Offer: From<OfferCompressed>
+impl TryFrom<OfferCompressed> for Offer {
+    type Error = error::Error;
+
+    fn try_from(offer: OfferCompressed) -> Result<Self, Self::Error> {
+        Ok(Offer(offer.0.try_into()?))
+    }
+}
+
+impl TryFrom<CredentialCompressed> for Offer {
+    type Error = error::Error;
+
+    fn try_from(cred: CredentialCompressed) -> Result<Self, Self::Error> {
+        Ok(Offer(cred.try_into()?))
+    }
+}
+
 /// Implement [From]<[Credential]> for [Offer]
-impl From<Credential> for Offer {
-    fn from(cred: Credential) -> Self {
-        Offer(cred)
+impl From<CredentialCompressed> for OfferCompressed {
+    fn from(cred: CredentialCompressed) -> Self {
+        OfferCompressed(cred)
     }
 }
 
@@ -1062,20 +1183,32 @@ impl From<Offer> for Credential {
     }
 }
 
-impl TryFrom<Offer> for Vec<u8> {
-    type Error = error::Error;
-
-    fn try_from(value: Offer) -> Result<Self, Self::Error> {
-        let cred: Credential = value.into();
-        Ok(cred.to_bytes()?)
+impl From<Credential> for Offer {
+    fn from(cred: Credential) -> Self {
+        Offer(cred)
     }
 }
 
-impl TryFrom<Vec<u8>> for Offer {
+impl From<OfferCompressed> for CredentialCompressed {
+    fn from(offer: OfferCompressed) -> Self {
+        offer.0
+    }
+}
+
+impl TryFrom<OfferCompressed> for Vec<u8> {
+    type Error = error::Error;
+
+    fn try_from(value: OfferCompressed) -> Result<Self, Self::Error> {
+        let cred: CredentialCompressed = value.into();
+        Ok(cred.to_cbor()?)
+    }
+}
+
+impl TryFrom<Vec<u8>> for OfferCompressed {
     type Error = error::Error;
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        let cred = Credential::from_bytes(&value)?;
+        let cred = CredentialCompressed::from_cbor(&value)?;
         Ok(cred.into())
     }
 }
@@ -1087,15 +1220,93 @@ impl TryFrom<Vec<u8>> for Offer {
 /// - `commitment_vector`: Vec<[`G1`]>, commitment vector of the user
 /// - `witness_pi`: [`G1`], witness of the user
 /// - `nym_public`: [`NymPublic`], proof of the pseudonym
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CredProof {
     sigma: Signature,
-    commitment_vector: Vec<G1Projective>,
-    witness_pi: G1Projective,
+    commitment_vector: Vec<G1Affine>,
+    witness_pi: G1Affine,
     nym_proof: NymProof,
 }
 
-impl CBORCodec for CredProof {}
+/// Only serialize the compressed version of the [CredProof].
+/// Size is 240 + 48 * max_entries + 48 + 320 bytes.
+/// For example, with 2 enties: 240 + 48 * 2 + 48 + 320 = 704 bytes.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CredProofCompressed {
+    /// 240 bytes of data
+    pub sigma: SignatureCompressed,
+    /// G1 compressed 48 bytes, times number of current entries up to max_entries
+    pub commitment_vector: Vec<Vec<u8>>,
+    /// G1 compressed 48 bytes. Only one witness.
+    pub witness_pi: Vec<u8>,
+    /// 320 bytes of data
+    pub nym_proof: NymProofCompressed,
+}
+
+impl CBORCodec for CredProofCompressed {}
+
+/// From [CredProof] to [CredProofCompressed]
+impl From<CredProof> for CredProofCompressed {
+    fn from(item: CredProof) -> Self {
+        Self {
+            sigma: SignatureCompressed::from(item.sigma),
+            commitment_vector: item
+                .commitment_vector
+                .iter()
+                .map(|c| c.to_compressed().to_vec())
+                .collect(),
+            witness_pi: item.witness_pi.to_compressed().to_vec(),
+            nym_proof: NymProofCompressed::from(item.nym_proof),
+        }
+    }
+}
+
+/// TryFrom [CredProofCompressed] to [CredProof]
+impl TryFrom<CredProofCompressed> for CredProof {
+    type Error = error::Error;
+
+    fn try_from(item: CredProofCompressed) -> Result<Self, Self::Error> {
+        let sigma = Signature::try_from(item.sigma)?;
+        let nym_proof = NymProof::try_from(item.nym_proof)?;
+
+        let commitment_vector = item
+            .commitment_vector
+            .iter()
+            .map(|c| {
+                let mut byte = [0u8; G1Affine::COMPRESSED_BYTES];
+                byte.copy_from_slice(c);
+                let maybe_g1 = G1Affine::from_compressed(&byte);
+
+                if maybe_g1.is_none().into() {
+                    return Err(error::Error::InvalidG1Point);
+                } else {
+                    Ok(G1Projective::from(maybe_g1.unwrap()))
+                }
+            })
+            .map(|item| item.unwrap().into())
+            .collect::<Vec<G1Projective>>();
+
+        let witness_pi = {
+            let mut byte = [0u8; G1Affine::COMPRESSED_BYTES];
+            byte.copy_from_slice(&item.witness_pi);
+            let maybe_g1 = G1Affine::from_compressed(&byte);
+
+            if maybe_g1.is_none().into() {
+                return Err(error::Error::InvalidG1Point);
+            } else {
+                G1Projective::from(maybe_g1.unwrap())
+            }
+        };
+
+        Ok(Self {
+            sigma,
+            commitment_vector: commitment_vector.iter().map(|c| c.to_affine()).collect(),
+            witness_pi: witness_pi.into(),
+            nym_proof,
+        })
+    }
+}
 
 /// Verify a proof of a [CredProof] against [IssuerPublic] and selected [Entry]s
 pub fn verify_proof(
@@ -1118,9 +1329,12 @@ pub fn verify_proof(
     // check the proof is valid for each
     let check_verify_cross = CrossSetCommitment::verify_cross(
         &issuer_public.parameters,
-        &commitment_vectors,
+        &commitment_vectors
+            .iter()
+            .map(|c| c.into())
+            .collect::<Vec<_>>(),
         selected_attrs,
-        &proof.witness_pi,
+        &proof.witness_pi.into(),
     );
 
     let check_zkp_verify = DamgardTransform::verify(&proof.nym_proof, nonce);
@@ -1128,8 +1342,12 @@ pub fn verify_proof(
     // signature is based on the original commitment vector. Unless we adapt it when the restriction is applied
     let verify_sig = verify(
         &issuer_public.vk,
-        &proof.nym_proof.public_key,
-        &proof.commitment_vector,
+        &proof.nym_proof.public_key.into(),
+        &proof
+            .commitment_vector
+            .iter()
+            .map(|c| c.into())
+            .collect::<Vec<_>>(),
         &proof.sigma,
     );
 
@@ -1141,7 +1359,10 @@ pub fn verify_proof(
 mod tests {
 
     use super::*;
-    use crate::attributes::{attribute, Attribute};
+    use crate::{
+        attributes::{attribute, Attribute},
+        zkp::Pedersen,
+    };
 
     lazy_static::lazy_static! {
         static ref NONCE: Nonce = Nonce::default();
@@ -2043,10 +2264,10 @@ mod tests {
 
         let nym_proof = nym.nym_proof(&nonce);
 
-        let bytes = nym_proof.to_bytes().expect("valid bytes");
-        let nym_proof2 = NymProof::from_bytes(&bytes).expect("valid bytes");
+        let compressed_nym_proof = NymProofCompressed::from(nym_proof.clone());
+        let decomp_nym_proof = NymProof::try_from(compressed_nym_proof).expect("valid conversion");
 
-        assert_eq!(nym_proof, nym_proof2);
+        assert_eq!(nym_proof, decomp_nym_proof);
     }
 
     // Test nym.extend credential by a single entry
@@ -2134,5 +2355,191 @@ mod tests {
         ));
 
         Ok(())
+    }
+
+    // test roundtrip NymProof -> TryFrom<NymProofCompressed> -> NymProof
+    #[test]
+    fn test_nym_proof_compressed_roundtrip() {
+        let nym = Nym::new();
+        let nonce = Nonce::new(vec![1, 2, 3, 4, 5, 6, 7, 8]);
+
+        let nym_proof = nym.nym_proof(&nonce);
+
+        let nym_proof_compressed = NymProofCompressed::from(nym_proof.clone());
+        // let bytes = nym_proof_compressed.to_cbor().expect("valid bytes");
+        // let nym_proof_compressed2 = NymProofCompressed::from_cbor(&bytes).expect("valid bytes");
+        let nym_proof2 = NymProof::try_from(nym_proof_compressed).expect("valid conversion");
+
+        assert_eq!(nym_proof, nym_proof2);
+    }
+
+    // test IssuerPublicCompressed roundtrip
+    #[test]
+    fn test_issuer_public_compressed_roundtrip() {
+        let issuer = Issuer::default();
+        let issuer_public = issuer.public.clone();
+
+        let issuer_public_compressed = IssuerPublicCompressed::from(issuer_public.clone());
+        let issuer_public2 =
+            IssuerPublic::try_from(issuer_public_compressed).expect("valid conversion");
+
+        assert_eq!(issuer_public, issuer_public2);
+    }
+
+    // test Signature to SignatureCompressed roundtrip.
+    // Make a signature, compress it, decompress it and verify it matchs the original signature
+    #[test]
+    fn test_signature_compress_rountrip() {
+        let signature = Signature {
+            z: G1Projective::random(&mut ThreadRng::default()).into(),
+            y_g1: G1Projective::random(&mut ThreadRng::default()).into(),
+            y_hat: G2Projective::random(&mut ThreadRng::default()).into(),
+            t: G1Projective::random(&mut ThreadRng::default()).into(),
+        };
+
+        let signature_compressed = SignatureCompressed::from(signature.clone());
+        let signature2 =
+            Signature::try_from(signature_compressed.clone()).expect("valid conversion");
+
+        eprintln!(
+            "\nOrig: {:?} \n\n Compressed: {:?} \n\nUncomp {:?} \n",
+            signature, signature_compressed, signature2
+        );
+
+        assert_eq!(signature, signature2);
+    }
+    // CredProofCompressed roundtrip
+    #[test]
+    fn test_cred_proofcompressed_roundtrip() {
+        let cred_proof = CredProof {
+            sigma: Signature {
+                z: G1Projective::random(&mut ThreadRng::default()).into(),
+                y_g1: G1Projective::random(&mut ThreadRng::default()).into(),
+                y_hat: G2Projective::random(&mut ThreadRng::default()).into(),
+                t: G1Projective::random(&mut ThreadRng::default()).into(),
+            },
+            commitment_vector: vec![G1Projective::random(&mut ThreadRng::default()).into(); 4],
+            witness_pi: G1Projective::random(&mut ThreadRng::default()).into(),
+            nym_proof: NymProof {
+                challenge: Scalar::random(&mut ThreadRng::default()),
+                pedersen_open: PedersenOpen {
+                    announce_randomness: Scalar::random(&mut ThreadRng::default()),
+                    open_randomness: Nonce::default(),
+                    announce_element: Some(G1Projective::random(&mut ThreadRng::default()).into()),
+                },
+                pedersen_commit: G1Projective::random(&mut ThreadRng::default()).into(),
+                public_key: G1Projective::random(&mut ThreadRng::default()).into(),
+                response: Scalar::random(&mut ThreadRng::default()),
+                damgard: DamgardTransform {
+                    pedersen: Pedersen {
+                        h: G1Projective::random(&mut ThreadRng::default()).into(),
+                    },
+                },
+            },
+        };
+
+        // commitment_vector compress, decompress, compare
+        let commit_vec_comp = cred_proof
+            .commitment_vector
+            .iter()
+            .map(|x| x.to_compressed().to_vec())
+            .collect::<Vec<Vec<u8>>>();
+        let commit_vec_decomp = commit_vec_comp
+            .iter()
+            .map(|x| try_decompress_g1(x.to_vec()))
+            .collect::<Result<Vec<G1Affine>, _>>()
+            .expect("valid conversion");
+
+        assert_eq!(cred_proof.commitment_vector, commit_vec_decomp);
+
+        // witness_pi
+        let wit_comp = cred_proof.witness_pi.to_compressed().to_vec();
+        let wit_decomp = try_decompress_g1(wit_comp).expect("valid conversion");
+        assert_eq!(cred_proof.witness_pi, wit_decomp);
+
+        // nym_proof
+        let nym_proof_comp = NymProofCompressed::from(cred_proof.nym_proof.clone());
+        let nym_proof_decomp = NymProof::try_from(nym_proof_comp).expect("valid conversion");
+        assert_eq!(cred_proof.nym_proof, nym_proof_decomp);
+
+        let cred_proof_compressed = CredProofCompressed::from(cred_proof.clone());
+        let proof2 = CredProof::try_from(cred_proof_compressed.clone()).expect("valid conversion");
+
+        assert_eq!(cred_proof, proof2);
+    }
+
+    // test roundtrip offer OfferCompressed
+    #[test]
+    fn test_offer_compressed_roundtrip() {
+        let issuer = Issuer::default();
+        let nym = Nym::new();
+
+        let messages_vectors = setup_tests();
+
+        let k_prime = Some(4);
+
+        // issue the cred
+        let cred = issuer
+            .issue_cred(
+                &[Entry(messages_vectors.message1_str.clone())],
+                k_prime,
+                &nym.nym_proof(&NONCE),
+                Some(&NONCE),
+            )
+            .unwrap();
+
+        let nonce = Nonce::new(vec![1, 2, 3, 4, 5, 6, 7, 8]);
+
+        // generate a proof using prove
+        let proof = nym.prove(
+            &cred,
+            &[Entry(messages_vectors.message1_str.clone())],
+            &[Entry(messages_vectors.message1_str.clone())],
+            &nonce,
+        );
+
+        // the proof.pedersen_open.open_randomness should match the nonce
+        assert_eq!(proof.nym_proof.pedersen_open.open_randomness, nonce);
+
+        // verify the proof
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &[Entry(messages_vectors.message1_str.clone())],
+            Some(&nonce)
+        ));
+
+        // extend the credential
+        let extended_cred = nym
+            .extend(&cred, &Entry(messages_vectors.message2_str.clone()))
+            .unwrap();
+
+        // generate a proof using prove
+        let proof = nym.prove(
+            &extended_cred,
+            &[
+                Entry(messages_vectors.message1_str.clone()),
+                Entry(messages_vectors.message2_str.clone()),
+            ],
+            &[Entry(messages_vectors.message1_str.clone())],
+            &NONCE,
+        );
+
+        // verify the proof
+        assert!(verify_proof(
+            &issuer.public,
+            &proof,
+            &[Entry(messages_vectors.message1_str.clone())],
+            Some(&NONCE)
+        ));
+
+        let offer = nym.offer(&extended_cred, &None).unwrap();
+
+        let offer_compressed = OfferCompressed::from(offer.clone());
+        let bytes = offer_compressed.to_cbor().expect("valid bytes");
+        let offer_compressed2 = OfferCompressed::from_cbor(&bytes).expect("valid bytes");
+        let offer2 = Offer::try_from(offer_compressed2).expect("valid conversion");
+
+        assert_eq!(offer, offer2);
     }
 }
