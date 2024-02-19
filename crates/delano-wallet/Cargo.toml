@@ -23,6 +23,11 @@ crate-type = ["cdylib"]
 [package.metadata.component]
 package = "delano:wallet"
 
+# It's not documented, but you can use `package.metadata.component.bindings` to
+# set additional derive attributes for the generated bindings:
+[package.metadata.component.bindings]
+derives = ["PartialEq"]
+
 [package.metadata.component.dependencies]
 
 [package.metadata.component.target.dependencies]

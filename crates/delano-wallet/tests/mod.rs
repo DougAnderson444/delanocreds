@@ -1,9 +1,8 @@
 mod bindgen {
     wasmtime::component::bindgen!("delanocreds"); // name of the world in the .wit file
 }
-
 use bindgen::delano::wallet::types::{OfferConfig, Provables, Verifiables};
-use delanocreds::{Attribute, CBORCodec, Credential, MaxEntries, Nonce, NymProof};
+use delanocreds::{Attribute, MaxEntries, Nonce};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -122,32 +121,20 @@ fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
     // We should be able to leave Issue Options as None, and we will issue Root to own Nym
     let max_entries = MaxEntries::default();
 
-    let cred = bindings
+    let cred_compressed = bindings
         .delano_wallet_actions()
         .call_issue(&mut store, &root_entry.clone(), max_entries.into(), None)?
         .map_err(|e| TestError::Stringified(e))?;
 
     // There should be an update key in the cred
-    let cred_native = Credential::from_bytes(&cred)?;
-    assert!(cred_native.update_key.is_some());
+    assert!(cred_compressed.update_key.is_some());
 
     let nonce = Nonce::default();
     let nonce_bytes: Vec<u8> = nonce.clone().into();
-    let nym_proof_bytes = bindings
-        .delano_wallet_actions()
-        .call_get_nym_proof(&mut store, &nonce_bytes)?
-        .map_err(|e| TestError::Stringified(format!("Get Nym: {:?}", e)))?;
-
-    let nym_proof = NymProof::from_bytes(&nym_proof_bytes)?;
-
-    // nym_proof.pedersen_open.open_randomness should equal the nonce value
-    assert_eq!(nym_proof.pedersen_open.open_randomness, nonce);
-
-    let cred_native = Credential::from_bytes(&cred)?;
 
     // The self-issued cred should be provable by our nym's proof
     let provables = Provables {
-        credential: cred.clone(),
+        credential: cred_compressed.clone(),
         entries: vec![root_entry.clone()],
         selected: vec![doug.clone()],
         nonce: nonce_bytes.clone(),
@@ -161,10 +148,13 @@ fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
     // The self-issued cred should be verifiable againsy our nym's proof
     let verifiables = Verifiables {
         proof: proof.clone(),
-        issuer_public: cred_native.issuer_public.to_bytes()?,
+        issuer_public: cred_compressed.issuer_public,
         nonce: Some(nonce_bytes.clone()),
         selected: selected.clone(),
     };
+
+    eprintln!("verifiables: {:?}", verifiables);
+
     assert!(bindings
         .delano_wallet_actions()
         .call_verify(&mut store, &verifiables)?
@@ -173,6 +163,16 @@ fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
     let max_entries = MaxEntries::default();
 
     // We can also explicitly issue the Root Cred to our own Nym, using IssueOptions, so we need to retreive the Nym's public key
+    let nym_proof_compressed = bindings
+        .delano_wallet_actions()
+        .call_get_nym_proof(&mut store, &nonce_bytes)?
+        .map_err(|e| TestError::Stringified(format!("Get Nym: {:?}", e)))?;
+
+    assert_eq!(
+        nym_proof_compressed.pedersen_open.open_randomness,
+        nonce_bytes
+    );
+
     let cred = bindings
         .delano_wallet_actions()
         .call_issue(
@@ -180,13 +180,11 @@ fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
             &root_entry,
             max_entries.into(),
             Some(&IssueOptions {
-                nymproof: nym_proof.to_bytes()?,
+                nymproof: nym_proof_compressed,
                 nonce: Some(nonce_bytes.clone()),
             }),
         )?
         .map_err(|e| TestError::Stringified(e))?;
-
-    let cred_native = Credential::from_bytes(&cred)?;
 
     // Create an offer for this cred
     let offer_config = OfferConfig {
@@ -225,7 +223,7 @@ fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
     // verify the proof
     let verifiables = Verifiables {
         proof: proof.clone(),
-        issuer_public: cred_native.issuer_public.to_bytes()?,
+        issuer_public: accepted_cred.issuer_public.clone(),
         nonce: Some(verifiers_nonce_bytes.clone()),
         selected: selected.clone(),
     };
@@ -267,7 +265,7 @@ fn main_test_delano_wallet() -> wasmtime::Result<(), TestError> {
     // verify the proof
     let verifiables = Verifiables {
         proof: proof.clone(),
-        issuer_public: cred_native.issuer_public.to_bytes()?,
+        issuer_public: extended_cred.issuer_public,
         nonce: Some(nonce_bytes.clone()),
         selected: selected.clone(),
     };

@@ -9,20 +9,20 @@ interface types {
   type selected = list<entry>;
 
   record provables {
-    credential: list<u8>,
+    credential: credential-compressed,
     entries: list<entry>,
     selected: list<attribute>,
     nonce: list<u8>
   }
 
   record proven {
-    proof: list<u8>,
-    selected: list<entry>
+    proof: cred-proof-compressed,
+    selected: selected
   }
 
   record verifiables {
-    proof: list<u8>, 
-    issuer-public: list<u8>, 
+    proof: cred-proof-compressed, 
+    issuer-public: issuer-public-compressed, 
     nonce: option<list<u8>>, 
     selected: selected
   }
@@ -30,7 +30,7 @@ interface types {
   /// Issuer config: Default config creates (issues) a credential to yourself.
   /// Provide a config to offer it to someone else's nym, and optionally verify it with a nonce.
   record issue-options {
-    nymproof: list<u8>,
+    nymproof: nym-proof-compressed,
     nonce: option<list<u8>>
   }
 
@@ -51,26 +51,89 @@ interface types {
     entries: list<entry>,
     remove: list<attribute>
   } 
+
+  /// A compressed version of the Credential
+  record credential-compressed {
+    sigma: signature-compressed,
+    update-key: option<list<list<list<u8>>>>,
+    commitment-vector: list<list<u8>>,
+    opening-vector: list<list<u8>>,
+    issuer-public: issuer-public-compressed,
+  }
+
+  /// A compressed signature
+  record signature-compressed {
+    z: list<u8>,
+    y-g1: list<u8>,
+    y-hat: list<u8>,
+    t: list<u8>,
+  }
+
+  /// Issuer public parameters, compressed
+  record issuer-public-compressed {
+    parameters: param-set-commitment-compressed,
+    vk: list<vk-compressed>,
+  } 
+
+  record param-set-commitment-compressed {
+    pp-commit-g1: list<list<u8>>,
+    pp-commit-g2: list<list<u8>>
+  }
+  
+  variant vk-compressed {
+    g1(list<u8>),
+    g2(list<u8>)
+  }
+
+  record cred-proof-compressed {
+    sigma: signature-compressed,
+    commitment-vector: list<list<u8>>,
+    witness-pi: list<u8>,
+    nym-proof: nym-proof-compressed
+  }
+
+  record nym-proof-compressed {
+    challenge: list<u8>,
+    pedersen-open: pedersen-open-compressed,
+    pedersen-commit: list<u8>,
+    public-key: list<u8>,
+    response: list<u8>,
+    damgard: damgard-transform-compressed
+  }
+
+  record damgard-transform-compressed {
+    pedersen: pedersen-compressed  
+  }
+
+  record pedersen-compressed {
+    h: list<u8>,
+  }
+  
+  record pedersen-open-compressed {
+    open-randomness: list<u8>,
+    announce-randomness: list<u8>,
+    announce-element: option<list<u8>>
+  }
 }
 
 interface actions {
-    use types.{attribute, provables, verifiables, offer-config, issue-options, nonce, entry, proven};
+    use types.{attribute, provables, verifiables, offer-config, issue-options, nonce, entry, proven, credential-compressed, nym-proof-compressed, issuer-public-compressed};
 
     /// Returns the active Nym of the component.
-    get-nym-proof: func(nonce: nonce) -> result<list<u8>, string>;
+    get-nym-proof: func(nonce: list<u8>) -> result<nym-proof-compressed, string>;
 
     /// Issue a credential Entry to a Nym with maximum entries.
     /// By default issues a credential to your own Nym. To issue to others, set the options to their nymproof and optionally the nonce you gave them.
-    issue: func(attributes: list<attribute>, maxentries: u8, options: option<issue-options>) -> result<list<u8>, string>;
+    issue: func(attributes: list<attribute>, maxentries: u8, options: option<issue-options>) -> result<credential-compressed, string>;
 
     /// Create an offer for a credential with its given entries and a given configuration.
-    offer: func(cred: list<u8>, config: offer-config) -> result<list<u8>, string>;
+    offer: func(cred: credential-compressed, config: offer-config) -> result<credential-compressed, string>;
 
     /// Accept a credential offer and return the accepte Credential bytes
-    accept: func(offer: list<u8>) -> result<list<u8>, string>;
+    accept: func(offer: credential-compressed) -> result<credential-compressed, string>;
 
     /// Extend a credential with a new entry
-    extend: func(cred: list<u8>, entry: entry) -> result<list<u8>, string>;
+    extend: func(cred: credential-compressed, entry: entry) -> result<credential-compressed, string>;
 
     /// Export a function that proves selected attributes in a given credential
     /// Returns the selected attributes in the proper order in order to verify the proof,
@@ -81,7 +144,7 @@ interface actions {
     verify: func(values: verifiables) -> result<bool, string>;
 
     /// Returns the Issuer's public key if it exists, otherwise returns an error.
-    issuer-public: func() -> result<list<list<u8>>, string>;
+    issuer-public: func() -> result<issuer-public-compressed, string>;
 
 }
 

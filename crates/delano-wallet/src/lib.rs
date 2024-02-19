@@ -3,6 +3,7 @@
 // cargo_component_bindings::generate!();
 
 mod bindings;
+mod conversions;
 mod error;
 mod utils;
 
@@ -11,13 +12,16 @@ use bindings::delano::wallet::types::{Attribute, OfferConfig, Provables};
 use bindings::exports::delano::wallet::actions::Guest;
 use bindings::seed_keeper::wallet::config::get_seed;
 
-use delano_keys::kdf::Scalar;
 use delano_keys::kdf::{ExposeSecret, Manager, Zeroizing};
-// Opinionatedly choose CBOR as our byte encoding format
-use delanocreds::CBORCodec;
+use delano_keys::{
+    kdf::Scalar,
+    //    vk::VKCompressed
+};
+use delanocreds::keypair::{CredProofCompressed, IssuerPublicCompressed, NymProofCompressed};
+use delanocreds::CredentialCompressed;
 use delanocreds::{
     verify_proof, CredProof, Credential, Entry, Initial, Issuer, IssuerPublic, MaxCardinality,
-    MaxEntries, Nonce, Nym, NymProof, Offer, Secret,
+    MaxEntries, Nonce, Nym, NymProof, Secret,
 };
 use error::Error;
 
@@ -74,17 +78,14 @@ struct Component;
 
 impl Guest for Component {
     /// Return proof of [Nym] given the Nonce
-    fn get_nym_proof(nonce: wallet::types::Nonce) -> Result<Vec<u8>, String> {
+    fn get_nym_proof(nonce: Vec<u8>) -> Result<wallet::types::NymProofCompressed, String> {
         assert_nym().map_err(|e| e.to_string())?;
         let nym = NYM
             .get()
             .expect("NYM should be initialized by assert_nym, but it wasn't");
         let nonce = utils::nonce_by_len(&nonce)?;
         let nym_proof = nym.nym_proof(&nonce);
-        let bytes = nym_proof
-            .to_bytes()
-            .map_err(|e| format!("Error converting nym proof to bytes: {:?}", e))?;
-        Ok(bytes)
+        Ok(NymProofCompressed::from(nym_proof).into())
     }
 
     /// Issue a credential to a holder's [Nym].
@@ -105,7 +106,7 @@ impl Guest for Component {
         attributes: Vec<wallet::types::Attribute>,
         maxentries: u8,
         options: Option<wallet::types::IssueOptions>,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<wallet::types::CredentialCompressed, String> {
         assert_issuer().map_err(|e| e.to_string())?;
         let issuer = ISSUER
             .get()
@@ -117,8 +118,10 @@ impl Guest for Component {
         let (nym_proof, nonce) = match options {
             Some(options) => {
                 let nonce = utils::maybe_nonce(options.nonce.as_deref())?;
-                let nym_proof = NymProof::from_bytes(&options.nymproof)
-                    .map_err(|e| format!("Error converting nym proof to bytes: {:?}", e))?;
+                let nym_proof = NymProof::try_from(NymProofCompressed::from(options.nymproof))
+                    .map_err(|e| {
+                        format!("Error converting nym_proof bytes into NymProof: {:?}", e)
+                    })?;
                 (nym_proof, nonce)
             }
             _ => {
@@ -141,15 +144,15 @@ impl Guest for Component {
             .map_err(|e| format!("Error issuing credential: {:?}", e))?;
 
         // serialize and return the cred
-        let cred_bytes = cred
-            .to_bytes()
-            .map_err(|e| format!("Accept error converting cred to bytes: {:?}", e))?;
-
-        Ok(cred_bytes)
+        let cred_compressed = CredentialCompressed::from(&cred);
+        Ok(cred_compressed.into())
     }
 
     /// Given a credential that we have authorization of we issued it, or accepted it), create an offer for another nym
-    fn offer(cred: Vec<u8>, config: OfferConfig) -> Result<Vec<u8>, String> {
+    fn offer(
+        cred: wallet::types::CredentialCompressed,
+        config: OfferConfig,
+    ) -> Result<wallet::types::CredentialCompressed, String> {
         // Create an offer from the Entry with the given config
         // first, use our NYM to create an offer builder
         assert_nym().map_err(|e| e.to_string())?;
@@ -182,8 +185,8 @@ impl Guest for Component {
             }
         };
 
-        let cred = Credential::from_bytes(&cred)
-            .map_err(|e| format!("Error converting cred to Credential, {:?}", e))?;
+        let cred =
+            Credential::try_from(CredentialCompressed::from(cred)).map_err(|e| e.to_string())?;
         let mut offer_builder = nym.offer_builder(&cred, &entries);
 
         if let Some(additional_entry) = config.additional_entry {
@@ -213,46 +216,46 @@ impl Guest for Component {
         // we do not return _provable_entries in order to keep it separated from the offer in order
         // to prevent both from falling into the rong hands. Rather, the application should create
         // some sort of "Hint" object to relay to the accepter of this offer.
-        let cred = offer.to_bytes().map_err(|e| e.to_string())?;
-        Ok(cred)
+        let offer_compressed = CredentialCompressed::from(offer.as_ref());
+        Ok(offer_compressed.into())
     }
 
     /// Accept a CBOR Serialized Credential (apply our signing key to it so it can only be used by
     /// us)
-    fn accept(offer: Vec<u8>) -> Result<Vec<u8>, String> {
+    fn accept(
+        offer: wallet::types::CredentialCompressed,
+    ) -> Result<wallet::types::CredentialCompressed, String> {
         assert_nym().map_err(|e| e.to_string())?;
         let nym = NYM.get().expect("NYM should be initialized");
 
-        let offer = Offer::from_bytes(&offer)
+        let offer = Credential::try_from(CredentialCompressed::from(offer))
             .map_err(|e| format!("Error converting offer to Offer: {:?}", e))?;
         let accepted_cred = nym
-            .accept(&offer)
+            .accept(&offer.into())
             .map_err(|e| format!("Error accepting offer: {:?}", e))?;
-        let bytes = accepted_cred
-            .to_bytes()
-            .map_err(|e| format!("Error converting accepted cred to bytes: {:?}", e))?;
 
-        Ok(bytes)
+        let accept_compressed = CredentialCompressed::from(&accepted_cred);
+        Ok(accept_compressed.into())
     }
 
     /// Extend the given credential with the given entry
-    fn extend(cred: Vec<u8>, entry: wallet::types::Entry) -> Result<Vec<u8>, String> {
+    fn extend(
+        cred: wallet::types::CredentialCompressed,
+        entry: wallet::types::Entry,
+    ) -> Result<wallet::types::CredentialCompressed, String> {
         assert_nym().map_err(|e| e.to_string())?;
         let nym = NYM.get().expect("NYM should be initialized");
 
-        let cred = Credential::from_bytes(&cred)
-            .map_err(|e| format!("Error converting cred to Credential: {:?}", e))?;
+        let cred =
+            Credential::try_from(CredentialCompressed::from(cred)).map_err(|e| e.to_string())?;
         let entry = Entry::try_from(entry).map_err(|e| e.to_string())?;
 
         let extended_cred = nym
             .extend(&cred, &entry)
             .map_err(|e| format!("Error extending credential: {:?}", e))?;
 
-        let bytes = extended_cred
-            .to_bytes()
-            .map_err(|e| format!("Error converting extended cred to bytes: {:?}", e))?;
-
-        Ok(bytes)
+        let extended_compressed = CredentialCompressed::from(&extended_cred);
+        Ok(extended_compressed.into())
     }
 
     /// Prove
@@ -260,8 +263,8 @@ impl Guest for Component {
         assert_nym().map_err(|e| e.to_string())?;
         let nym = NYM.get().expect("NYM should be initialized");
 
-        let cred = Credential::from_bytes(&values.credential)
-            .map_err(|e| format!("Error in prove converting bytes to Credential: {e}"))?;
+        let cred = Credential::try_from(CredentialCompressed::from(values.credential))
+            .map_err(|e| e.to_string())?;
         let entries = values
             .entries
             .iter()
@@ -284,7 +287,7 @@ impl Guest for Component {
         let (proof, selected_entries) = buildr.prove(&nonce);
 
         Ok(wallet::types::Proven {
-            proof: proof.to_bytes().map_err(|e| e.to_string())?,
+            proof: wallet::types::CredProofCompressed::from(CredProofCompressed::from(proof)),
             selected: selected_entries
                 .iter()
                 .map(|entry| entry.iter().map(|attr| attr.to_bytes()).collect())
@@ -294,9 +297,17 @@ impl Guest for Component {
 
     /// Verify
     fn verify(values: wallet::types::Verifiables) -> Result<bool, String> {
-        let issuer_public =
-            IssuerPublic::from_bytes(&values.issuer_public).map_err(|e| e.to_string())?;
-        let proof = CredProof::from_bytes(&values.proof).map_err(|e| e.to_string())?;
+        let issuer_public = IssuerPublic::try_from(IssuerPublicCompressed::from(
+            values.issuer_public,
+        ))
+        .map_err(|e| {
+            format!(
+                "Error converting issuer_public to IssuerPublic: {:?}",
+                e.to_string()
+            )
+        })?;
+        let proof = CredProof::try_from(CredProofCompressed::from(values.proof))
+            .map_err(|e| format!("Error converting proof to CredProof: {:?}", e.to_string()))?;
         let selected_attrs = values
             .selected
             .iter()
@@ -311,19 +322,12 @@ impl Guest for Component {
     }
 
     /// Returns the Issuer Public Key
-    fn issuer_public() -> Result<Vec<Vec<u8>>, String> {
+    fn issuer_public() -> Result<wallet::types::IssuerPublicCompressed, String> {
         assert_issuer().map_err(|e| e.to_string())?;
         let issuer = ISSUER
             .get()
             .expect("ISSUER should be initialized by assert_issuer, but it wasn't");
 
-        let bytes: Vec<Vec<u8>> = issuer
-            .public
-            .vk
-            .iter()
-            .map(|vk| vk.to_bytes())
-            .collect::<Vec<Vec<u8>>>();
-
-        Ok(bytes)
+        Ok(IssuerPublicCompressed::from(&issuer.public).into())
     }
 }
