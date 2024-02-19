@@ -8,6 +8,7 @@ mod bindgen {
     wasmtime::component::bindgen!("delanocreds-wit-ui");
 }
 
+use bindgen::delano::wallet::{self, types::CredProofCompressed};
 use bindgen::delano::wit_ui::context_types;
 use bindgen::exports::delano::wit_ui;
 
@@ -52,8 +53,21 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
     fn get_nym_proof(
         &mut self,
         _nonce: Vec<u8>,
-    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        Ok(Ok(vec![69u8; 32]))
+    ) -> Result<Result<wallet::types::NymProofCompressed, String>, wasmtime::Error> {
+        Ok(Ok(wallet::types::NymProofCompressed {
+            challenge: vec![69u8; 32], //Scalar bytes is 32
+            pedersen_open: wallet::types::PedersenOpenCompressed {
+                announce_randomness: vec![69u8; 32],    // Scalar bytes is 32
+                open_randomness: vec![69u8; 32],        // Scalar bytes is 32
+                announce_element: Some(vec![69u8; 48]), // G1Affine bytes is 48
+            },
+            pedersen_commit: vec![69u8; 48], // G1Affine bytes is 48
+            public_key: vec![69u8; 48],      // G1Affine bytes is 48
+            response: vec![69u8; 32],        // Scalar bytes is 32
+            damgard: wallet::types::DamgardTransformCompressed {
+                pedersen: wallet::types::PedersenCompressed { h: vec![69u8; 48] }, // G1 compressed bytes is 48
+            },
+        }))
     }
 
     /// Issue a credential Entry to a Nym with maximum entries.
@@ -62,31 +76,118 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
         _attributes: Vec<bindgen::delano::wallet::types::Attribute>,
         _maxentries: u8,
         _options: Option<bindgen::delano::wallet::types::IssueOptions>,
-    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        Ok(Ok(vec![105u8; 32]))
+    ) -> Result<Result<wallet::types::CredentialCompressed, String>, wasmtime::Error> {
+        Ok(Ok(wallet::types::CredentialCompressed {
+            sigma: wallet::types::SignatureCompressed {
+                z: vec![69u8; 48],     // G1 compressed bytes is 48
+                y_g1: vec![69u8; 48],  // G1 compressed bytes is 48
+                y_hat: vec![69u8; 96], // G2 compressed bytes is 96
+                t: vec![69u8; 48],     // G1 compressed bytes is 48
+            },
+            update_key: None,
+            commitment_vector: vec![vec![1, 2, 3]],
+            opening_vector: vec![vec![1, 2, 3]],
+            issuer_public: wallet::types::IssuerPublicCompressed {
+                parameters: wallet::types::ParamSetCommitmentCompressed {
+                    pp_commit_g1: vec![vec![1, 2, 3]],
+                    pp_commit_g2: vec![vec![1, 2, 3]],
+                },
+                vk: vec![
+                    wallet::types::VkCompressed::G1(vec![1, 2, 3]),
+                    wallet::types::VkCompressed::G2(vec![1, 2, 3]),
+                ],
+            },
+        }))
     }
 
     /// Create an offer for a credential with its given entries and a given configuration.
     fn offer(
         &mut self,
-        _cred: Vec<u8>,
+        _cred: wallet::types::CredentialCompressed,
         _config: bindgen::delano::wallet::types::OfferConfig,
-    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        Ok(Ok(vec![69u8; 32]))
+    ) -> Result<Result<wallet::types::CredentialCompressed, String>, wasmtime::Error> {
+        Ok(Ok(wallet::types::CredentialCompressed {
+            sigma: wallet::types::SignatureCompressed {
+                z: vec![1, 2, 3],
+                y_g1: vec![4, 5, 6],
+                y_hat: vec![7, 8, 9],
+                t: vec![10, 11, 12],
+            },
+            update_key: None,
+            commitment_vector: vec![vec![1, 2, 3]],
+            opening_vector: vec![vec![1, 2, 3]],
+            issuer_public: wallet::types::IssuerPublicCompressed {
+                parameters: wallet::types::ParamSetCommitmentCompressed {
+                    pp_commit_g1: vec![vec![1, 2, 3]],
+                    pp_commit_g2: vec![vec![1, 2, 3]],
+                },
+                vk: vec![
+                    wallet::types::VkCompressed::G1(vec![1, 2, 3]),
+                    wallet::types::VkCompressed::G2(vec![1, 2, 3]),
+                ],
+            },
+        }))
     }
 
     /// Accept a credential offer and return the accepte Credential bytes
-    fn accept(&mut self, _offer: Vec<u8>) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        Ok(Ok(vec![69u8; 32]))
+    fn accept(
+        &mut self,
+        _offer: wallet::types::CredentialCompressed,
+    ) -> Result<Result<wallet::types::CredentialCompressed, String>, wasmtime::Error> {
+        Ok(Ok(wallet::types::CredentialCompressed {
+            sigma: wallet::types::SignatureCompressed {
+                z: vec![1, 2, 3],
+                y_g1: vec![4, 5, 6],
+                y_hat: vec![7, 8, 9],
+                t: vec![10, 11, 12],
+            },
+            update_key: None,
+            commitment_vector: vec![vec![1, 2, 3]],
+            opening_vector: vec![vec![1, 2, 3]],
+            issuer_public: wallet::types::IssuerPublicCompressed {
+                parameters: wallet::types::ParamSetCommitmentCompressed {
+                    pp_commit_g1: vec![vec![1, 2, 3]],
+                    pp_commit_g2: vec![vec![1, 2, 3]],
+                },
+                vk: vec![
+                    wallet::types::VkCompressed::G1(vec![1, 2, 3]),
+                    wallet::types::VkCompressed::G2(vec![1, 2, 3]),
+                ],
+            },
+        }))
     }
 
     /// Export a function that proves selected attributes in a given credential
+    /// Proven has a total byte size of:
     fn prove(
         &mut self,
         _values: bindgen::delano::wallet::types::Provables,
     ) -> Result<Result<bindgen::delano::wallet::types::Proven, String>, wasmtime::Error> {
-        Ok(Ok(bindgen::delano::wallet::types::Proven {
-            proof: vec![69u8; 32],
+        Ok(Ok(wallet::types::Proven {
+            proof: CredProofCompressed {
+                sigma: wallet::types::SignatureCompressed {
+                    z: vec![69u8; 32],
+                    y_g1: vec![69u8; 32],
+                    y_hat: vec![69u8; 32],
+                    t: vec![69u8; 32],
+                },
+                commitment_vector: vec![vec![69u8; 32]],
+                witness_pi: vec![69u8; 32],
+                nym_proof: wallet::types::NymProofCompressed {
+                    challenge: vec![69u8; 32],
+                    pedersen_open: wallet::types::PedersenOpenCompressed {
+                        announce_randomness: vec![69u8; 32],
+                        open_randomness: vec![69u8; 32],
+                        announce_element: Some(vec![69u8; 32]),
+                    },
+                    pedersen_commit: vec![69u8; 32],
+                    public_key: vec![69u8; 32],
+                    response: vec![69u8; 32],
+                    damgard: wallet::types::DamgardTransformCompressed {
+                        pedersen: wallet::types::PedersenCompressed { h: vec![69u8; 32] },
+                    },
+                },
+            },
             selected: vec![vec![vec![69u8; 32]]],
         }))
     }
@@ -101,14 +202,45 @@ impl bindgen::delano::wallet::actions::Host for MyCtx {
 
     fn extend(
         &mut self,
-        _cred: Vec<u8>,
+        _cred: wallet::types::CredentialCompressed,
         _entry: bindgen::delano::wallet::types::Entry,
-    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        Ok(Ok(vec![69u8; 32]))
+    ) -> Result<Result<wallet::types::CredentialCompressed, String>, wasmtime::Error> {
+        Ok(Ok(wallet::types::CredentialCompressed {
+            sigma: wallet::types::SignatureCompressed {
+                z: vec![1, 2, 3],
+                y_g1: vec![4, 5, 6],
+                y_hat: vec![7, 8, 9],
+                t: vec![10, 11, 12],
+            },
+            update_key: None,
+            commitment_vector: vec![vec![1, 2, 3]],
+            opening_vector: vec![vec![1, 2, 3]],
+            issuer_public: wallet::types::IssuerPublicCompressed {
+                parameters: wallet::types::ParamSetCommitmentCompressed {
+                    pp_commit_g1: vec![vec![1, 2, 3]],
+                    pp_commit_g2: vec![vec![1, 2, 3]],
+                },
+                vk: vec![
+                    wallet::types::VkCompressed::G1(vec![1, 2, 3]),
+                    wallet::types::VkCompressed::G2(vec![1, 2, 3]),
+                ],
+            },
+        }))
     }
 
-    fn issuer_public(&mut self) -> wasmtime::Result<Result<Vec<Vec<u8>>, String>> {
-        Ok(Ok(vec![vec![69u8; 32]]))
+    fn issuer_public(
+        &mut self,
+    ) -> wasmtime::Result<Result<wallet::types::IssuerPublicCompressed, String>> {
+        Ok(Ok(wallet::types::IssuerPublicCompressed {
+            parameters: wallet::types::ParamSetCommitmentCompressed {
+                pp_commit_g1: vec![vec![69u8; 32]],
+                pp_commit_g2: vec![vec![69u8; 32]],
+            },
+            vk: vec![
+                wallet::types::VkCompressed::G1(vec![69u8; 32]),
+                wallet::types::VkCompressed::G2(vec![69u8; 32]),
+            ],
+        }))
     }
 }
 
