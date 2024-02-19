@@ -27,8 +27,6 @@ This is new technology, so there is no standard for encoding these values. So fa
 
 - When a credential is passed to a Nym for acceptance/use, it must be serialized and transmitted somehow. Possibly using a QR Code, URL Link, SMS Text message, email, chat, or anything else.
 
-- When the value is serialized to JSON, the values are Base64URL encoded in the JSON object (mostly for debugging / prettyprint display).
-
 - When the value is serialized to bytes, the values are CBOR bytes of the Object (for passing Credentials around).
 
 This should allow users to import/export the bytes in a reasonably short and convenient manner.
