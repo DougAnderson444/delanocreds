@@ -10,7 +10,6 @@ delano-events = { path = "crates/delano-events" }
 bls12_381_plus = { version = "0.8.13", git="https://github.com/mikelodder7/bls12_381_plus.git", rev = "91a399e9a5f326816f13a0feab898ff40a7a1599", features = ["expose-fields", "alloc"] }
 
 secrecy = "0.8"
-base64 = "0.21.4"
 
 [profile.release]
 codegen-units = 1        # allow for maximum size reduction optimizations
