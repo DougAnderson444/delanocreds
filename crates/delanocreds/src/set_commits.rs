@@ -8,33 +8,43 @@ use crate::keypair::MaxCardinality;
 use bls12_381_plus::elliptic_curve::bigint;
 use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
 use bls12_381_plus::ff::Field;
-use bls12_381_plus::group::{Curve, Group, GroupEncoding};
-use bls12_381_plus::{G1Compressed, G2Compressed};
+use bls12_381_plus::group::{Curve, Group};
+use bls12_381_plus::{G1Affine, G2Affine};
 use rand::rngs::ThreadRng;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
-use serde_with::base64::{Base64, UrlSafe};
-use serde_with::formats::Unpadded;
-use serde_with::serde_as;
 use sha2::{Digest, Sha256};
 
 /// Public Parameters of the Set Commitment
 /// - `pp_commit_g1`: Root Issuer's public parameters commitment for G1
 /// - `pp_commit_g2`: Root Issuer's public parameter commitment for G2
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct ParamSetCommitment {
     pub pp_commit_g1: Vec<G1Projective>,
     pub pp_commit_g2: Vec<G2Projective>,
 }
 
-#[serde_as]
+/// Compressed Public Parameters of the Set Commitment. Length depends on what
+/// the max cardinality is set to.
+///
+/// The size of these commits are determined by the max cardinality of the set, plus one.
+///
+/// For example, max cardinality of t, the size of the compressed commitment is:
+/// (48 (G1) + 96 (G2)) * (t + 1) = length
+///
+/// | Size G1 | Size G2 | Max Cardinality | Size of Compressed Commitment|
+/// |---------|---------|-----------------|------------------------------|
+/// | 48      | 96      | 2               | 432                          |
+/// | 48      | 96      | 4               | 720                          |
+/// | 48      | 96      | 6               | 1008                         |
+/// | 48      | 96      | 8               | 1296                         |
+/// | 48      | 96      | 10              | 1584                         |
+/// | 48      | 96      | 12              | 1872                         |
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParamSetCommitmentCompressed {
-    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
-    pub pp_commit_g1: Vec<G1Compressed>,
-    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
-    pub pp_commit_g2: Vec<G2Compressed>,
+    pub pp_commit_g1: Vec<Vec<u8>>,
+    pub pp_commit_g2: Vec<Vec<u8>>,
 }
 
 /// From [ParamSetCommitment] to [ParamSetCommitmentCompressed]
@@ -43,14 +53,14 @@ impl From<ParamSetCommitment> for ParamSetCommitmentCompressed {
         let pp_commit_g1_compressed = param_sc
             .pp_commit_g1
             .iter()
-            .map(|g1| g1.to_bytes())
-            .collect::<Vec<G1Compressed>>();
+            .map(|g1| g1.to_compressed().to_vec())
+            .collect::<Vec<_>>();
 
         let pp_commit_g2_compressed = param_sc
             .pp_commit_g2
             .iter()
-            .map(|g2| g2.to_bytes())
-            .collect::<Vec<G2Compressed>>();
+            .map(|g2| g2.to_compressed().to_vec())
+            .collect::<Vec<_>>();
 
         ParamSetCommitmentCompressed {
             pp_commit_g1: pp_commit_g1_compressed,
@@ -68,29 +78,33 @@ impl std::convert::TryFrom<ParamSetCommitmentCompressed> for ParamSetCommitment 
             .pp_commit_g1
             .iter()
             .map(|g1| {
-                let g1_maybe = G1Projective::from_bytes(g1);
+                let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+                bytes.copy_from_slice(g1);
+                let g1_maybe = G1Affine::from_compressed(&bytes);
 
                 if g1_maybe.is_none().into() {
-                    return Err("Invalid G1 point".to_string());
+                    return Err(Self::Error::InvalidG1Point);
                 }
                 Ok(g1_maybe.expect("it'll be fine, it passed the check"))
             })
-            .collect::<Result<Vec<G1Projective>, String>>()
-            .expect("it'll be fine, it passed the check");
+            .map(|item| item.unwrap().into())
+            .collect::<Vec<_>>();
 
         let pp_commit_g2 = param_sc
             .pp_commit_g2
             .iter()
             .map(|g2| {
-                let g2_maybe = G2Projective::from_bytes(g2);
+                let mut bytes = [0u8; G2Affine::COMPRESSED_BYTES];
+                bytes.copy_from_slice(g2);
+                let g2_maybe = G2Affine::from_compressed(&bytes);
 
                 if g2_maybe.is_none().into() {
-                    return Err("Invalid G2 point".to_string());
+                    return Err(Self::Error::InvalidG2Point);
                 }
                 Ok(g2_maybe.expect("it'll be fine, it passed the check"))
             })
-            .collect::<Result<Vec<G2Projective>, String>>()
-            .expect("it'll be fine, it passed the check");
+            .map(|item| item.unwrap().into())
+            .collect::<Vec<_>>();
 
         Ok(ParamSetCommitment {
             pp_commit_g1,
@@ -107,7 +121,7 @@ impl ToString for ParamSetCommitmentCompressed {
     }
 }
 
-/// Converts the PublicParameters to a Base64 encoded json string
+/// Converts the PublicParameters to a json string
 impl ToString for ParamSetCommitment {
     fn to_string(&self) -> String {
         ParamSetCommitmentCompressed::from(self.clone()).to_string()
@@ -158,9 +172,11 @@ pub trait Commitment {
     ///
     /// # Returns
     /// A Commitment scheme, either SetCommitment or CrossSetCommitment
+    #[allow(dead_code)]
     fn new(t: MaxCardinality) -> Self;
 
     /// Public parameters of the commitment scheme.
+    #[allow(dead_code)]
     fn public_parameters(self) -> ParamSetCommitment;
 
     /// Commit to a set of messages
@@ -202,6 +218,7 @@ pub trait Commitment {
     /// # Returns
     ///
     /// bool: true if the opening information is valid, false otherwise
+    #[allow(dead_code)]
     fn open_set(
         param_sc: &ParamSetCommitment,
         commitment: &G1Projective,
@@ -283,6 +300,7 @@ pub trait Commitment {
     /// # Returns
     ///
     /// bool: true if the witness is valid, false otherwise
+    #[allow(dead_code)]
     fn verify_subset(
         param_sc: &ParamSetCommitment,
         commitment: &G1Projective,
@@ -738,6 +756,16 @@ mod test {
         let expected = Scalar::from(4u64);
 
         assert_eq!(result, &expected);
+    }
+
+    // Test ParamSetCommitment compressed roundtrip
+    #[test]
+    fn test_param_set_commitment_roundtrip() {
+        let max_cardinal = 5;
+        let param_sc = ParamSetCommitment::new(&max_cardinal);
+        let param_sc_compressed = ParamSetCommitmentCompressed::from(param_sc.clone());
+        let param_sc_decompressed = ParamSetCommitment::try_from(param_sc_compressed).unwrap();
+        assert_eq!(param_sc, param_sc_decompressed);
     }
 
     // #[test]
