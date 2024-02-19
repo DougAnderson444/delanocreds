@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 use delano_keys::publish::PublishingKey;
+use delanocreds::keypair::{CredProofCompressed, IssuerPublicCompressed};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
@@ -41,6 +42,18 @@ where
     }
 }
 
+impl<T> From<&Publishables<T>> for PublishMessage
+where
+    T: serde::Serialize,
+{
+    fn from(publishables: &Publishables<T>) -> Self {
+        Self {
+            key: publishables.key(),
+            value: serde_json::to_vec(&publishables.value()).unwrap_or_default(),
+        }
+    }
+}
+
 impl<T> TryFrom<PublishMessage> for Publishables<T>
 where
     T: for<'de> serde::Deserialize<'de>,
@@ -50,6 +63,20 @@ where
     fn try_from(publish_message: PublishMessage) -> Result<Self, Self::Error> {
         Ok(Self {
             key: publish_message.key,
+            value: serde_json::from_slice(&publish_message.value)?,
+        })
+    }
+}
+
+impl<T> TryFrom<&PublishMessage> for Publishables<T>
+where
+    T: for<'de> serde::Deserialize<'de>,
+{
+    type Error = serde_json::Error;
+
+    fn try_from(publish_message: &PublishMessage) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: publish_message.key.clone(),
             value: serde_json::from_slice(&publish_message.value)?,
         })
     }
@@ -68,7 +95,7 @@ where
     T: serde::Serialize,
 {
     /// Creates a new Publishables from any serializable type.
-    /// This method ensures our types match in the Publishing Key and Provables Value.
+    /// The generic types in this method ensures our types match in the Publishing Key and Provables Value.
     pub fn new(key: PublishingKey<T>, value: Provables<T>) -> Self {
         Self {
             key: key.cid().to_string(),
@@ -85,15 +112,30 @@ where
     pub fn value(&self) -> &Provables<T> {
         &self.value
     }
+
+    /// Builds a [PublishMessage] from the [Publishables]
+    pub fn build(&self) -> PublishMessage {
+        self.into()
+    }
 }
 
-/// The bytes are serialized as base64 to avoid missing TypedArray issues when passing through JavaScript in `jco`
-/// They will be decoded on the receiving end back to bytes when deserialized.
+/// The serializable proof package to be published. Contains both the preimages and the corresponding proof for those preimages.
+/// The Issuer Pulic material should be compared to another known reference to that Isser to
+/// validate they match each other. The selectec preimages are hashed into [delanocreds::Attribute]s to ensure they also match those in the proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Provables<T> {
-    pub proof: Vec<u8>,
-    pub issuer_public: Vec<u8>,
-    /// The selected delanocreds::Attributes used in the proof
+    /// cred proof size is 240 + 48 * max_entries + 48 + 320 bytes.
+    pub proof: CredProofCompressed,
+    /// Size depends on the Max Cardinality and Max Entries.
+    /// Size = (48 + 96) * (MaxCardinality + 1) + 48 + (96 * (MaxEntries + 2))
+    /// | Max Cardinality  | Max Entries | Size (bytes)     |
+    /// |------------------|-------------|------------------|
+    /// | 1                | 1           | 228 + 336 = 564  |
+    /// | 2                | 2           | 276 + 384 = 660  |
+    /// | 4                | 4           | 720 + 624 = 1344 |
+    pub issuer_public: IssuerPublicCompressed,
+    /// The selected [delanocreds::Attribute]s used in the proof, in the right order and position
+    /// (which is important when veirfying the proof).
     pub selected: Vec<Vec<Vec<u8>>>,
     /// Preimages can be any type, such as text or images, as long as they can be serialized to bytes.
     /// These bytes are encoded as base64 to avoid missing TypedArray issues in JavaScript.
