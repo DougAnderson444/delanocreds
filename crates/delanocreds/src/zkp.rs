@@ -13,9 +13,14 @@ use rand::rngs::ThreadRng;
 use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
 
+use crate::error;
 use crate::error::Error;
 use crate::keypair::NymProof;
+use crate::utils::try_decompress_g1;
+use crate::utils::try_into_scalar;
 
+/// A Scalar Nonce, number used once. It can be serialized and deserialized to and from bytes
+/// as it does not have a compressed form.
 #[derive(PartialEq, Eq, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Nonce(pub(crate) Scalar);
@@ -341,9 +346,33 @@ impl ZKPSchnorr {
 
 /// Damgard Transform containing a [Pedersen] commitment
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DamgardTransform {
     pub pedersen: Pedersen,
+}
+
+/// DamgardTransform Compressed
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DamgardTransformCompressed {
+    pub pedersen: PedersenCompressed,
+}
+
+impl From<DamgardTransform> for DamgardTransformCompressed {
+    fn from(damgard: DamgardTransform) -> Self {
+        Self {
+            pedersen: damgard.pedersen.into(),
+        }
+    }
+}
+
+impl TryFrom<DamgardTransformCompressed> for DamgardTransform {
+    type Error = error::Error;
+
+    fn try_from(damgard_compressed: DamgardTransformCompressed) -> Result<Self, Self::Error> {
+        Ok(Self {
+            pedersen: Pedersen::try_from(damgard_compressed.pedersen)?,
+        })
+    }
 }
 
 impl DamgardTransform {
@@ -374,7 +403,7 @@ impl DamgardTransform {
         let decommit = nym_proof
             .damgard
             .pedersen
-            .decommit(&nym_proof.pedersen_open, &nym_proof.pedersen_commit);
+            .decommit(&nym_proof.pedersen_open, &nym_proof.pedersen_commit.into());
 
         (left_side == right_side) && decommit
     }
@@ -390,16 +419,50 @@ impl Schnorr for DamgardTransform {
 
 /// Pedersen commitment containing [G1Projective] public key of the random secret trapdoor `d`
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pedersen {
     pub h: G1Projective,
     // trapdoor: Scalar,
 }
-pub type PedersenCommit = G1Projective;
+
+/// Pedersen Compressed
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PedersenCompressed {
+    h: Vec<u8>,
+}
+
+impl PedersenCompressed {
+    pub fn h(&self) -> Vec<u8> {
+        self.h.clone()
+    }
+}
+
+impl From<Vec<u8>> for PedersenCompressed {
+    fn from(h: Vec<u8>) -> Self {
+        Self { h }
+    }
+}
+
+impl From<Pedersen> for PedersenCompressed {
+    fn from(pedersen: Pedersen) -> Self {
+        Self {
+            h: pedersen.h.to_compressed().to_vec(),
+        }
+    }
+}
+
+impl TryFrom<PedersenCompressed> for Pedersen {
+    type Error = error::Error;
+
+    fn try_from(pedersen_compressed: PedersenCompressed) -> Result<Self, Self::Error> {
+        try_decompress_g1(pedersen_compressed.h).map(|h| Pedersen { h: h.into() })
+    }
+}
+
+pub type PedersenCommit = G1Affine;
 
 /// Pedersen Open information: Randomness used to open the commitment, randomness used to announce the secret, and the announcement element
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PedersenOpen {
     /// Randomness used to open the commitment
     pub open_randomness: Nonce,
@@ -407,6 +470,72 @@ pub struct PedersenOpen {
     pub announce_randomness: Scalar,
     /// Announcement element
     pub announce_element: Option<G1Affine>,
+}
+
+/// Only serialize the compressed version of the PedersenOpen
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PedersenOpenCompressed {
+    pub open_randomness: Vec<u8>,
+    pub announce_randomness: Vec<u8>,
+    pub announce_element: Option<Vec<u8>>,
+}
+
+/// From [PedersenOpen] to [PedersenOpenCompressed]
+impl From<PedersenOpen> for PedersenOpenCompressed {
+    fn from(pedersen_open: PedersenOpen) -> Self {
+        let announce_element = pedersen_open
+            .announce_element
+            .map(|elem| elem.to_compressed().to_vec());
+        Self {
+            open_randomness: pedersen_open.open_randomness.into(),
+            announce_randomness: pedersen_open.announce_randomness.into(),
+            announce_element,
+        }
+    }
+}
+
+/// PedersenOpenCompressed: From<delanocreds::zkp::PedersenOpen>
+impl From<&PedersenOpen> for PedersenOpenCompressed {
+    fn from(pedersen_open: &PedersenOpen) -> Self {
+        let announce_element = pedersen_open
+            .announce_element
+            .as_ref()
+            .map(|elem| elem.to_compressed().to_vec());
+        Self {
+            open_randomness: pedersen_open.open_randomness.clone().into(),
+            announce_randomness: pedersen_open.announce_randomness.into(),
+            announce_element,
+        }
+    }
+}
+
+/// TryFrom [PedersenOpenCompressed] to [PedersenOpen]
+impl std::convert::TryFrom<PedersenOpenCompressed> for PedersenOpen {
+    type Error = error::Error;
+
+    fn try_from(pedersen_open_compressed: PedersenOpenCompressed) -> Result<Self, Self::Error> {
+        let announce_element = pedersen_open_compressed
+            .announce_element
+            .map(|elem| {
+                let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+                bytes.copy_from_slice(&elem);
+                let maybe_g1 = G1Affine::from_compressed(&bytes);
+                if maybe_g1.is_none().into() {
+                    return Err(Self::Error::InvalidG1Point);
+                }
+
+                Ok(maybe_g1.expect("G1Affine is Some"))
+            })
+            .transpose()?;
+        Ok(Self {
+            open_randomness: Nonce::from(try_into_scalar(
+                pedersen_open_compressed.open_randomness,
+            )?),
+            announce_randomness: try_into_scalar(pedersen_open_compressed.announce_randomness)?,
+            announce_element,
+        })
+    }
 }
 
 impl PedersenOpen {
@@ -425,7 +554,7 @@ impl Pedersen {
         // h is the statement. d is the trapdoor. g is the generator. h = d*g
         let d = Secret::new(Scalar::random(ThreadRng::default())); // trapdoor
         let h = G1Projective::mul_by_generator(d.expose_secret());
-        Pedersen { h }
+        Pedersen { h: h.into() }
     }
 
     /// Create a Pedersen commit
@@ -443,14 +572,14 @@ impl Pedersen {
             announce_element: None,
         };
 
-        (pedersen_commit, pedersen_open)
+        (pedersen_commit.into(), pedersen_open)
     }
 
     /// Decrypts/Decommits the message
     pub fn decommit(&self, pedersen_open: &PedersenOpen, pedersen_commit: &PedersenCommit) -> bool {
         let c2 = self.h * (*pedersen_open.open_randomness)
             + G1Projective::mul_by_generator(&pedersen_open.announce_randomness);
-        &c2 == pedersen_commit
+        &c2.to_affine() == pedersen_commit
     }
 }
 
@@ -567,5 +696,21 @@ mod tests {
         let bytes: [u8; 32] = nonce.clone().try_into().expect("nonce to be 32 bytes");
         let nonce2 = Nonce::try_from(bytes).expect("bytes to be canonical");
         assert_eq!(nonce, nonce2);
+
+        // test to/from Vec<u8>
+        let nonce = Nonce::new(b);
+        let bytes: Vec<u8> = nonce.clone().into();
+        let nonce2 = Nonce::from(try_into_scalar(bytes).unwrap());
+        assert_eq!(nonce, nonce2);
+    }
+
+    // test roundtrip From<DamgardTransform> for DamgardTransformCompressed and back
+    #[test]
+    fn test_roundtrip_damgard_transform() {
+        let damgard = DamgardTransform::new();
+        let damgard_compressed = DamgardTransformCompressed::from(damgard.clone());
+        let damgard2 =
+            DamgardTransform::try_from(damgard_compressed).expect("compressed to be canonical");
+        assert_eq!(damgard, damgard2);
     }
 }
