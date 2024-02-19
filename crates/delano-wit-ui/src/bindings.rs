@@ -11,57 +11,10 @@ pub mod delano {
       /// An attribute is a 32 bytes hash value
       pub type Attribute = wit_bindgen::rt::vec::Vec::<u8>;
       pub type Entry = wit_bindgen::rt::vec::Vec::<Attribute>;
-      pub type Nonce = wit_bindgen::rt::vec::Vec::<u8>;
       pub type Selected = wit_bindgen::rt::vec::Vec::<Entry>;
-      #[derive(Clone)]
-      pub struct Provables {
-        pub credential: wit_bindgen::rt::vec::Vec::<u8>,
-        pub entries: wit_bindgen::rt::vec::Vec::<Entry>,
-        pub selected: wit_bindgen::rt::vec::Vec::<Attribute>,
-        pub nonce: wit_bindgen::rt::vec::Vec::<u8>,
-      }
-      impl ::core::fmt::Debug for Provables {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("Provables").field("credential", &self.credential).field("entries", &self.entries).field("selected", &self.selected).field("nonce", &self.nonce).finish()
-        }
-      }
-      #[derive(Clone)]
-      pub struct Proven {
-        pub proof: wit_bindgen::rt::vec::Vec::<u8>,
-        pub selected: wit_bindgen::rt::vec::Vec::<Entry>,
-      }
-      impl ::core::fmt::Debug for Proven {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("Proven").field("proof", &self.proof).field("selected", &self.selected).finish()
-        }
-      }
-      #[derive(Clone)]
-      pub struct Verifiables {
-        pub proof: wit_bindgen::rt::vec::Vec::<u8>,
-        pub issuer_public: wit_bindgen::rt::vec::Vec::<u8>,
-        pub nonce: Option<wit_bindgen::rt::vec::Vec::<u8>>,
-        pub selected: Selected,
-      }
-      impl ::core::fmt::Debug for Verifiables {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("Verifiables").field("proof", &self.proof).field("issuer-public", &self.issuer_public).field("nonce", &self.nonce).field("selected", &self.selected).finish()
-        }
-      }
-      /// Issuer config: Default config creates (issues) a credential to yourself.
-      /// Provide a config to offer it to someone else's nym, and optionally verify it with a nonce.
-      #[derive(Clone)]
-      pub struct IssueOptions {
-        pub nymproof: wit_bindgen::rt::vec::Vec::<u8>,
-        pub nonce: Option<wit_bindgen::rt::vec::Vec::<u8>>,
-      }
-      impl ::core::fmt::Debug for IssueOptions {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("IssueOptions").field("nymproof", &self.nymproof).field("nonce", &self.nonce).finish()
-        }
-      }
       /// If you want to redact an Entry containing an Attribute,
       /// construct a redactable record with all Entries and the list of Attributes to redact.
-      #[derive(Clone)]
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
       pub struct Redactables {
         pub entries: wit_bindgen::rt::vec::Vec::<Entry>,
         pub remove: wit_bindgen::rt::vec::Vec::<Attribute>,
@@ -75,7 +28,7 @@ pub mod delano {
       /// 1) without-attribute: an optional redactable record of attributes to redact,
       /// 2) additional-entry: an optional single additional entry,
       /// 3) max-entries: the maximum number of entries the delegated party can add to the credential.
-      #[derive(Clone)]
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
       pub struct OfferConfig {
         pub redact: Option<Redactables>,
         pub additional_entry: Option<Entry>,
@@ -85,6 +38,172 @@ pub mod delano {
       impl ::core::fmt::Debug for OfferConfig {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
           f.debug_struct("OfferConfig").field("redact", &self.redact).field("additional-entry", &self.additional_entry).field("max-entries", &self.max_entries).finish()
+        }
+      }
+      /// A compressed signature
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct SignatureCompressed {
+        pub z: wit_bindgen::rt::vec::Vec::<u8>,
+        pub y_g1: wit_bindgen::rt::vec::Vec::<u8>,
+        pub y_hat: wit_bindgen::rt::vec::Vec::<u8>,
+        pub t: wit_bindgen::rt::vec::Vec::<u8>,
+      }
+      impl ::core::fmt::Debug for SignatureCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("SignatureCompressed").field("z", &self.z).field("y-g1", &self.y_g1).field("y-hat", &self.y_hat).field("t", &self.t).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct ParamSetCommitmentCompressed {
+        pub pp_commit_g1: wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<u8>>,
+        pub pp_commit_g2: wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<u8>>,
+      }
+      impl ::core::fmt::Debug for ParamSetCommitmentCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("ParamSetCommitmentCompressed").field("pp-commit-g1", &self.pp_commit_g1).field("pp-commit-g2", &self.pp_commit_g2).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub enum VkCompressed{
+        G1(wit_bindgen::rt::vec::Vec::<u8>),
+        G2(wit_bindgen::rt::vec::Vec::<u8>),
+      }
+      impl ::core::fmt::Debug for VkCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          match self {
+            VkCompressed::G1(e) => {
+              f.debug_tuple("VkCompressed::G1").field(e).finish()
+            }
+            VkCompressed::G2(e) => {
+              f.debug_tuple("VkCompressed::G2").field(e).finish()
+            }
+          }
+        }
+      }
+      /// Issuer public parameters, compressed
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct IssuerPublicCompressed {
+        pub parameters: ParamSetCommitmentCompressed,
+        pub vk: wit_bindgen::rt::vec::Vec::<VkCompressed>,
+      }
+      impl ::core::fmt::Debug for IssuerPublicCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("IssuerPublicCompressed").field("parameters", &self.parameters).field("vk", &self.vk).finish()
+        }
+      }
+      /// A compressed version of the Credential
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct CredentialCompressed {
+        pub sigma: SignatureCompressed,
+        pub update_key: Option<wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<u8>>>>,
+        pub commitment_vector: wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<u8>>,
+        pub opening_vector: wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<u8>>,
+        pub issuer_public: IssuerPublicCompressed,
+      }
+      impl ::core::fmt::Debug for CredentialCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("CredentialCompressed").field("sigma", &self.sigma).field("update-key", &self.update_key).field("commitment-vector", &self.commitment_vector).field("opening-vector", &self.opening_vector).field("issuer-public", &self.issuer_public).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct Provables {
+        pub credential: CredentialCompressed,
+        pub entries: wit_bindgen::rt::vec::Vec::<Entry>,
+        pub selected: wit_bindgen::rt::vec::Vec::<Attribute>,
+        pub nonce: wit_bindgen::rt::vec::Vec::<u8>,
+      }
+      impl ::core::fmt::Debug for Provables {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("Provables").field("credential", &self.credential).field("entries", &self.entries).field("selected", &self.selected).field("nonce", &self.nonce).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct PedersenCompressed {
+        pub h: wit_bindgen::rt::vec::Vec::<u8>,
+      }
+      impl ::core::fmt::Debug for PedersenCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("PedersenCompressed").field("h", &self.h).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct DamgardTransformCompressed {
+        pub pedersen: PedersenCompressed,
+      }
+      impl ::core::fmt::Debug for DamgardTransformCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("DamgardTransformCompressed").field("pedersen", &self.pedersen).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct PedersenOpenCompressed {
+        pub open_randomness: wit_bindgen::rt::vec::Vec::<u8>,
+        pub announce_randomness: wit_bindgen::rt::vec::Vec::<u8>,
+        pub announce_element: Option<wit_bindgen::rt::vec::Vec::<u8>>,
+      }
+      impl ::core::fmt::Debug for PedersenOpenCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("PedersenOpenCompressed").field("open-randomness", &self.open_randomness).field("announce-randomness", &self.announce_randomness).field("announce-element", &self.announce_element).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct NymProofCompressed {
+        pub challenge: wit_bindgen::rt::vec::Vec::<u8>,
+        pub pedersen_open: PedersenOpenCompressed,
+        pub pedersen_commit: wit_bindgen::rt::vec::Vec::<u8>,
+        pub public_key: wit_bindgen::rt::vec::Vec::<u8>,
+        pub response: wit_bindgen::rt::vec::Vec::<u8>,
+        pub damgard: DamgardTransformCompressed,
+      }
+      impl ::core::fmt::Debug for NymProofCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("NymProofCompressed").field("challenge", &self.challenge).field("pedersen-open", &self.pedersen_open).field("pedersen-commit", &self.pedersen_commit).field("public-key", &self.public_key).field("response", &self.response).field("damgard", &self.damgard).finish()
+        }
+      }
+      /// Issuer config: Default config creates (issues) a credential to yourself.
+      /// Provide a config to offer it to someone else's nym, and optionally verify it with a nonce.
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct IssueOptions {
+        pub nymproof: NymProofCompressed,
+        pub nonce: Option<wit_bindgen::rt::vec::Vec::<u8>>,
+      }
+      impl ::core::fmt::Debug for IssueOptions {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("IssueOptions").field("nymproof", &self.nymproof).field("nonce", &self.nonce).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct CredProofCompressed {
+        pub sigma: SignatureCompressed,
+        pub commitment_vector: wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<u8>>,
+        pub witness_pi: wit_bindgen::rt::vec::Vec::<u8>,
+        pub nym_proof: NymProofCompressed,
+      }
+      impl ::core::fmt::Debug for CredProofCompressed {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("CredProofCompressed").field("sigma", &self.sigma).field("commitment-vector", &self.commitment_vector).field("witness-pi", &self.witness_pi).field("nym-proof", &self.nym_proof).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct Proven {
+        pub proof: CredProofCompressed,
+        pub selected: Selected,
+      }
+      impl ::core::fmt::Debug for Proven {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("Proven").field("proof", &self.proof).field("selected", &self.selected).finish()
+        }
+      }
+      #[derive(Clone, serde::Deserialize, serde::Serialize)]
+      pub struct Verifiables {
+        pub proof: CredProofCompressed,
+        pub issuer_public: IssuerPublicCompressed,
+        pub nonce: Option<wit_bindgen::rt::vec::Vec::<u8>>,
+        pub selected: Selected,
+      }
+      impl ::core::fmt::Debug for Verifiables {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("Verifiables").field("proof", &self.proof).field("issuer-public", &self.issuer_public).field("nonce", &self.nonce).field("selected", &self.selected).finish()
         }
       }
       
@@ -102,19 +221,21 @@ pub mod delano {
       pub type Verifiables = super::super::super::delano::wallet::types::Verifiables;
       pub type OfferConfig = super::super::super::delano::wallet::types::OfferConfig;
       pub type IssueOptions = super::super::super::delano::wallet::types::IssueOptions;
-      pub type Nonce = super::super::super::delano::wallet::types::Nonce;
       pub type Entry = super::super::super::delano::wallet::types::Entry;
       pub type Proven = super::super::super::delano::wallet::types::Proven;
+      pub type CredentialCompressed = super::super::super::delano::wallet::types::CredentialCompressed;
+      pub type NymProofCompressed = super::super::super::delano::wallet::types::NymProofCompressed;
+      pub type IssuerPublicCompressed = super::super::super::delano::wallet::types::IssuerPublicCompressed;
       #[allow(unused_unsafe, clippy::all)]
       /// Returns the active Nym of the component.
-      pub fn get_nym_proof(nonce: &Nonce,) -> Result<wit_bindgen::rt::vec::Vec::<u8>,wit_bindgen::rt::string::String>{
+      pub fn get_nym_proof(nonce: &[u8],) -> Result<NymProofCompressed,wit_bindgen::rt::string::String>{
         
         #[allow(unused_imports)]
         use wit_bindgen::rt::{alloc, vec::Vec, string::String};
         unsafe {
           
           #[repr(align(4))]
-          struct RetArea([u8; 12]);
+          struct RetArea([u8; 72]);
           let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
           let vec0 = nonce;
           let ptr0 = vec0.as_ptr() as i32;
@@ -137,19 +258,66 @@ pub mod delano {
                 let l3 = *((ptr1 + 4) as *const i32);
                 let l4 = *((ptr1 + 8) as *const i32);
                 let len5 = l4 as usize;
+                let l6 = *((ptr1 + 12) as *const i32);
+                let l7 = *((ptr1 + 16) as *const i32);
+                let len8 = l7 as usize;
+                let l9 = *((ptr1 + 20) as *const i32);
+                let l10 = *((ptr1 + 24) as *const i32);
+                let len11 = l10 as usize;
+                let l12 = i32::from(*((ptr1 + 28) as *const u8));
+                let l16 = *((ptr1 + 40) as *const i32);
+                let l17 = *((ptr1 + 44) as *const i32);
+                let len18 = l17 as usize;
+                let l19 = *((ptr1 + 48) as *const i32);
+                let l20 = *((ptr1 + 52) as *const i32);
+                let len21 = l20 as usize;
+                let l22 = *((ptr1 + 56) as *const i32);
+                let l23 = *((ptr1 + 60) as *const i32);
+                let len24 = l23 as usize;
+                let l25 = *((ptr1 + 64) as *const i32);
+                let l26 = *((ptr1 + 68) as *const i32);
+                let len27 = l26 as usize;
                 
-                Vec::from_raw_parts(l3 as *mut _, len5, len5)
+                super::super::super::delano::wallet::types::NymProofCompressed{
+                  challenge: Vec::from_raw_parts(l3 as *mut _, len5, len5),
+                  pedersen_open: super::super::super::delano::wallet::types::PedersenOpenCompressed{
+                    open_randomness: Vec::from_raw_parts(l6 as *mut _, len8, len8),
+                    announce_randomness: Vec::from_raw_parts(l9 as *mut _, len11, len11),
+                    announce_element: match l12 {
+                      0 => None,
+                      1 => {
+                        let e = {
+                          let l13 = *((ptr1 + 32) as *const i32);
+                          let l14 = *((ptr1 + 36) as *const i32);
+                          let len15 = l14 as usize;
+                          
+                          Vec::from_raw_parts(l13 as *mut _, len15, len15)
+                        };
+                        Some(e)
+                      }
+                      _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                    },
+                  },
+                  pedersen_commit: Vec::from_raw_parts(l16 as *mut _, len18, len18),
+                  public_key: Vec::from_raw_parts(l19 as *mut _, len21, len21),
+                  response: Vec::from_raw_parts(l22 as *mut _, len24, len24),
+                  damgard: super::super::super::delano::wallet::types::DamgardTransformCompressed{
+                    pedersen: super::super::super::delano::wallet::types::PedersenCompressed{
+                      h: Vec::from_raw_parts(l25 as *mut _, len27, len27),
+                    },
+                  },
+                }
               };
               Ok(e)
             }
             1 => {
               let e = {
-                let l6 = *((ptr1 + 4) as *const i32);
-                let l7 = *((ptr1 + 8) as *const i32);
-                let len8 = l7 as usize;
-                let bytes8 = Vec::from_raw_parts(l6 as *mut _, len8, len8);
+                let l28 = *((ptr1 + 4) as *const i32);
+                let l29 = *((ptr1 + 8) as *const i32);
+                let len30 = l29 as usize;
+                let bytes30 = Vec::from_raw_parts(l28 as *mut _, len30, len30);
                 
-                wit_bindgen::rt::string_lift(bytes8)
+                wit_bindgen::rt::string_lift(bytes30)
               };
               Err(e)
             }
@@ -160,351 +328,16 @@ pub mod delano {
       #[allow(unused_unsafe, clippy::all)]
       /// Issue a credential Entry to a Nym with maximum entries.
       /// By default issues a credential to your own Nym. To issue to others, set the options to their nymproof and optionally the nonce you gave them.
-      pub fn issue(attributes: &[Attribute],maxentries: u8,options: Option<&IssueOptions>,) -> Result<wit_bindgen::rt::vec::Vec::<u8>,wit_bindgen::rt::string::String>{
+      pub fn issue(attributes: &[Attribute],maxentries: u8,options: Option<&IssueOptions>,) -> Result<CredentialCompressed,wit_bindgen::rt::string::String>{
         
         #[allow(unused_imports)]
         use wit_bindgen::rt::{alloc, vec::Vec, string::String};
         unsafe {
           
           #[repr(align(4))]
-          struct RetArea([u8; 12]);
+          struct RetArea([u8; 96]);
           let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
-          let vec1 = attributes;
-          let len1 = vec1.len() as i32;
-          let layout1 = alloc::Layout::from_size_align_unchecked(vec1.len() * 8, 4);
-          let result1 = if layout1.size() != 0
-          {
-            let ptr = alloc::alloc(layout1);
-            if ptr.is_null()
-            {
-              alloc::handle_alloc_error(layout1);
-            }
-            ptr
-          }else {{
-            ::core::ptr::null_mut()
-          }};
-          for (i, e) in vec1.into_iter().enumerate() {
-            let base = result1 as i32 + (i as i32) * 8;
-            {
-              let vec0 = e;
-              let ptr0 = vec0.as_ptr() as i32;
-              let len0 = vec0.len() as i32;
-              *((base + 4) as *mut i32) = len0;
-              *((base + 0) as *mut i32) = ptr0;
-            }
-          }
-          let (result6_0,result6_1,result6_2,result6_3,result6_4,result6_5,) = match options {
-            Some(e) => {
-              let super::super::super::delano::wallet::types::IssueOptions{ nymproof:nymproof2, nonce:nonce2, } = e;
-              let vec3 = nymproof2;
-              let ptr3 = vec3.as_ptr() as i32;
-              let len3 = vec3.len() as i32;
-              let (result5_0,result5_1,result5_2,) = match nonce2 {
-                Some(e) => {
-                  let vec4 = e;
-                  let ptr4 = vec4.as_ptr() as i32;
-                  let len4 = vec4.len() as i32;
-                  
-                  (1i32, ptr4, len4)
-                },
-                None => {
-                  (0i32, 0i32, 0i32)
-                },
-              };
-              (1i32, ptr3, len3, result5_0, result5_1, result5_2)
-            },
-            None => {
-              (0i32, 0i32, 0i32, 0i32, 0i32, 0i32)
-            },
-          };let ptr7 = ret_area.as_mut_ptr() as i32;
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
-          extern "C" {
-            #[link_name = "issue"]
-            fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, ){ unreachable!() }
-          wit_import(result1 as i32, len1, wit_bindgen::rt::as_i32(maxentries), result6_0, result6_1, result6_2, result6_3, result6_4, result6_5, ptr7);
-          let l8 = i32::from(*((ptr7 + 0) as *const u8));
-          if layout1.size() != 0 {
-            alloc::dealloc(result1, layout1);
-          }
-          match l8 {
-            0 => {
-              let e = {
-                let l9 = *((ptr7 + 4) as *const i32);
-                let l10 = *((ptr7 + 8) as *const i32);
-                let len11 = l10 as usize;
-                
-                Vec::from_raw_parts(l9 as *mut _, len11, len11)
-              };
-              Ok(e)
-            }
-            1 => {
-              let e = {
-                let l12 = *((ptr7 + 4) as *const i32);
-                let l13 = *((ptr7 + 8) as *const i32);
-                let len14 = l13 as usize;
-                let bytes14 = Vec::from_raw_parts(l12 as *mut _, len14, len14);
-                
-                wit_bindgen::rt::string_lift(bytes14)
-              };
-              Err(e)
-            }
-            _ => wit_bindgen::rt::invalid_enum_discriminant(),
-          }
-        }
-      }
-      #[allow(unused_unsafe, clippy::all)]
-      /// Create an offer for a credential with its given entries and a given configuration.
-      pub fn offer(cred: &[u8],config: &OfferConfig,) -> Result<wit_bindgen::rt::vec::Vec::<u8>,wit_bindgen::rt::string::String>{
-        
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          let mut cleanup_list = Vec::new();
-          
-          #[repr(align(4))]
-          struct RetArea([u8; 12]);
-          let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
-          let vec0 = cred;
-          let ptr0 = vec0.as_ptr() as i32;
-          let len0 = vec0.len() as i32;
-          let super::super::super::delano::wallet::types::OfferConfig{ redact:redact1, additional_entry:additional_entry1, max_entries:max_entries1, } = config;
-          let (result8_0,result8_1,result8_2,result8_3,result8_4,) = match redact1 {
-            Some(e) => {
-              let super::super::super::delano::wallet::types::Redactables{ entries:entries2, remove:remove2, } = e;
-              let vec5 = entries2;
-              let len5 = vec5.len() as i32;
-              let layout5 = alloc::Layout::from_size_align_unchecked(vec5.len() * 8, 4);
-              let result5 = if layout5.size() != 0
-              {
-                let ptr = alloc::alloc(layout5);
-                if ptr.is_null()
-                {
-                  alloc::handle_alloc_error(layout5);
-                }
-                ptr
-              }else {{
-                ::core::ptr::null_mut()
-              }};
-              for (i, e) in vec5.into_iter().enumerate() {
-                let base = result5 as i32 + (i as i32) * 8;
-                {
-                  let vec4 = e;
-                  let len4 = vec4.len() as i32;
-                  let layout4 = alloc::Layout::from_size_align_unchecked(vec4.len() * 8, 4);
-                  let result4 = if layout4.size() != 0
-                  {
-                    let ptr = alloc::alloc(layout4);
-                    if ptr.is_null()
-                    {
-                      alloc::handle_alloc_error(layout4);
-                    }
-                    ptr
-                  }else {{
-                    ::core::ptr::null_mut()
-                  }};
-                  for (i, e) in vec4.into_iter().enumerate() {
-                    let base = result4 as i32 + (i as i32) * 8;
-                    {
-                      let vec3 = e;
-                      let ptr3 = vec3.as_ptr() as i32;
-                      let len3 = vec3.len() as i32;
-                      *((base + 4) as *mut i32) = len3;
-                      *((base + 0) as *mut i32) = ptr3;
-                    }
-                  }
-                  *((base + 4) as *mut i32) = len4;
-                  *((base + 0) as *mut i32) = result4 as i32;
-                  cleanup_list.extend_from_slice(&[(result4, layout4),]);
-                }
-              }
-              let vec7 = remove2;
-              let len7 = vec7.len() as i32;
-              let layout7 = alloc::Layout::from_size_align_unchecked(vec7.len() * 8, 4);
-              let result7 = if layout7.size() != 0
-              {
-                let ptr = alloc::alloc(layout7);
-                if ptr.is_null()
-                {
-                  alloc::handle_alloc_error(layout7);
-                }
-                ptr
-              }else {{
-                ::core::ptr::null_mut()
-              }};
-              for (i, e) in vec7.into_iter().enumerate() {
-                let base = result7 as i32 + (i as i32) * 8;
-                {
-                  let vec6 = e;
-                  let ptr6 = vec6.as_ptr() as i32;
-                  let len6 = vec6.len() as i32;
-                  *((base + 4) as *mut i32) = len6;
-                  *((base + 0) as *mut i32) = ptr6;
-                }
-              }
-              cleanup_list.extend_from_slice(&[(result5, layout5),(result7, layout7),]);
-              
-              (1i32, result5 as i32, len5, result7 as i32, len7)
-            },
-            None => {
-              (0i32, 0i32, 0i32, 0i32, 0i32)
-            },
-          };let (result11_0,result11_1,result11_2,) = match additional_entry1 {
-            Some(e) => {
-              let vec10 = e;
-              let len10 = vec10.len() as i32;
-              let layout10 = alloc::Layout::from_size_align_unchecked(vec10.len() * 8, 4);
-              let result10 = if layout10.size() != 0
-              {
-                let ptr = alloc::alloc(layout10);
-                if ptr.is_null()
-                {
-                  alloc::handle_alloc_error(layout10);
-                }
-                ptr
-              }else {{
-                ::core::ptr::null_mut()
-              }};
-              for (i, e) in vec10.into_iter().enumerate() {
-                let base = result10 as i32 + (i as i32) * 8;
-                {
-                  let vec9 = e;
-                  let ptr9 = vec9.as_ptr() as i32;
-                  let len9 = vec9.len() as i32;
-                  *((base + 4) as *mut i32) = len9;
-                  *((base + 0) as *mut i32) = ptr9;
-                }
-              }
-              cleanup_list.extend_from_slice(&[(result10, layout10),]);
-              
-              (1i32, result10 as i32, len10)
-            },
-            None => {
-              (0i32, 0i32, 0i32)
-            },
-          };let (result12_0,result12_1,) = match max_entries1 {
-            Some(e) => (1i32, wit_bindgen::rt::as_i32(e)),
-            None => {
-              (0i32, 0i32)
-            },
-          };let ptr13 = ret_area.as_mut_ptr() as i32;
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
-          extern "C" {
-            #[link_name = "offer"]
-            fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, ){ unreachable!() }
-          wit_import(ptr0, len0, result8_0, result8_1, result8_2, result8_3, result8_4, result11_0, result11_1, result11_2, result12_0, result12_1, ptr13);
-          let l14 = i32::from(*((ptr13 + 0) as *const u8));
-          for (ptr, layout) in cleanup_list {
-            
-            if layout.size() != 0 {
-              
-              alloc::dealloc(ptr, layout);
-              
-            }
-            
-          }
-          match l14 {
-            0 => {
-              let e = {
-                let l15 = *((ptr13 + 4) as *const i32);
-                let l16 = *((ptr13 + 8) as *const i32);
-                let len17 = l16 as usize;
-                
-                Vec::from_raw_parts(l15 as *mut _, len17, len17)
-              };
-              Ok(e)
-            }
-            1 => {
-              let e = {
-                let l18 = *((ptr13 + 4) as *const i32);
-                let l19 = *((ptr13 + 8) as *const i32);
-                let len20 = l19 as usize;
-                let bytes20 = Vec::from_raw_parts(l18 as *mut _, len20, len20);
-                
-                wit_bindgen::rt::string_lift(bytes20)
-              };
-              Err(e)
-            }
-            _ => wit_bindgen::rt::invalid_enum_discriminant(),
-          }
-        }
-      }
-      #[allow(unused_unsafe, clippy::all)]
-      /// Accept a credential offer and return the accepte Credential bytes
-      pub fn accept(offer: &[u8],) -> Result<wit_bindgen::rt::vec::Vec::<u8>,wit_bindgen::rt::string::String>{
-        
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          
-          #[repr(align(4))]
-          struct RetArea([u8; 12]);
-          let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
-          let vec0 = offer;
-          let ptr0 = vec0.as_ptr() as i32;
-          let len0 = vec0.len() as i32;
-          let ptr1 = ret_area.as_mut_ptr() as i32;
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
-          extern "C" {
-            #[link_name = "accept"]
-            fn wit_import(_: i32, _: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, _: i32, ){ unreachable!() }
-          wit_import(ptr0, len0, ptr1);
-          let l2 = i32::from(*((ptr1 + 0) as *const u8));
-          match l2 {
-            0 => {
-              let e = {
-                let l3 = *((ptr1 + 4) as *const i32);
-                let l4 = *((ptr1 + 8) as *const i32);
-                let len5 = l4 as usize;
-                
-                Vec::from_raw_parts(l3 as *mut _, len5, len5)
-              };
-              Ok(e)
-            }
-            1 => {
-              let e = {
-                let l6 = *((ptr1 + 4) as *const i32);
-                let l7 = *((ptr1 + 8) as *const i32);
-                let len8 = l7 as usize;
-                let bytes8 = Vec::from_raw_parts(l6 as *mut _, len8, len8);
-                
-                wit_bindgen::rt::string_lift(bytes8)
-              };
-              Err(e)
-            }
-            _ => wit_bindgen::rt::invalid_enum_discriminant(),
-          }
-        }
-      }
-      #[allow(unused_unsafe, clippy::all)]
-      /// Extend a credential with a new entry
-      pub fn extend(cred: &[u8],entry: &Entry,) -> Result<wit_bindgen::rt::vec::Vec::<u8>,wit_bindgen::rt::string::String>{
-        
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          
-          #[repr(align(4))]
-          struct RetArea([u8; 12]);
-          let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
-          let vec0 = cred;
-          let ptr0 = vec0.as_ptr() as i32;
-          let len0 = vec0.len() as i32;
-          let vec2 = entry;
+          let ptr0 = ret_area.as_mut_ptr() as i32;let vec2 = attributes;
           let len2 = vec2.len() as i32;
           let layout2 = alloc::Layout::from_size_align_unchecked(vec2.len() * 8, 4);
           let result2 = if layout2.size() != 0
@@ -528,885 +361,3333 @@ pub mod delano {
               *((base + 0) as *mut i32) = ptr1;
             }
           }
-          let ptr3 = ret_area.as_mut_ptr() as i32;
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
-          extern "C" {
-            #[link_name = "extend"]
-            fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, ){ unreachable!() }
-          wit_import(ptr0, len0, result2 as i32, len2, ptr3);
-          let l4 = i32::from(*((ptr3 + 0) as *const u8));
-          if layout2.size() != 0 {
-            alloc::dealloc(result2, layout2);
-          }
-          match l4 {
-            0 => {
-              let e = {
-                let l5 = *((ptr3 + 4) as *const i32);
-                let l6 = *((ptr3 + 8) as *const i32);
-                let len7 = l6 as usize;
-                
-                Vec::from_raw_parts(l5 as *mut _, len7, len7)
-              };
-              Ok(e)
-            }
-            1 => {
-              let e = {
-                let l8 = *((ptr3 + 4) as *const i32);
-                let l9 = *((ptr3 + 8) as *const i32);
-                let len10 = l9 as usize;
-                let bytes10 = Vec::from_raw_parts(l8 as *mut _, len10, len10);
-                
-                wit_bindgen::rt::string_lift(bytes10)
-              };
-              Err(e)
-            }
-            _ => wit_bindgen::rt::invalid_enum_discriminant(),
-          }
-        }
-      }
-      #[allow(unused_unsafe, clippy::all)]
-      /// Export a function that proves selected attributes in a given credential
-      /// Returns the selected attributes in the proper order in order to verify the proof,
-      /// as each Attribute needs to be verified from their respective Entry.
-      pub fn prove(values: &Provables,) -> Result<Proven,wit_bindgen::rt::string::String>{
-        
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          let mut cleanup_list = Vec::new();
-          
-          #[repr(align(4))]
-          struct RetArea([u8; 20]);
-          let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
-          let super::super::super::delano::wallet::types::Provables{ credential:credential0, entries:entries0, selected:selected0, nonce:nonce0, } = values;
-          let vec1 = credential0;
-          let ptr1 = vec1.as_ptr() as i32;
-          let len1 = vec1.len() as i32;
-          let vec4 = entries0;
-          let len4 = vec4.len() as i32;
-          let layout4 = alloc::Layout::from_size_align_unchecked(vec4.len() * 8, 4);
-          let result4 = if layout4.size() != 0
-          {
-            let ptr = alloc::alloc(layout4);
-            if ptr.is_null()
-            {
-              alloc::handle_alloc_error(layout4);
-            }
-            ptr
-          }else {{
-            ::core::ptr::null_mut()
-          }};
-          for (i, e) in vec4.into_iter().enumerate() {
-            let base = result4 as i32 + (i as i32) * 8;
-            {
-              let vec3 = e;
-              let len3 = vec3.len() as i32;
-              let layout3 = alloc::Layout::from_size_align_unchecked(vec3.len() * 8, 4);
-              let result3 = if layout3.size() != 0
-              {
-                let ptr = alloc::alloc(layout3);
-                if ptr.is_null()
-                {
-                  alloc::handle_alloc_error(layout3);
-                }
-                ptr
-              }else {{
-                ::core::ptr::null_mut()
-              }};
-              for (i, e) in vec3.into_iter().enumerate() {
-                let base = result3 as i32 + (i as i32) * 8;
-                {
-                  let vec2 = e;
-                  let ptr2 = vec2.as_ptr() as i32;
-                  let len2 = vec2.len() as i32;
-                  *((base + 4) as *mut i32) = len2;
-                  *((base + 0) as *mut i32) = ptr2;
-                }
-              }
-              *((base + 4) as *mut i32) = len3;
-              *((base + 0) as *mut i32) = result3 as i32;
-              cleanup_list.extend_from_slice(&[(result3, layout3),]);
-            }
-          }
-          let vec6 = selected0;
-          let len6 = vec6.len() as i32;
-          let layout6 = alloc::Layout::from_size_align_unchecked(vec6.len() * 8, 4);
-          let result6 = if layout6.size() != 0
-          {
-            let ptr = alloc::alloc(layout6);
-            if ptr.is_null()
-            {
-              alloc::handle_alloc_error(layout6);
-            }
-            ptr
-          }else {{
-            ::core::ptr::null_mut()
-          }};
-          for (i, e) in vec6.into_iter().enumerate() {
-            let base = result6 as i32 + (i as i32) * 8;
-            {
-              let vec5 = e;
+          *((ptr0 + 4) as *mut i32) = len2;
+          *((ptr0 + 0) as *mut i32) = result2 as i32;
+          *((ptr0 + 8) as *mut u8) = (wit_bindgen::rt::as_i32(maxentries)) as u8;
+          match options {
+            Some(e) => {
+              *((ptr0 + 12) as *mut u8) = (1i32) as u8;
+              let super::super::super::delano::wallet::types::IssueOptions{ nymproof:nymproof3, nonce:nonce3, } = e;
+              let super::super::super::delano::wallet::types::NymProofCompressed{ challenge:challenge4, pedersen_open:pedersen_open4, pedersen_commit:pedersen_commit4, public_key:public_key4, response:response4, damgard:damgard4, } = nymproof3;
+              let vec5 = challenge4;
               let ptr5 = vec5.as_ptr() as i32;
               let len5 = vec5.len() as i32;
-              *((base + 4) as *mut i32) = len5;
-              *((base + 0) as *mut i32) = ptr5;
+              *((ptr0 + 20) as *mut i32) = len5;
+              *((ptr0 + 16) as *mut i32) = ptr5;
+              let super::super::super::delano::wallet::types::PedersenOpenCompressed{ open_randomness:open_randomness6, announce_randomness:announce_randomness6, announce_element:announce_element6, } = pedersen_open4;
+              let vec7 = open_randomness6;
+              let ptr7 = vec7.as_ptr() as i32;
+              let len7 = vec7.len() as i32;
+              *((ptr0 + 28) as *mut i32) = len7;
+              *((ptr0 + 24) as *mut i32) = ptr7;
+              let vec8 = announce_randomness6;
+              let ptr8 = vec8.as_ptr() as i32;
+              let len8 = vec8.len() as i32;
+              *((ptr0 + 36) as *mut i32) = len8;
+              *((ptr0 + 32) as *mut i32) = ptr8;
+              match announce_element6 {
+                Some(e) => {
+                  *((ptr0 + 40) as *mut u8) = (1i32) as u8;
+                  let vec9 = e;
+                  let ptr9 = vec9.as_ptr() as i32;
+                  let len9 = vec9.len() as i32;
+                  *((ptr0 + 48) as *mut i32) = len9;
+                  *((ptr0 + 44) as *mut i32) = ptr9;
+                },
+                None => {
+                  {
+                    *((ptr0 + 40) as *mut u8) = (0i32) as u8;
+                  }
+                },
+              };let vec10 = pedersen_commit4;
+              let ptr10 = vec10.as_ptr() as i32;
+              let len10 = vec10.len() as i32;
+              *((ptr0 + 56) as *mut i32) = len10;
+              *((ptr0 + 52) as *mut i32) = ptr10;
+              let vec11 = public_key4;
+              let ptr11 = vec11.as_ptr() as i32;
+              let len11 = vec11.len() as i32;
+              *((ptr0 + 64) as *mut i32) = len11;
+              *((ptr0 + 60) as *mut i32) = ptr11;
+              let vec12 = response4;
+              let ptr12 = vec12.as_ptr() as i32;
+              let len12 = vec12.len() as i32;
+              *((ptr0 + 72) as *mut i32) = len12;
+              *((ptr0 + 68) as *mut i32) = ptr12;
+              let super::super::super::delano::wallet::types::DamgardTransformCompressed{ pedersen:pedersen13, } = damgard4;
+              let super::super::super::delano::wallet::types::PedersenCompressed{ h:h14, } = pedersen13;
+              let vec15 = h14;
+              let ptr15 = vec15.as_ptr() as i32;
+              let len15 = vec15.len() as i32;
+              *((ptr0 + 80) as *mut i32) = len15;
+              *((ptr0 + 76) as *mut i32) = ptr15;
+              match nonce3 {
+                Some(e) => {
+                  *((ptr0 + 84) as *mut u8) = (1i32) as u8;
+                  let vec16 = e;
+                  let ptr16 = vec16.as_ptr() as i32;
+                  let len16 = vec16.len() as i32;
+                  *((ptr0 + 92) as *mut i32) = len16;
+                  *((ptr0 + 88) as *mut i32) = ptr16;
+                },
+                None => {
+                  {
+                    *((ptr0 + 84) as *mut u8) = (0i32) as u8;
+                  }
+                },
+              };},
+              None => {
+                {
+                  *((ptr0 + 12) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let ptr17 = ret_area.as_mut_ptr() as i32;
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
+            extern "C" {
+              #[link_name = "issue"]
+              fn wit_import(_: i32, _: i32, );
             }
-          }
-          let vec7 = nonce0;
-          let ptr7 = vec7.as_ptr() as i32;
-          let len7 = vec7.len() as i32;
-          let ptr8 = ret_area.as_mut_ptr() as i32;
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
-          extern "C" {
-            #[link_name = "prove"]
-            fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, ){ unreachable!() }
-          wit_import(ptr1, len1, result4 as i32, len4, result6 as i32, len6, ptr7, len7, ptr8);
-          let l9 = i32::from(*((ptr8 + 0) as *const u8));
-          if layout4.size() != 0 {
-            alloc::dealloc(result4, layout4);
-          }
-          if layout6.size() != 0 {
-            alloc::dealloc(result6, layout6);
-          }
-          for (ptr, layout) in cleanup_list {
             
-            if layout.size() != 0 {
-              
-              alloc::dealloc(ptr, layout);
-              
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr0, ptr17);
+            let l18 = i32::from(*((ptr17 + 0) as *const u8));
+            if layout2.size() != 0 {
+              alloc::dealloc(result2, layout2);
             }
-            
-          }
-          match l9 {
-            0 => {
-              let e = {
-                let l10 = *((ptr8 + 4) as *const i32);
-                let l11 = *((ptr8 + 8) as *const i32);
-                let len12 = l11 as usize;
-                let l13 = *((ptr8 + 12) as *const i32);
-                let l14 = *((ptr8 + 16) as *const i32);
-                let base21 = l13;
-                let len21 = l14;
-                let mut result21 = Vec::with_capacity(len21 as usize);
-                for i in 0..len21 {
-                  let base = base21 + i * 8;
-                  let e21 = {
-                    let l15 = *((base + 0) as *const i32);
-                    let l16 = *((base + 4) as *const i32);
-                    let base20 = l15;
-                    let len20 = l16;
-                    let mut result20 = Vec::with_capacity(len20 as usize);
-                    for i in 0..len20 {
-                      let base = base20 + i * 8;
-                      let e20 = {
-                        let l17 = *((base + 0) as *const i32);
-                        let l18 = *((base + 4) as *const i32);
-                        let len19 = l18 as usize;
-                        
-                        Vec::from_raw_parts(l17 as *mut _, len19, len19)
+            match l18 {
+              0 => {
+                let e = {
+                  let l19 = *((ptr17 + 4) as *const i32);
+                  let l20 = *((ptr17 + 8) as *const i32);
+                  let len21 = l20 as usize;
+                  let l22 = *((ptr17 + 12) as *const i32);
+                  let l23 = *((ptr17 + 16) as *const i32);
+                  let len24 = l23 as usize;
+                  let l25 = *((ptr17 + 20) as *const i32);
+                  let l26 = *((ptr17 + 24) as *const i32);
+                  let len27 = l26 as usize;
+                  let l28 = *((ptr17 + 28) as *const i32);
+                  let l29 = *((ptr17 + 32) as *const i32);
+                  let len30 = l29 as usize;
+                  let l31 = i32::from(*((ptr17 + 36) as *const u8));
+                  let l41 = *((ptr17 + 48) as *const i32);
+                  let l42 = *((ptr17 + 52) as *const i32);
+                  let base46 = l41;
+                  let len46 = l42;
+                  let mut result46 = Vec::with_capacity(len46 as usize);
+                  for i in 0..len46 {
+                    let base = base46 + i * 8;
+                    let e46 = {
+                      let l43 = *((base + 0) as *const i32);
+                      let l44 = *((base + 4) as *const i32);
+                      let len45 = l44 as usize;
+                      
+                      Vec::from_raw_parts(l43 as *mut _, len45, len45)
+                    };
+                    result46.push(e46);
+                  }
+                  wit_bindgen::rt::dealloc(base46, (len46 as usize) * 8, 4);
+                  let l47 = *((ptr17 + 56) as *const i32);
+                  let l48 = *((ptr17 + 60) as *const i32);
+                  let base52 = l47;
+                  let len52 = l48;
+                  let mut result52 = Vec::with_capacity(len52 as usize);
+                  for i in 0..len52 {
+                    let base = base52 + i * 8;
+                    let e52 = {
+                      let l49 = *((base + 0) as *const i32);
+                      let l50 = *((base + 4) as *const i32);
+                      let len51 = l50 as usize;
+                      
+                      Vec::from_raw_parts(l49 as *mut _, len51, len51)
+                    };
+                    result52.push(e52);
+                  }
+                  wit_bindgen::rt::dealloc(base52, (len52 as usize) * 8, 4);
+                  let l53 = *((ptr17 + 64) as *const i32);
+                  let l54 = *((ptr17 + 68) as *const i32);
+                  let base58 = l53;
+                  let len58 = l54;
+                  let mut result58 = Vec::with_capacity(len58 as usize);
+                  for i in 0..len58 {
+                    let base = base58 + i * 8;
+                    let e58 = {
+                      let l55 = *((base + 0) as *const i32);
+                      let l56 = *((base + 4) as *const i32);
+                      let len57 = l56 as usize;
+                      
+                      Vec::from_raw_parts(l55 as *mut _, len57, len57)
+                    };
+                    result58.push(e58);
+                  }
+                  wit_bindgen::rt::dealloc(base58, (len58 as usize) * 8, 4);
+                  let l59 = *((ptr17 + 72) as *const i32);
+                  let l60 = *((ptr17 + 76) as *const i32);
+                  let base64 = l59;
+                  let len64 = l60;
+                  let mut result64 = Vec::with_capacity(len64 as usize);
+                  for i in 0..len64 {
+                    let base = base64 + i * 8;
+                    let e64 = {
+                      let l61 = *((base + 0) as *const i32);
+                      let l62 = *((base + 4) as *const i32);
+                      let len63 = l62 as usize;
+                      
+                      Vec::from_raw_parts(l61 as *mut _, len63, len63)
+                    };
+                    result64.push(e64);
+                  }
+                  wit_bindgen::rt::dealloc(base64, (len64 as usize) * 8, 4);
+                  let l65 = *((ptr17 + 80) as *const i32);
+                  let l66 = *((ptr17 + 84) as *const i32);
+                  let base75 = l65;
+                  let len75 = l66;
+                  let mut result75 = Vec::with_capacity(len75 as usize);
+                  for i in 0..len75 {
+                    let base = base75 + i * 12;
+                    let e75 = {
+                      let l67 = i32::from(*((base + 0) as *const u8));
+                      use super::super::super::delano::wallet::types::VkCompressed as V74;
+                      let v74 = match l67 {
+                        0 => {
+                          let e74 = {
+                            let l68 = *((base + 4) as *const i32);
+                            let l69 = *((base + 8) as *const i32);
+                            let len70 = l69 as usize;
+                            
+                            Vec::from_raw_parts(l68 as *mut _, len70, len70)
+                          };
+                          V74::G1(e74)
+                        }
+                        n => {
+                          debug_assert_eq!(n, 1, "invalid enum discriminant");
+                          let e74 = {
+                            let l71 = *((base + 4) as *const i32);
+                            let l72 = *((base + 8) as *const i32);
+                            let len73 = l72 as usize;
+                            
+                            Vec::from_raw_parts(l71 as *mut _, len73, len73)
+                          };
+                          V74::G2(e74)
+                        }
                       };
-                      result20.push(e20);
-                    }
-                    wit_bindgen::rt::dealloc(base20, (len20 as usize) * 8, 4);
-                    
-                    result20
-                  };
-                  result21.push(e21);
-                }
-                wit_bindgen::rt::dealloc(base21, (len21 as usize) * 8, 4);
-                
-                super::super::super::delano::wallet::types::Proven{
-                  proof: Vec::from_raw_parts(l10 as *mut _, len12, len12),
-                  selected: result21,
-                }
-              };
-              Ok(e)
+                      
+                      v74
+                    };
+                    result75.push(e75);
+                  }
+                  wit_bindgen::rt::dealloc(base75, (len75 as usize) * 12, 4);
+                  
+                  super::super::super::delano::wallet::types::CredentialCompressed{
+                    sigma: super::super::super::delano::wallet::types::SignatureCompressed{
+                      z: Vec::from_raw_parts(l19 as *mut _, len21, len21),
+                      y_g1: Vec::from_raw_parts(l22 as *mut _, len24, len24),
+                      y_hat: Vec::from_raw_parts(l25 as *mut _, len27, len27),
+                      t: Vec::from_raw_parts(l28 as *mut _, len30, len30),
+                    },
+                    update_key: match l31 {
+                      0 => None,
+                      1 => {
+                        let e = {
+                          let l32 = *((ptr17 + 40) as *const i32);
+                          let l33 = *((ptr17 + 44) as *const i32);
+                          let base40 = l32;
+                          let len40 = l33;
+                          let mut result40 = Vec::with_capacity(len40 as usize);
+                          for i in 0..len40 {
+                            let base = base40 + i * 8;
+                            let e40 = {
+                              let l34 = *((base + 0) as *const i32);
+                              let l35 = *((base + 4) as *const i32);
+                              let base39 = l34;
+                              let len39 = l35;
+                              let mut result39 = Vec::with_capacity(len39 as usize);
+                              for i in 0..len39 {
+                                let base = base39 + i * 8;
+                                let e39 = {
+                                  let l36 = *((base + 0) as *const i32);
+                                  let l37 = *((base + 4) as *const i32);
+                                  let len38 = l37 as usize;
+                                  
+                                  Vec::from_raw_parts(l36 as *mut _, len38, len38)
+                                };
+                                result39.push(e39);
+                              }
+                              wit_bindgen::rt::dealloc(base39, (len39 as usize) * 8, 4);
+                              
+                              result39
+                            };
+                            result40.push(e40);
+                          }
+                          wit_bindgen::rt::dealloc(base40, (len40 as usize) * 8, 4);
+                          
+                          result40
+                        };
+                        Some(e)
+                      }
+                      _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                    },
+                    commitment_vector: result46,
+                    opening_vector: result52,
+                    issuer_public: super::super::super::delano::wallet::types::IssuerPublicCompressed{
+                      parameters: super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{
+                        pp_commit_g1: result58,
+                        pp_commit_g2: result64,
+                      },
+                      vk: result75,
+                    },
+                  }
+                };
+                Ok(e)
+              }
+              1 => {
+                let e = {
+                  let l76 = *((ptr17 + 4) as *const i32);
+                  let l77 = *((ptr17 + 8) as *const i32);
+                  let len78 = l77 as usize;
+                  let bytes78 = Vec::from_raw_parts(l76 as *mut _, len78, len78);
+                  
+                  wit_bindgen::rt::string_lift(bytes78)
+                };
+                Err(e)
+              }
+              _ => wit_bindgen::rt::invalid_enum_discriminant(),
             }
-            1 => {
-              let e = {
-                let l22 = *((ptr8 + 4) as *const i32);
-                let l23 = *((ptr8 + 8) as *const i32);
-                let len24 = l23 as usize;
-                let bytes24 = Vec::from_raw_parts(l22 as *mut _, len24, len24);
-                
-                wit_bindgen::rt::string_lift(bytes24)
-              };
-              Err(e)
-            }
-            _ => wit_bindgen::rt::invalid_enum_discriminant(),
           }
         }
-      }
-      #[allow(unused_unsafe, clippy::all)]
-      /// Export a function that verifies a proof against a public key, nonce and selected attributes
-      pub fn verify(values: &Verifiables,) -> Result<bool,wit_bindgen::rt::string::String>{
-        
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          let mut cleanup_list = Vec::new();
+        #[allow(unused_unsafe, clippy::all)]
+        /// Create an offer for a credential with its given entries and a given configuration.
+        pub fn offer(cred: &CredentialCompressed,config: &OfferConfig,) -> Result<CredentialCompressed,wit_bindgen::rt::string::String>{
           
-          #[repr(align(4))]
-          struct RetArea([u8; 12]);
-          let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
-          let super::super::super::delano::wallet::types::Verifiables{ proof:proof0, issuer_public:issuer_public0, nonce:nonce0, selected:selected0, } = values;
-          let vec1 = proof0;
-          let ptr1 = vec1.as_ptr() as i32;
-          let len1 = vec1.len() as i32;
-          let vec2 = issuer_public0;
-          let ptr2 = vec2.as_ptr() as i32;
-          let len2 = vec2.len() as i32;
-          let (result4_0,result4_1,result4_2,) = match nonce0 {
-            Some(e) => {
-              let vec3 = e;
-              let ptr3 = vec3.as_ptr() as i32;
-              let len3 = vec3.len() as i32;
-              
-              (1i32, ptr3, len3)
-            },
-            None => {
-              (0i32, 0i32, 0i32)
-            },
-          };let vec7 = selected0;
-          let len7 = vec7.len() as i32;
-          let layout7 = alloc::Layout::from_size_align_unchecked(vec7.len() * 8, 4);
-          let result7 = if layout7.size() != 0
-          {
-            let ptr = alloc::alloc(layout7);
-            if ptr.is_null()
-            {
-              alloc::handle_alloc_error(layout7);
-            }
-            ptr
-          }else {{
-            ::core::ptr::null_mut()
-          }};
-          for (i, e) in vec7.into_iter().enumerate() {
-            let base = result7 as i32 + (i as i32) * 8;
-            {
-              let vec6 = e;
-              let len6 = vec6.len() as i32;
-              let layout6 = alloc::Layout::from_size_align_unchecked(vec6.len() * 8, 4);
-              let result6 = if layout6.size() != 0
-              {
-                let ptr = alloc::alloc(layout6);
-                if ptr.is_null()
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            let mut cleanup_list = Vec::new();
+            
+            #[repr(align(4))]
+            struct RetArea([u8; 120]);
+            let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
+            let ptr0 = ret_area.as_mut_ptr() as i32;let super::super::super::delano::wallet::types::CredentialCompressed{ sigma:sigma1, update_key:update_key1, commitment_vector:commitment_vector1, opening_vector:opening_vector1, issuer_public:issuer_public1, } = cred;
+            let super::super::super::delano::wallet::types::SignatureCompressed{ z:z2, y_g1:y_g12, y_hat:y_hat2, t:t2, } = sigma1;
+            let vec3 = z2;
+            let ptr3 = vec3.as_ptr() as i32;
+            let len3 = vec3.len() as i32;
+            *((ptr0 + 4) as *mut i32) = len3;
+            *((ptr0 + 0) as *mut i32) = ptr3;
+            let vec4 = y_g12;
+            let ptr4 = vec4.as_ptr() as i32;
+            let len4 = vec4.len() as i32;
+            *((ptr0 + 12) as *mut i32) = len4;
+            *((ptr0 + 8) as *mut i32) = ptr4;
+            let vec5 = y_hat2;
+            let ptr5 = vec5.as_ptr() as i32;
+            let len5 = vec5.len() as i32;
+            *((ptr0 + 20) as *mut i32) = len5;
+            *((ptr0 + 16) as *mut i32) = ptr5;
+            let vec6 = t2;
+            let ptr6 = vec6.as_ptr() as i32;
+            let len6 = vec6.len() as i32;
+            *((ptr0 + 28) as *mut i32) = len6;
+            *((ptr0 + 24) as *mut i32) = ptr6;
+            match update_key1 {
+              Some(e) => {
+                *((ptr0 + 32) as *mut u8) = (1i32) as u8;
+                let vec9 = e;
+                let len9 = vec9.len() as i32;
+                let layout9 = alloc::Layout::from_size_align_unchecked(vec9.len() * 8, 4);
+                let result9 = if layout9.size() != 0
                 {
-                  alloc::handle_alloc_error(layout6);
+                  let ptr = alloc::alloc(layout9);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout9);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec9.into_iter().enumerate() {
+                  let base = result9 as i32 + (i as i32) * 8;
+                  {
+                    let vec8 = e;
+                    let len8 = vec8.len() as i32;
+                    let layout8 = alloc::Layout::from_size_align_unchecked(vec8.len() * 8, 4);
+                    let result8 = if layout8.size() != 0
+                    {
+                      let ptr = alloc::alloc(layout8);
+                      if ptr.is_null()
+                      {
+                        alloc::handle_alloc_error(layout8);
+                      }
+                      ptr
+                    }else {{
+                      ::core::ptr::null_mut()
+                    }};
+                    for (i, e) in vec8.into_iter().enumerate() {
+                      let base = result8 as i32 + (i as i32) * 8;
+                      {
+                        let vec7 = e;
+                        let ptr7 = vec7.as_ptr() as i32;
+                        let len7 = vec7.len() as i32;
+                        *((base + 4) as *mut i32) = len7;
+                        *((base + 0) as *mut i32) = ptr7;
+                      }
+                    }
+                    *((base + 4) as *mut i32) = len8;
+                    *((base + 0) as *mut i32) = result8 as i32;
+                    cleanup_list.extend_from_slice(&[(result8, layout8),]);
+                  }
                 }
-                ptr
-              }else {{
-                ::core::ptr::null_mut()
-              }};
-              for (i, e) in vec6.into_iter().enumerate() {
-                let base = result6 as i32 + (i as i32) * 8;
+                *((ptr0 + 40) as *mut i32) = len9;
+                *((ptr0 + 36) as *mut i32) = result9 as i32;
+                cleanup_list.extend_from_slice(&[(result9, layout9),]);
+              },
+              None => {
                 {
-                  let vec5 = e;
-                  let ptr5 = vec5.as_ptr() as i32;
-                  let len5 = vec5.len() as i32;
-                  *((base + 4) as *mut i32) = len5;
-                  *((base + 0) as *mut i32) = ptr5;
+                  *((ptr0 + 32) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let vec11 = commitment_vector1;
+            let len11 = vec11.len() as i32;
+            let layout11 = alloc::Layout::from_size_align_unchecked(vec11.len() * 8, 4);
+            let result11 = if layout11.size() != 0
+            {
+              let ptr = alloc::alloc(layout11);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout11);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec11.into_iter().enumerate() {
+              let base = result11 as i32 + (i as i32) * 8;
+              {
+                let vec10 = e;
+                let ptr10 = vec10.as_ptr() as i32;
+                let len10 = vec10.len() as i32;
+                *((base + 4) as *mut i32) = len10;
+                *((base + 0) as *mut i32) = ptr10;
+              }
+            }
+            *((ptr0 + 48) as *mut i32) = len11;
+            *((ptr0 + 44) as *mut i32) = result11 as i32;
+            let vec13 = opening_vector1;
+            let len13 = vec13.len() as i32;
+            let layout13 = alloc::Layout::from_size_align_unchecked(vec13.len() * 8, 4);
+            let result13 = if layout13.size() != 0
+            {
+              let ptr = alloc::alloc(layout13);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout13);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec13.into_iter().enumerate() {
+              let base = result13 as i32 + (i as i32) * 8;
+              {
+                let vec12 = e;
+                let ptr12 = vec12.as_ptr() as i32;
+                let len12 = vec12.len() as i32;
+                *((base + 4) as *mut i32) = len12;
+                *((base + 0) as *mut i32) = ptr12;
+              }
+            }
+            *((ptr0 + 56) as *mut i32) = len13;
+            *((ptr0 + 52) as *mut i32) = result13 as i32;
+            let super::super::super::delano::wallet::types::IssuerPublicCompressed{ parameters:parameters14, vk:vk14, } = issuer_public1;
+            let super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{ pp_commit_g1:pp_commit_g115, pp_commit_g2:pp_commit_g215, } = parameters14;
+            let vec17 = pp_commit_g115;
+            let len17 = vec17.len() as i32;
+            let layout17 = alloc::Layout::from_size_align_unchecked(vec17.len() * 8, 4);
+            let result17 = if layout17.size() != 0
+            {
+              let ptr = alloc::alloc(layout17);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout17);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec17.into_iter().enumerate() {
+              let base = result17 as i32 + (i as i32) * 8;
+              {
+                let vec16 = e;
+                let ptr16 = vec16.as_ptr() as i32;
+                let len16 = vec16.len() as i32;
+                *((base + 4) as *mut i32) = len16;
+                *((base + 0) as *mut i32) = ptr16;
+              }
+            }
+            *((ptr0 + 64) as *mut i32) = len17;
+            *((ptr0 + 60) as *mut i32) = result17 as i32;
+            let vec19 = pp_commit_g215;
+            let len19 = vec19.len() as i32;
+            let layout19 = alloc::Layout::from_size_align_unchecked(vec19.len() * 8, 4);
+            let result19 = if layout19.size() != 0
+            {
+              let ptr = alloc::alloc(layout19);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout19);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec19.into_iter().enumerate() {
+              let base = result19 as i32 + (i as i32) * 8;
+              {
+                let vec18 = e;
+                let ptr18 = vec18.as_ptr() as i32;
+                let len18 = vec18.len() as i32;
+                *((base + 4) as *mut i32) = len18;
+                *((base + 0) as *mut i32) = ptr18;
+              }
+            }
+            *((ptr0 + 72) as *mut i32) = len19;
+            *((ptr0 + 68) as *mut i32) = result19 as i32;
+            let vec23 = vk14;
+            let len23 = vec23.len() as i32;
+            let layout23 = alloc::Layout::from_size_align_unchecked(vec23.len() * 12, 4);
+            let result23 = if layout23.size() != 0
+            {
+              let ptr = alloc::alloc(layout23);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout23);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec23.into_iter().enumerate() {
+              let base = result23 as i32 + (i as i32) * 12;
+              {
+                use super::super::super::delano::wallet::types::VkCompressed as V22;
+                match e {
+                  V22::G1(e) => {
+                    *((base + 0) as *mut u8) = (0i32) as u8;
+                    let vec20 = e;
+                    let ptr20 = vec20.as_ptr() as i32;
+                    let len20 = vec20.len() as i32;
+                    *((base + 8) as *mut i32) = len20;
+                    *((base + 4) as *mut i32) = ptr20;
+                  },
+                  V22::G2(e) => {
+                    *((base + 0) as *mut u8) = (1i32) as u8;
+                    let vec21 = e;
+                    let ptr21 = vec21.as_ptr() as i32;
+                    let len21 = vec21.len() as i32;
+                    *((base + 8) as *mut i32) = len21;
+                    *((base + 4) as *mut i32) = ptr21;
+                  },
                 }
               }
-              *((base + 4) as *mut i32) = len6;
-              *((base + 0) as *mut i32) = result6 as i32;
-              cleanup_list.extend_from_slice(&[(result6, layout6),]);
             }
-          }
-          let ptr8 = ret_area.as_mut_ptr() as i32;
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
-          extern "C" {
-            #[link_name = "verify"]
-            fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32, ){ unreachable!() }
-          wit_import(ptr1, len1, ptr2, len2, result4_0, result4_1, result4_2, result7 as i32, len7, ptr8);
-          let l9 = i32::from(*((ptr8 + 0) as *const u8));
-          if layout7.size() != 0 {
-            alloc::dealloc(result7, layout7);
-          }
-          for (ptr, layout) in cleanup_list {
-            
-            if layout.size() != 0 {
-              
-              alloc::dealloc(ptr, layout);
-              
-            }
-            
-          }
-          match l9 {
-            0 => {
-              let e = {
-                let l10 = i32::from(*((ptr8 + 4) as *const u8));
-                
-                wit_bindgen::rt::bool_lift(l10 as u8)
-              };
-              Ok(e)
-            }
-            1 => {
-              let e = {
-                let l11 = *((ptr8 + 4) as *const i32);
-                let l12 = *((ptr8 + 8) as *const i32);
-                let len13 = l12 as usize;
-                let bytes13 = Vec::from_raw_parts(l11 as *mut _, len13, len13);
-                
-                wit_bindgen::rt::string_lift(bytes13)
-              };
-              Err(e)
-            }
-            _ => wit_bindgen::rt::invalid_enum_discriminant(),
-          }
-        }
-      }
-      #[allow(unused_unsafe, clippy::all)]
-      /// Returns the Issuer's public key if it exists, otherwise returns an error.
-      pub fn issuer_public() -> Result<wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::vec::Vec::<u8>>,wit_bindgen::rt::string::String>{
-        
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          
-          #[repr(align(4))]
-          struct RetArea([u8; 12]);
-          let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
-          let ptr0 = ret_area.as_mut_ptr() as i32;
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
-          extern "C" {
-            #[link_name = "issuer-public"]
-            fn wit_import(_: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, ){ unreachable!() }
-          wit_import(ptr0);
-          let l1 = i32::from(*((ptr0 + 0) as *const u8));
-          match l1 {
-            0 => {
-              let e = {
-                let l2 = *((ptr0 + 4) as *const i32);
-                let l3 = *((ptr0 + 8) as *const i32);
-                let base7 = l2;
-                let len7 = l3;
-                let mut result7 = Vec::with_capacity(len7 as usize);
-                for i in 0..len7 {
-                  let base = base7 + i * 8;
-                  let e7 = {
-                    let l4 = *((base + 0) as *const i32);
-                    let l5 = *((base + 4) as *const i32);
-                    let len6 = l5 as usize;
-                    
-                    Vec::from_raw_parts(l4 as *mut _, len6, len6)
-                  };
-                  result7.push(e7);
+            *((ptr0 + 80) as *mut i32) = len23;
+            *((ptr0 + 76) as *mut i32) = result23 as i32;
+            let super::super::super::delano::wallet::types::OfferConfig{ redact:redact24, additional_entry:additional_entry24, max_entries:max_entries24, } = config;
+            match redact24 {
+              Some(e) => {
+                *((ptr0 + 84) as *mut u8) = (1i32) as u8;
+                let super::super::super::delano::wallet::types::Redactables{ entries:entries25, remove:remove25, } = e;
+                let vec28 = entries25;
+                let len28 = vec28.len() as i32;
+                let layout28 = alloc::Layout::from_size_align_unchecked(vec28.len() * 8, 4);
+                let result28 = if layout28.size() != 0
+                {
+                  let ptr = alloc::alloc(layout28);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout28);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec28.into_iter().enumerate() {
+                  let base = result28 as i32 + (i as i32) * 8;
+                  {
+                    let vec27 = e;
+                    let len27 = vec27.len() as i32;
+                    let layout27 = alloc::Layout::from_size_align_unchecked(vec27.len() * 8, 4);
+                    let result27 = if layout27.size() != 0
+                    {
+                      let ptr = alloc::alloc(layout27);
+                      if ptr.is_null()
+                      {
+                        alloc::handle_alloc_error(layout27);
+                      }
+                      ptr
+                    }else {{
+                      ::core::ptr::null_mut()
+                    }};
+                    for (i, e) in vec27.into_iter().enumerate() {
+                      let base = result27 as i32 + (i as i32) * 8;
+                      {
+                        let vec26 = e;
+                        let ptr26 = vec26.as_ptr() as i32;
+                        let len26 = vec26.len() as i32;
+                        *((base + 4) as *mut i32) = len26;
+                        *((base + 0) as *mut i32) = ptr26;
+                      }
+                    }
+                    *((base + 4) as *mut i32) = len27;
+                    *((base + 0) as *mut i32) = result27 as i32;
+                    cleanup_list.extend_from_slice(&[(result27, layout27),]);
+                  }
                 }
-                wit_bindgen::rt::dealloc(base7, (len7 as usize) * 8, 4);
+                *((ptr0 + 92) as *mut i32) = len28;
+                *((ptr0 + 88) as *mut i32) = result28 as i32;
+                let vec30 = remove25;
+                let len30 = vec30.len() as i32;
+                let layout30 = alloc::Layout::from_size_align_unchecked(vec30.len() * 8, 4);
+                let result30 = if layout30.size() != 0
+                {
+                  let ptr = alloc::alloc(layout30);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout30);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec30.into_iter().enumerate() {
+                  let base = result30 as i32 + (i as i32) * 8;
+                  {
+                    let vec29 = e;
+                    let ptr29 = vec29.as_ptr() as i32;
+                    let len29 = vec29.len() as i32;
+                    *((base + 4) as *mut i32) = len29;
+                    *((base + 0) as *mut i32) = ptr29;
+                  }
+                }
+                *((ptr0 + 100) as *mut i32) = len30;
+                *((ptr0 + 96) as *mut i32) = result30 as i32;
+                cleanup_list.extend_from_slice(&[(result28, layout28),(result30, layout30),]);
+              },
+              None => {
+                {
+                  *((ptr0 + 84) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };match additional_entry24 {
+              Some(e) => {
+                *((ptr0 + 104) as *mut u8) = (1i32) as u8;
+                let vec32 = e;
+                let len32 = vec32.len() as i32;
+                let layout32 = alloc::Layout::from_size_align_unchecked(vec32.len() * 8, 4);
+                let result32 = if layout32.size() != 0
+                {
+                  let ptr = alloc::alloc(layout32);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout32);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec32.into_iter().enumerate() {
+                  let base = result32 as i32 + (i as i32) * 8;
+                  {
+                    let vec31 = e;
+                    let ptr31 = vec31.as_ptr() as i32;
+                    let len31 = vec31.len() as i32;
+                    *((base + 4) as *mut i32) = len31;
+                    *((base + 0) as *mut i32) = ptr31;
+                  }
+                }
+                *((ptr0 + 112) as *mut i32) = len32;
+                *((ptr0 + 108) as *mut i32) = result32 as i32;
+                cleanup_list.extend_from_slice(&[(result32, layout32),]);
+              },
+              None => {
+                {
+                  *((ptr0 + 104) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };match max_entries24 {
+              Some(e) => {
+                *((ptr0 + 116) as *mut u8) = (1i32) as u8;
+                *((ptr0 + 117) as *mut u8) = (wit_bindgen::rt::as_i32(e)) as u8;
+              },
+              None => {
+                {
+                  *((ptr0 + 116) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let ptr33 = ret_area.as_mut_ptr() as i32;
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
+            extern "C" {
+              #[link_name = "offer"]
+              fn wit_import(_: i32, _: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr0, ptr33);
+            let l34 = i32::from(*((ptr33 + 0) as *const u8));
+            if layout11.size() != 0 {
+              alloc::dealloc(result11, layout11);
+            }
+            if layout13.size() != 0 {
+              alloc::dealloc(result13, layout13);
+            }
+            if layout17.size() != 0 {
+              alloc::dealloc(result17, layout17);
+            }
+            if layout19.size() != 0 {
+              alloc::dealloc(result19, layout19);
+            }
+            if layout23.size() != 0 {
+              alloc::dealloc(result23, layout23);
+            }
+            for (ptr, layout) in cleanup_list {
+              
+              if layout.size() != 0 {
                 
-                result7
-              };
-              Ok(e)
-            }
-            1 => {
-              let e = {
-                let l8 = *((ptr0 + 4) as *const i32);
-                let l9 = *((ptr0 + 8) as *const i32);
-                let len10 = l9 as usize;
-                let bytes10 = Vec::from_raw_parts(l8 as *mut _, len10, len10);
+                alloc::dealloc(ptr, layout);
                 
-                wit_bindgen::rt::string_lift(bytes10)
-              };
-              Err(e)
+              }
+              
             }
-            _ => wit_bindgen::rt::invalid_enum_discriminant(),
+            match l34 {
+              0 => {
+                let e = {
+                  let l35 = *((ptr33 + 4) as *const i32);
+                  let l36 = *((ptr33 + 8) as *const i32);
+                  let len37 = l36 as usize;
+                  let l38 = *((ptr33 + 12) as *const i32);
+                  let l39 = *((ptr33 + 16) as *const i32);
+                  let len40 = l39 as usize;
+                  let l41 = *((ptr33 + 20) as *const i32);
+                  let l42 = *((ptr33 + 24) as *const i32);
+                  let len43 = l42 as usize;
+                  let l44 = *((ptr33 + 28) as *const i32);
+                  let l45 = *((ptr33 + 32) as *const i32);
+                  let len46 = l45 as usize;
+                  let l47 = i32::from(*((ptr33 + 36) as *const u8));
+                  let l57 = *((ptr33 + 48) as *const i32);
+                  let l58 = *((ptr33 + 52) as *const i32);
+                  let base62 = l57;
+                  let len62 = l58;
+                  let mut result62 = Vec::with_capacity(len62 as usize);
+                  for i in 0..len62 {
+                    let base = base62 + i * 8;
+                    let e62 = {
+                      let l59 = *((base + 0) as *const i32);
+                      let l60 = *((base + 4) as *const i32);
+                      let len61 = l60 as usize;
+                      
+                      Vec::from_raw_parts(l59 as *mut _, len61, len61)
+                    };
+                    result62.push(e62);
+                  }
+                  wit_bindgen::rt::dealloc(base62, (len62 as usize) * 8, 4);
+                  let l63 = *((ptr33 + 56) as *const i32);
+                  let l64 = *((ptr33 + 60) as *const i32);
+                  let base68 = l63;
+                  let len68 = l64;
+                  let mut result68 = Vec::with_capacity(len68 as usize);
+                  for i in 0..len68 {
+                    let base = base68 + i * 8;
+                    let e68 = {
+                      let l65 = *((base + 0) as *const i32);
+                      let l66 = *((base + 4) as *const i32);
+                      let len67 = l66 as usize;
+                      
+                      Vec::from_raw_parts(l65 as *mut _, len67, len67)
+                    };
+                    result68.push(e68);
+                  }
+                  wit_bindgen::rt::dealloc(base68, (len68 as usize) * 8, 4);
+                  let l69 = *((ptr33 + 64) as *const i32);
+                  let l70 = *((ptr33 + 68) as *const i32);
+                  let base74 = l69;
+                  let len74 = l70;
+                  let mut result74 = Vec::with_capacity(len74 as usize);
+                  for i in 0..len74 {
+                    let base = base74 + i * 8;
+                    let e74 = {
+                      let l71 = *((base + 0) as *const i32);
+                      let l72 = *((base + 4) as *const i32);
+                      let len73 = l72 as usize;
+                      
+                      Vec::from_raw_parts(l71 as *mut _, len73, len73)
+                    };
+                    result74.push(e74);
+                  }
+                  wit_bindgen::rt::dealloc(base74, (len74 as usize) * 8, 4);
+                  let l75 = *((ptr33 + 72) as *const i32);
+                  let l76 = *((ptr33 + 76) as *const i32);
+                  let base80 = l75;
+                  let len80 = l76;
+                  let mut result80 = Vec::with_capacity(len80 as usize);
+                  for i in 0..len80 {
+                    let base = base80 + i * 8;
+                    let e80 = {
+                      let l77 = *((base + 0) as *const i32);
+                      let l78 = *((base + 4) as *const i32);
+                      let len79 = l78 as usize;
+                      
+                      Vec::from_raw_parts(l77 as *mut _, len79, len79)
+                    };
+                    result80.push(e80);
+                  }
+                  wit_bindgen::rt::dealloc(base80, (len80 as usize) * 8, 4);
+                  let l81 = *((ptr33 + 80) as *const i32);
+                  let l82 = *((ptr33 + 84) as *const i32);
+                  let base91 = l81;
+                  let len91 = l82;
+                  let mut result91 = Vec::with_capacity(len91 as usize);
+                  for i in 0..len91 {
+                    let base = base91 + i * 12;
+                    let e91 = {
+                      let l83 = i32::from(*((base + 0) as *const u8));
+                      use super::super::super::delano::wallet::types::VkCompressed as V90;
+                      let v90 = match l83 {
+                        0 => {
+                          let e90 = {
+                            let l84 = *((base + 4) as *const i32);
+                            let l85 = *((base + 8) as *const i32);
+                            let len86 = l85 as usize;
+                            
+                            Vec::from_raw_parts(l84 as *mut _, len86, len86)
+                          };
+                          V90::G1(e90)
+                        }
+                        n => {
+                          debug_assert_eq!(n, 1, "invalid enum discriminant");
+                          let e90 = {
+                            let l87 = *((base + 4) as *const i32);
+                            let l88 = *((base + 8) as *const i32);
+                            let len89 = l88 as usize;
+                            
+                            Vec::from_raw_parts(l87 as *mut _, len89, len89)
+                          };
+                          V90::G2(e90)
+                        }
+                      };
+                      
+                      v90
+                    };
+                    result91.push(e91);
+                  }
+                  wit_bindgen::rt::dealloc(base91, (len91 as usize) * 12, 4);
+                  
+                  super::super::super::delano::wallet::types::CredentialCompressed{
+                    sigma: super::super::super::delano::wallet::types::SignatureCompressed{
+                      z: Vec::from_raw_parts(l35 as *mut _, len37, len37),
+                      y_g1: Vec::from_raw_parts(l38 as *mut _, len40, len40),
+                      y_hat: Vec::from_raw_parts(l41 as *mut _, len43, len43),
+                      t: Vec::from_raw_parts(l44 as *mut _, len46, len46),
+                    },
+                    update_key: match l47 {
+                      0 => None,
+                      1 => {
+                        let e = {
+                          let l48 = *((ptr33 + 40) as *const i32);
+                          let l49 = *((ptr33 + 44) as *const i32);
+                          let base56 = l48;
+                          let len56 = l49;
+                          let mut result56 = Vec::with_capacity(len56 as usize);
+                          for i in 0..len56 {
+                            let base = base56 + i * 8;
+                            let e56 = {
+                              let l50 = *((base + 0) as *const i32);
+                              let l51 = *((base + 4) as *const i32);
+                              let base55 = l50;
+                              let len55 = l51;
+                              let mut result55 = Vec::with_capacity(len55 as usize);
+                              for i in 0..len55 {
+                                let base = base55 + i * 8;
+                                let e55 = {
+                                  let l52 = *((base + 0) as *const i32);
+                                  let l53 = *((base + 4) as *const i32);
+                                  let len54 = l53 as usize;
+                                  
+                                  Vec::from_raw_parts(l52 as *mut _, len54, len54)
+                                };
+                                result55.push(e55);
+                              }
+                              wit_bindgen::rt::dealloc(base55, (len55 as usize) * 8, 4);
+                              
+                              result55
+                            };
+                            result56.push(e56);
+                          }
+                          wit_bindgen::rt::dealloc(base56, (len56 as usize) * 8, 4);
+                          
+                          result56
+                        };
+                        Some(e)
+                      }
+                      _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                    },
+                    commitment_vector: result62,
+                    opening_vector: result68,
+                    issuer_public: super::super::super::delano::wallet::types::IssuerPublicCompressed{
+                      parameters: super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{
+                        pp_commit_g1: result74,
+                        pp_commit_g2: result80,
+                      },
+                      vk: result91,
+                    },
+                  }
+                };
+                Ok(e)
+              }
+              1 => {
+                let e = {
+                  let l92 = *((ptr33 + 4) as *const i32);
+                  let l93 = *((ptr33 + 8) as *const i32);
+                  let len94 = l93 as usize;
+                  let bytes94 = Vec::from_raw_parts(l92 as *mut _, len94, len94);
+                  
+                  wit_bindgen::rt::string_lift(bytes94)
+                };
+                Err(e)
+              }
+              _ => wit_bindgen::rt::invalid_enum_discriminant(),
+            }
           }
         }
-      }
-      
-    }
-    
-  }
-  pub mod wit_ui {
-    
-    #[allow(clippy::all)]
-    pub mod wurbo_types {
-      #[used]
-      #[doc(hidden)]
-      #[cfg(target_arch = "wasm32")]
-      static __FORCE_SECTION_REF: fn() = super::super::super::__link_section;
-      /// Details required in order to add an event listener to an element
-      #[derive(Clone)]
-      pub struct ListenDetails {
-        pub selector: wit_bindgen::rt::string::String,
-        pub ty: wit_bindgen::rt::string::String,
-      }
-      impl ::core::fmt::Debug for ListenDetails {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("ListenDetails").field("selector", &self.selector).field("ty", &self.ty).finish()
+        #[allow(unused_unsafe, clippy::all)]
+        /// Accept a credential offer and return the accepte Credential bytes
+        pub fn accept(offer: &CredentialCompressed,) -> Result<CredentialCompressed,wit_bindgen::rt::string::String>{
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            let mut cleanup_list = Vec::new();
+            
+            #[repr(align(4))]
+            struct RetArea([u8; 88]);
+            let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
+            let ptr0 = ret_area.as_mut_ptr() as i32;let super::super::super::delano::wallet::types::CredentialCompressed{ sigma:sigma1, update_key:update_key1, commitment_vector:commitment_vector1, opening_vector:opening_vector1, issuer_public:issuer_public1, } = offer;
+            let super::super::super::delano::wallet::types::SignatureCompressed{ z:z2, y_g1:y_g12, y_hat:y_hat2, t:t2, } = sigma1;
+            let vec3 = z2;
+            let ptr3 = vec3.as_ptr() as i32;
+            let len3 = vec3.len() as i32;
+            *((ptr0 + 4) as *mut i32) = len3;
+            *((ptr0 + 0) as *mut i32) = ptr3;
+            let vec4 = y_g12;
+            let ptr4 = vec4.as_ptr() as i32;
+            let len4 = vec4.len() as i32;
+            *((ptr0 + 12) as *mut i32) = len4;
+            *((ptr0 + 8) as *mut i32) = ptr4;
+            let vec5 = y_hat2;
+            let ptr5 = vec5.as_ptr() as i32;
+            let len5 = vec5.len() as i32;
+            *((ptr0 + 20) as *mut i32) = len5;
+            *((ptr0 + 16) as *mut i32) = ptr5;
+            let vec6 = t2;
+            let ptr6 = vec6.as_ptr() as i32;
+            let len6 = vec6.len() as i32;
+            *((ptr0 + 28) as *mut i32) = len6;
+            *((ptr0 + 24) as *mut i32) = ptr6;
+            match update_key1 {
+              Some(e) => {
+                *((ptr0 + 32) as *mut u8) = (1i32) as u8;
+                let vec9 = e;
+                let len9 = vec9.len() as i32;
+                let layout9 = alloc::Layout::from_size_align_unchecked(vec9.len() * 8, 4);
+                let result9 = if layout9.size() != 0
+                {
+                  let ptr = alloc::alloc(layout9);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout9);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec9.into_iter().enumerate() {
+                  let base = result9 as i32 + (i as i32) * 8;
+                  {
+                    let vec8 = e;
+                    let len8 = vec8.len() as i32;
+                    let layout8 = alloc::Layout::from_size_align_unchecked(vec8.len() * 8, 4);
+                    let result8 = if layout8.size() != 0
+                    {
+                      let ptr = alloc::alloc(layout8);
+                      if ptr.is_null()
+                      {
+                        alloc::handle_alloc_error(layout8);
+                      }
+                      ptr
+                    }else {{
+                      ::core::ptr::null_mut()
+                    }};
+                    for (i, e) in vec8.into_iter().enumerate() {
+                      let base = result8 as i32 + (i as i32) * 8;
+                      {
+                        let vec7 = e;
+                        let ptr7 = vec7.as_ptr() as i32;
+                        let len7 = vec7.len() as i32;
+                        *((base + 4) as *mut i32) = len7;
+                        *((base + 0) as *mut i32) = ptr7;
+                      }
+                    }
+                    *((base + 4) as *mut i32) = len8;
+                    *((base + 0) as *mut i32) = result8 as i32;
+                    cleanup_list.extend_from_slice(&[(result8, layout8),]);
+                  }
+                }
+                *((ptr0 + 40) as *mut i32) = len9;
+                *((ptr0 + 36) as *mut i32) = result9 as i32;
+                cleanup_list.extend_from_slice(&[(result9, layout9),]);
+              },
+              None => {
+                {
+                  *((ptr0 + 32) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let vec11 = commitment_vector1;
+            let len11 = vec11.len() as i32;
+            let layout11 = alloc::Layout::from_size_align_unchecked(vec11.len() * 8, 4);
+            let result11 = if layout11.size() != 0
+            {
+              let ptr = alloc::alloc(layout11);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout11);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec11.into_iter().enumerate() {
+              let base = result11 as i32 + (i as i32) * 8;
+              {
+                let vec10 = e;
+                let ptr10 = vec10.as_ptr() as i32;
+                let len10 = vec10.len() as i32;
+                *((base + 4) as *mut i32) = len10;
+                *((base + 0) as *mut i32) = ptr10;
+              }
+            }
+            *((ptr0 + 48) as *mut i32) = len11;
+            *((ptr0 + 44) as *mut i32) = result11 as i32;
+            let vec13 = opening_vector1;
+            let len13 = vec13.len() as i32;
+            let layout13 = alloc::Layout::from_size_align_unchecked(vec13.len() * 8, 4);
+            let result13 = if layout13.size() != 0
+            {
+              let ptr = alloc::alloc(layout13);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout13);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec13.into_iter().enumerate() {
+              let base = result13 as i32 + (i as i32) * 8;
+              {
+                let vec12 = e;
+                let ptr12 = vec12.as_ptr() as i32;
+                let len12 = vec12.len() as i32;
+                *((base + 4) as *mut i32) = len12;
+                *((base + 0) as *mut i32) = ptr12;
+              }
+            }
+            *((ptr0 + 56) as *mut i32) = len13;
+            *((ptr0 + 52) as *mut i32) = result13 as i32;
+            let super::super::super::delano::wallet::types::IssuerPublicCompressed{ parameters:parameters14, vk:vk14, } = issuer_public1;
+            let super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{ pp_commit_g1:pp_commit_g115, pp_commit_g2:pp_commit_g215, } = parameters14;
+            let vec17 = pp_commit_g115;
+            let len17 = vec17.len() as i32;
+            let layout17 = alloc::Layout::from_size_align_unchecked(vec17.len() * 8, 4);
+            let result17 = if layout17.size() != 0
+            {
+              let ptr = alloc::alloc(layout17);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout17);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec17.into_iter().enumerate() {
+              let base = result17 as i32 + (i as i32) * 8;
+              {
+                let vec16 = e;
+                let ptr16 = vec16.as_ptr() as i32;
+                let len16 = vec16.len() as i32;
+                *((base + 4) as *mut i32) = len16;
+                *((base + 0) as *mut i32) = ptr16;
+              }
+            }
+            *((ptr0 + 64) as *mut i32) = len17;
+            *((ptr0 + 60) as *mut i32) = result17 as i32;
+            let vec19 = pp_commit_g215;
+            let len19 = vec19.len() as i32;
+            let layout19 = alloc::Layout::from_size_align_unchecked(vec19.len() * 8, 4);
+            let result19 = if layout19.size() != 0
+            {
+              let ptr = alloc::alloc(layout19);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout19);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec19.into_iter().enumerate() {
+              let base = result19 as i32 + (i as i32) * 8;
+              {
+                let vec18 = e;
+                let ptr18 = vec18.as_ptr() as i32;
+                let len18 = vec18.len() as i32;
+                *((base + 4) as *mut i32) = len18;
+                *((base + 0) as *mut i32) = ptr18;
+              }
+            }
+            *((ptr0 + 72) as *mut i32) = len19;
+            *((ptr0 + 68) as *mut i32) = result19 as i32;
+            let vec23 = vk14;
+            let len23 = vec23.len() as i32;
+            let layout23 = alloc::Layout::from_size_align_unchecked(vec23.len() * 12, 4);
+            let result23 = if layout23.size() != 0
+            {
+              let ptr = alloc::alloc(layout23);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout23);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec23.into_iter().enumerate() {
+              let base = result23 as i32 + (i as i32) * 12;
+              {
+                use super::super::super::delano::wallet::types::VkCompressed as V22;
+                match e {
+                  V22::G1(e) => {
+                    *((base + 0) as *mut u8) = (0i32) as u8;
+                    let vec20 = e;
+                    let ptr20 = vec20.as_ptr() as i32;
+                    let len20 = vec20.len() as i32;
+                    *((base + 8) as *mut i32) = len20;
+                    *((base + 4) as *mut i32) = ptr20;
+                  },
+                  V22::G2(e) => {
+                    *((base + 0) as *mut u8) = (1i32) as u8;
+                    let vec21 = e;
+                    let ptr21 = vec21.as_ptr() as i32;
+                    let len21 = vec21.len() as i32;
+                    *((base + 8) as *mut i32) = len21;
+                    *((base + 4) as *mut i32) = ptr21;
+                  },
+                }
+              }
+            }
+            *((ptr0 + 80) as *mut i32) = len23;
+            *((ptr0 + 76) as *mut i32) = result23 as i32;
+            let ptr24 = ret_area.as_mut_ptr() as i32;
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
+            extern "C" {
+              #[link_name = "accept"]
+              fn wit_import(_: i32, _: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr0, ptr24);
+            let l25 = i32::from(*((ptr24 + 0) as *const u8));
+            if layout11.size() != 0 {
+              alloc::dealloc(result11, layout11);
+            }
+            if layout13.size() != 0 {
+              alloc::dealloc(result13, layout13);
+            }
+            if layout17.size() != 0 {
+              alloc::dealloc(result17, layout17);
+            }
+            if layout19.size() != 0 {
+              alloc::dealloc(result19, layout19);
+            }
+            if layout23.size() != 0 {
+              alloc::dealloc(result23, layout23);
+            }
+            for (ptr, layout) in cleanup_list {
+              
+              if layout.size() != 0 {
+                
+                alloc::dealloc(ptr, layout);
+                
+              }
+              
+            }
+            match l25 {
+              0 => {
+                let e = {
+                  let l26 = *((ptr24 + 4) as *const i32);
+                  let l27 = *((ptr24 + 8) as *const i32);
+                  let len28 = l27 as usize;
+                  let l29 = *((ptr24 + 12) as *const i32);
+                  let l30 = *((ptr24 + 16) as *const i32);
+                  let len31 = l30 as usize;
+                  let l32 = *((ptr24 + 20) as *const i32);
+                  let l33 = *((ptr24 + 24) as *const i32);
+                  let len34 = l33 as usize;
+                  let l35 = *((ptr24 + 28) as *const i32);
+                  let l36 = *((ptr24 + 32) as *const i32);
+                  let len37 = l36 as usize;
+                  let l38 = i32::from(*((ptr24 + 36) as *const u8));
+                  let l48 = *((ptr24 + 48) as *const i32);
+                  let l49 = *((ptr24 + 52) as *const i32);
+                  let base53 = l48;
+                  let len53 = l49;
+                  let mut result53 = Vec::with_capacity(len53 as usize);
+                  for i in 0..len53 {
+                    let base = base53 + i * 8;
+                    let e53 = {
+                      let l50 = *((base + 0) as *const i32);
+                      let l51 = *((base + 4) as *const i32);
+                      let len52 = l51 as usize;
+                      
+                      Vec::from_raw_parts(l50 as *mut _, len52, len52)
+                    };
+                    result53.push(e53);
+                  }
+                  wit_bindgen::rt::dealloc(base53, (len53 as usize) * 8, 4);
+                  let l54 = *((ptr24 + 56) as *const i32);
+                  let l55 = *((ptr24 + 60) as *const i32);
+                  let base59 = l54;
+                  let len59 = l55;
+                  let mut result59 = Vec::with_capacity(len59 as usize);
+                  for i in 0..len59 {
+                    let base = base59 + i * 8;
+                    let e59 = {
+                      let l56 = *((base + 0) as *const i32);
+                      let l57 = *((base + 4) as *const i32);
+                      let len58 = l57 as usize;
+                      
+                      Vec::from_raw_parts(l56 as *mut _, len58, len58)
+                    };
+                    result59.push(e59);
+                  }
+                  wit_bindgen::rt::dealloc(base59, (len59 as usize) * 8, 4);
+                  let l60 = *((ptr24 + 64) as *const i32);
+                  let l61 = *((ptr24 + 68) as *const i32);
+                  let base65 = l60;
+                  let len65 = l61;
+                  let mut result65 = Vec::with_capacity(len65 as usize);
+                  for i in 0..len65 {
+                    let base = base65 + i * 8;
+                    let e65 = {
+                      let l62 = *((base + 0) as *const i32);
+                      let l63 = *((base + 4) as *const i32);
+                      let len64 = l63 as usize;
+                      
+                      Vec::from_raw_parts(l62 as *mut _, len64, len64)
+                    };
+                    result65.push(e65);
+                  }
+                  wit_bindgen::rt::dealloc(base65, (len65 as usize) * 8, 4);
+                  let l66 = *((ptr24 + 72) as *const i32);
+                  let l67 = *((ptr24 + 76) as *const i32);
+                  let base71 = l66;
+                  let len71 = l67;
+                  let mut result71 = Vec::with_capacity(len71 as usize);
+                  for i in 0..len71 {
+                    let base = base71 + i * 8;
+                    let e71 = {
+                      let l68 = *((base + 0) as *const i32);
+                      let l69 = *((base + 4) as *const i32);
+                      let len70 = l69 as usize;
+                      
+                      Vec::from_raw_parts(l68 as *mut _, len70, len70)
+                    };
+                    result71.push(e71);
+                  }
+                  wit_bindgen::rt::dealloc(base71, (len71 as usize) * 8, 4);
+                  let l72 = *((ptr24 + 80) as *const i32);
+                  let l73 = *((ptr24 + 84) as *const i32);
+                  let base82 = l72;
+                  let len82 = l73;
+                  let mut result82 = Vec::with_capacity(len82 as usize);
+                  for i in 0..len82 {
+                    let base = base82 + i * 12;
+                    let e82 = {
+                      let l74 = i32::from(*((base + 0) as *const u8));
+                      use super::super::super::delano::wallet::types::VkCompressed as V81;
+                      let v81 = match l74 {
+                        0 => {
+                          let e81 = {
+                            let l75 = *((base + 4) as *const i32);
+                            let l76 = *((base + 8) as *const i32);
+                            let len77 = l76 as usize;
+                            
+                            Vec::from_raw_parts(l75 as *mut _, len77, len77)
+                          };
+                          V81::G1(e81)
+                        }
+                        n => {
+                          debug_assert_eq!(n, 1, "invalid enum discriminant");
+                          let e81 = {
+                            let l78 = *((base + 4) as *const i32);
+                            let l79 = *((base + 8) as *const i32);
+                            let len80 = l79 as usize;
+                            
+                            Vec::from_raw_parts(l78 as *mut _, len80, len80)
+                          };
+                          V81::G2(e81)
+                        }
+                      };
+                      
+                      v81
+                    };
+                    result82.push(e82);
+                  }
+                  wit_bindgen::rt::dealloc(base82, (len82 as usize) * 12, 4);
+                  
+                  super::super::super::delano::wallet::types::CredentialCompressed{
+                    sigma: super::super::super::delano::wallet::types::SignatureCompressed{
+                      z: Vec::from_raw_parts(l26 as *mut _, len28, len28),
+                      y_g1: Vec::from_raw_parts(l29 as *mut _, len31, len31),
+                      y_hat: Vec::from_raw_parts(l32 as *mut _, len34, len34),
+                      t: Vec::from_raw_parts(l35 as *mut _, len37, len37),
+                    },
+                    update_key: match l38 {
+                      0 => None,
+                      1 => {
+                        let e = {
+                          let l39 = *((ptr24 + 40) as *const i32);
+                          let l40 = *((ptr24 + 44) as *const i32);
+                          let base47 = l39;
+                          let len47 = l40;
+                          let mut result47 = Vec::with_capacity(len47 as usize);
+                          for i in 0..len47 {
+                            let base = base47 + i * 8;
+                            let e47 = {
+                              let l41 = *((base + 0) as *const i32);
+                              let l42 = *((base + 4) as *const i32);
+                              let base46 = l41;
+                              let len46 = l42;
+                              let mut result46 = Vec::with_capacity(len46 as usize);
+                              for i in 0..len46 {
+                                let base = base46 + i * 8;
+                                let e46 = {
+                                  let l43 = *((base + 0) as *const i32);
+                                  let l44 = *((base + 4) as *const i32);
+                                  let len45 = l44 as usize;
+                                  
+                                  Vec::from_raw_parts(l43 as *mut _, len45, len45)
+                                };
+                                result46.push(e46);
+                              }
+                              wit_bindgen::rt::dealloc(base46, (len46 as usize) * 8, 4);
+                              
+                              result46
+                            };
+                            result47.push(e47);
+                          }
+                          wit_bindgen::rt::dealloc(base47, (len47 as usize) * 8, 4);
+                          
+                          result47
+                        };
+                        Some(e)
+                      }
+                      _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                    },
+                    commitment_vector: result53,
+                    opening_vector: result59,
+                    issuer_public: super::super::super::delano::wallet::types::IssuerPublicCompressed{
+                      parameters: super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{
+                        pp_commit_g1: result65,
+                        pp_commit_g2: result71,
+                      },
+                      vk: result82,
+                    },
+                  }
+                };
+                Ok(e)
+              }
+              1 => {
+                let e = {
+                  let l83 = *((ptr24 + 4) as *const i32);
+                  let l84 = *((ptr24 + 8) as *const i32);
+                  let len85 = l84 as usize;
+                  let bytes85 = Vec::from_raw_parts(l83 as *mut _, len85, len85);
+                  
+                  wit_bindgen::rt::string_lift(bytes85)
+                };
+                Err(e)
+              }
+              _ => wit_bindgen::rt::invalid_enum_discriminant(),
+            }
+          }
         }
-      }
-      
-    }
-    
-    
-    #[allow(clippy::all)]
-    pub mod wurbo_in {
-      #[used]
-      #[doc(hidden)]
-      #[cfg(target_arch = "wasm32")]
-      static __FORCE_SECTION_REF: fn() = super::super::super::__link_section;
-      pub type ListenDetails = super::super::super::delano::wit_ui::wurbo_types::ListenDetails;
-      #[allow(unused_unsafe, clippy::all)]
-      /// Add an event listener to the given element
-      pub fn addeventlistener(details: &ListenDetails,){
+        #[allow(unused_unsafe, clippy::all)]
+        /// Extend a credential with a new entry
+        pub fn extend(cred: &CredentialCompressed,entry: &Entry,) -> Result<CredentialCompressed,wit_bindgen::rt::string::String>{
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            let mut cleanup_list = Vec::new();
+            
+            #[repr(align(4))]
+            struct RetArea([u8; 92]);
+            let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
+            let ptr0 = ret_area.as_mut_ptr() as i32;let super::super::super::delano::wallet::types::CredentialCompressed{ sigma:sigma1, update_key:update_key1, commitment_vector:commitment_vector1, opening_vector:opening_vector1, issuer_public:issuer_public1, } = cred;
+            let super::super::super::delano::wallet::types::SignatureCompressed{ z:z2, y_g1:y_g12, y_hat:y_hat2, t:t2, } = sigma1;
+            let vec3 = z2;
+            let ptr3 = vec3.as_ptr() as i32;
+            let len3 = vec3.len() as i32;
+            *((ptr0 + 4) as *mut i32) = len3;
+            *((ptr0 + 0) as *mut i32) = ptr3;
+            let vec4 = y_g12;
+            let ptr4 = vec4.as_ptr() as i32;
+            let len4 = vec4.len() as i32;
+            *((ptr0 + 12) as *mut i32) = len4;
+            *((ptr0 + 8) as *mut i32) = ptr4;
+            let vec5 = y_hat2;
+            let ptr5 = vec5.as_ptr() as i32;
+            let len5 = vec5.len() as i32;
+            *((ptr0 + 20) as *mut i32) = len5;
+            *((ptr0 + 16) as *mut i32) = ptr5;
+            let vec6 = t2;
+            let ptr6 = vec6.as_ptr() as i32;
+            let len6 = vec6.len() as i32;
+            *((ptr0 + 28) as *mut i32) = len6;
+            *((ptr0 + 24) as *mut i32) = ptr6;
+            match update_key1 {
+              Some(e) => {
+                *((ptr0 + 32) as *mut u8) = (1i32) as u8;
+                let vec9 = e;
+                let len9 = vec9.len() as i32;
+                let layout9 = alloc::Layout::from_size_align_unchecked(vec9.len() * 8, 4);
+                let result9 = if layout9.size() != 0
+                {
+                  let ptr = alloc::alloc(layout9);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout9);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec9.into_iter().enumerate() {
+                  let base = result9 as i32 + (i as i32) * 8;
+                  {
+                    let vec8 = e;
+                    let len8 = vec8.len() as i32;
+                    let layout8 = alloc::Layout::from_size_align_unchecked(vec8.len() * 8, 4);
+                    let result8 = if layout8.size() != 0
+                    {
+                      let ptr = alloc::alloc(layout8);
+                      if ptr.is_null()
+                      {
+                        alloc::handle_alloc_error(layout8);
+                      }
+                      ptr
+                    }else {{
+                      ::core::ptr::null_mut()
+                    }};
+                    for (i, e) in vec8.into_iter().enumerate() {
+                      let base = result8 as i32 + (i as i32) * 8;
+                      {
+                        let vec7 = e;
+                        let ptr7 = vec7.as_ptr() as i32;
+                        let len7 = vec7.len() as i32;
+                        *((base + 4) as *mut i32) = len7;
+                        *((base + 0) as *mut i32) = ptr7;
+                      }
+                    }
+                    *((base + 4) as *mut i32) = len8;
+                    *((base + 0) as *mut i32) = result8 as i32;
+                    cleanup_list.extend_from_slice(&[(result8, layout8),]);
+                  }
+                }
+                *((ptr0 + 40) as *mut i32) = len9;
+                *((ptr0 + 36) as *mut i32) = result9 as i32;
+                cleanup_list.extend_from_slice(&[(result9, layout9),]);
+              },
+              None => {
+                {
+                  *((ptr0 + 32) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let vec11 = commitment_vector1;
+            let len11 = vec11.len() as i32;
+            let layout11 = alloc::Layout::from_size_align_unchecked(vec11.len() * 8, 4);
+            let result11 = if layout11.size() != 0
+            {
+              let ptr = alloc::alloc(layout11);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout11);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec11.into_iter().enumerate() {
+              let base = result11 as i32 + (i as i32) * 8;
+              {
+                let vec10 = e;
+                let ptr10 = vec10.as_ptr() as i32;
+                let len10 = vec10.len() as i32;
+                *((base + 4) as *mut i32) = len10;
+                *((base + 0) as *mut i32) = ptr10;
+              }
+            }
+            *((ptr0 + 48) as *mut i32) = len11;
+            *((ptr0 + 44) as *mut i32) = result11 as i32;
+            let vec13 = opening_vector1;
+            let len13 = vec13.len() as i32;
+            let layout13 = alloc::Layout::from_size_align_unchecked(vec13.len() * 8, 4);
+            let result13 = if layout13.size() != 0
+            {
+              let ptr = alloc::alloc(layout13);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout13);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec13.into_iter().enumerate() {
+              let base = result13 as i32 + (i as i32) * 8;
+              {
+                let vec12 = e;
+                let ptr12 = vec12.as_ptr() as i32;
+                let len12 = vec12.len() as i32;
+                *((base + 4) as *mut i32) = len12;
+                *((base + 0) as *mut i32) = ptr12;
+              }
+            }
+            *((ptr0 + 56) as *mut i32) = len13;
+            *((ptr0 + 52) as *mut i32) = result13 as i32;
+            let super::super::super::delano::wallet::types::IssuerPublicCompressed{ parameters:parameters14, vk:vk14, } = issuer_public1;
+            let super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{ pp_commit_g1:pp_commit_g115, pp_commit_g2:pp_commit_g215, } = parameters14;
+            let vec17 = pp_commit_g115;
+            let len17 = vec17.len() as i32;
+            let layout17 = alloc::Layout::from_size_align_unchecked(vec17.len() * 8, 4);
+            let result17 = if layout17.size() != 0
+            {
+              let ptr = alloc::alloc(layout17);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout17);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec17.into_iter().enumerate() {
+              let base = result17 as i32 + (i as i32) * 8;
+              {
+                let vec16 = e;
+                let ptr16 = vec16.as_ptr() as i32;
+                let len16 = vec16.len() as i32;
+                *((base + 4) as *mut i32) = len16;
+                *((base + 0) as *mut i32) = ptr16;
+              }
+            }
+            *((ptr0 + 64) as *mut i32) = len17;
+            *((ptr0 + 60) as *mut i32) = result17 as i32;
+            let vec19 = pp_commit_g215;
+            let len19 = vec19.len() as i32;
+            let layout19 = alloc::Layout::from_size_align_unchecked(vec19.len() * 8, 4);
+            let result19 = if layout19.size() != 0
+            {
+              let ptr = alloc::alloc(layout19);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout19);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec19.into_iter().enumerate() {
+              let base = result19 as i32 + (i as i32) * 8;
+              {
+                let vec18 = e;
+                let ptr18 = vec18.as_ptr() as i32;
+                let len18 = vec18.len() as i32;
+                *((base + 4) as *mut i32) = len18;
+                *((base + 0) as *mut i32) = ptr18;
+              }
+            }
+            *((ptr0 + 72) as *mut i32) = len19;
+            *((ptr0 + 68) as *mut i32) = result19 as i32;
+            let vec23 = vk14;
+            let len23 = vec23.len() as i32;
+            let layout23 = alloc::Layout::from_size_align_unchecked(vec23.len() * 12, 4);
+            let result23 = if layout23.size() != 0
+            {
+              let ptr = alloc::alloc(layout23);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout23);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec23.into_iter().enumerate() {
+              let base = result23 as i32 + (i as i32) * 12;
+              {
+                use super::super::super::delano::wallet::types::VkCompressed as V22;
+                match e {
+                  V22::G1(e) => {
+                    *((base + 0) as *mut u8) = (0i32) as u8;
+                    let vec20 = e;
+                    let ptr20 = vec20.as_ptr() as i32;
+                    let len20 = vec20.len() as i32;
+                    *((base + 8) as *mut i32) = len20;
+                    *((base + 4) as *mut i32) = ptr20;
+                  },
+                  V22::G2(e) => {
+                    *((base + 0) as *mut u8) = (1i32) as u8;
+                    let vec21 = e;
+                    let ptr21 = vec21.as_ptr() as i32;
+                    let len21 = vec21.len() as i32;
+                    *((base + 8) as *mut i32) = len21;
+                    *((base + 4) as *mut i32) = ptr21;
+                  },
+                }
+              }
+            }
+            *((ptr0 + 80) as *mut i32) = len23;
+            *((ptr0 + 76) as *mut i32) = result23 as i32;
+            let vec25 = entry;
+            let len25 = vec25.len() as i32;
+            let layout25 = alloc::Layout::from_size_align_unchecked(vec25.len() * 8, 4);
+            let result25 = if layout25.size() != 0
+            {
+              let ptr = alloc::alloc(layout25);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout25);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec25.into_iter().enumerate() {
+              let base = result25 as i32 + (i as i32) * 8;
+              {
+                let vec24 = e;
+                let ptr24 = vec24.as_ptr() as i32;
+                let len24 = vec24.len() as i32;
+                *((base + 4) as *mut i32) = len24;
+                *((base + 0) as *mut i32) = ptr24;
+              }
+            }
+            *((ptr0 + 88) as *mut i32) = len25;
+            *((ptr0 + 84) as *mut i32) = result25 as i32;
+            let ptr26 = ret_area.as_mut_ptr() as i32;
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
+            extern "C" {
+              #[link_name = "extend"]
+              fn wit_import(_: i32, _: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr0, ptr26);
+            let l27 = i32::from(*((ptr26 + 0) as *const u8));
+            if layout11.size() != 0 {
+              alloc::dealloc(result11, layout11);
+            }
+            if layout13.size() != 0 {
+              alloc::dealloc(result13, layout13);
+            }
+            if layout17.size() != 0 {
+              alloc::dealloc(result17, layout17);
+            }
+            if layout19.size() != 0 {
+              alloc::dealloc(result19, layout19);
+            }
+            if layout23.size() != 0 {
+              alloc::dealloc(result23, layout23);
+            }
+            if layout25.size() != 0 {
+              alloc::dealloc(result25, layout25);
+            }
+            for (ptr, layout) in cleanup_list {
+              
+              if layout.size() != 0 {
+                
+                alloc::dealloc(ptr, layout);
+                
+              }
+              
+            }
+            match l27 {
+              0 => {
+                let e = {
+                  let l28 = *((ptr26 + 4) as *const i32);
+                  let l29 = *((ptr26 + 8) as *const i32);
+                  let len30 = l29 as usize;
+                  let l31 = *((ptr26 + 12) as *const i32);
+                  let l32 = *((ptr26 + 16) as *const i32);
+                  let len33 = l32 as usize;
+                  let l34 = *((ptr26 + 20) as *const i32);
+                  let l35 = *((ptr26 + 24) as *const i32);
+                  let len36 = l35 as usize;
+                  let l37 = *((ptr26 + 28) as *const i32);
+                  let l38 = *((ptr26 + 32) as *const i32);
+                  let len39 = l38 as usize;
+                  let l40 = i32::from(*((ptr26 + 36) as *const u8));
+                  let l50 = *((ptr26 + 48) as *const i32);
+                  let l51 = *((ptr26 + 52) as *const i32);
+                  let base55 = l50;
+                  let len55 = l51;
+                  let mut result55 = Vec::with_capacity(len55 as usize);
+                  for i in 0..len55 {
+                    let base = base55 + i * 8;
+                    let e55 = {
+                      let l52 = *((base + 0) as *const i32);
+                      let l53 = *((base + 4) as *const i32);
+                      let len54 = l53 as usize;
+                      
+                      Vec::from_raw_parts(l52 as *mut _, len54, len54)
+                    };
+                    result55.push(e55);
+                  }
+                  wit_bindgen::rt::dealloc(base55, (len55 as usize) * 8, 4);
+                  let l56 = *((ptr26 + 56) as *const i32);
+                  let l57 = *((ptr26 + 60) as *const i32);
+                  let base61 = l56;
+                  let len61 = l57;
+                  let mut result61 = Vec::with_capacity(len61 as usize);
+                  for i in 0..len61 {
+                    let base = base61 + i * 8;
+                    let e61 = {
+                      let l58 = *((base + 0) as *const i32);
+                      let l59 = *((base + 4) as *const i32);
+                      let len60 = l59 as usize;
+                      
+                      Vec::from_raw_parts(l58 as *mut _, len60, len60)
+                    };
+                    result61.push(e61);
+                  }
+                  wit_bindgen::rt::dealloc(base61, (len61 as usize) * 8, 4);
+                  let l62 = *((ptr26 + 64) as *const i32);
+                  let l63 = *((ptr26 + 68) as *const i32);
+                  let base67 = l62;
+                  let len67 = l63;
+                  let mut result67 = Vec::with_capacity(len67 as usize);
+                  for i in 0..len67 {
+                    let base = base67 + i * 8;
+                    let e67 = {
+                      let l64 = *((base + 0) as *const i32);
+                      let l65 = *((base + 4) as *const i32);
+                      let len66 = l65 as usize;
+                      
+                      Vec::from_raw_parts(l64 as *mut _, len66, len66)
+                    };
+                    result67.push(e67);
+                  }
+                  wit_bindgen::rt::dealloc(base67, (len67 as usize) * 8, 4);
+                  let l68 = *((ptr26 + 72) as *const i32);
+                  let l69 = *((ptr26 + 76) as *const i32);
+                  let base73 = l68;
+                  let len73 = l69;
+                  let mut result73 = Vec::with_capacity(len73 as usize);
+                  for i in 0..len73 {
+                    let base = base73 + i * 8;
+                    let e73 = {
+                      let l70 = *((base + 0) as *const i32);
+                      let l71 = *((base + 4) as *const i32);
+                      let len72 = l71 as usize;
+                      
+                      Vec::from_raw_parts(l70 as *mut _, len72, len72)
+                    };
+                    result73.push(e73);
+                  }
+                  wit_bindgen::rt::dealloc(base73, (len73 as usize) * 8, 4);
+                  let l74 = *((ptr26 + 80) as *const i32);
+                  let l75 = *((ptr26 + 84) as *const i32);
+                  let base84 = l74;
+                  let len84 = l75;
+                  let mut result84 = Vec::with_capacity(len84 as usize);
+                  for i in 0..len84 {
+                    let base = base84 + i * 12;
+                    let e84 = {
+                      let l76 = i32::from(*((base + 0) as *const u8));
+                      use super::super::super::delano::wallet::types::VkCompressed as V83;
+                      let v83 = match l76 {
+                        0 => {
+                          let e83 = {
+                            let l77 = *((base + 4) as *const i32);
+                            let l78 = *((base + 8) as *const i32);
+                            let len79 = l78 as usize;
+                            
+                            Vec::from_raw_parts(l77 as *mut _, len79, len79)
+                          };
+                          V83::G1(e83)
+                        }
+                        n => {
+                          debug_assert_eq!(n, 1, "invalid enum discriminant");
+                          let e83 = {
+                            let l80 = *((base + 4) as *const i32);
+                            let l81 = *((base + 8) as *const i32);
+                            let len82 = l81 as usize;
+                            
+                            Vec::from_raw_parts(l80 as *mut _, len82, len82)
+                          };
+                          V83::G2(e83)
+                        }
+                      };
+                      
+                      v83
+                    };
+                    result84.push(e84);
+                  }
+                  wit_bindgen::rt::dealloc(base84, (len84 as usize) * 12, 4);
+                  
+                  super::super::super::delano::wallet::types::CredentialCompressed{
+                    sigma: super::super::super::delano::wallet::types::SignatureCompressed{
+                      z: Vec::from_raw_parts(l28 as *mut _, len30, len30),
+                      y_g1: Vec::from_raw_parts(l31 as *mut _, len33, len33),
+                      y_hat: Vec::from_raw_parts(l34 as *mut _, len36, len36),
+                      t: Vec::from_raw_parts(l37 as *mut _, len39, len39),
+                    },
+                    update_key: match l40 {
+                      0 => None,
+                      1 => {
+                        let e = {
+                          let l41 = *((ptr26 + 40) as *const i32);
+                          let l42 = *((ptr26 + 44) as *const i32);
+                          let base49 = l41;
+                          let len49 = l42;
+                          let mut result49 = Vec::with_capacity(len49 as usize);
+                          for i in 0..len49 {
+                            let base = base49 + i * 8;
+                            let e49 = {
+                              let l43 = *((base + 0) as *const i32);
+                              let l44 = *((base + 4) as *const i32);
+                              let base48 = l43;
+                              let len48 = l44;
+                              let mut result48 = Vec::with_capacity(len48 as usize);
+                              for i in 0..len48 {
+                                let base = base48 + i * 8;
+                                let e48 = {
+                                  let l45 = *((base + 0) as *const i32);
+                                  let l46 = *((base + 4) as *const i32);
+                                  let len47 = l46 as usize;
+                                  
+                                  Vec::from_raw_parts(l45 as *mut _, len47, len47)
+                                };
+                                result48.push(e48);
+                              }
+                              wit_bindgen::rt::dealloc(base48, (len48 as usize) * 8, 4);
+                              
+                              result48
+                            };
+                            result49.push(e49);
+                          }
+                          wit_bindgen::rt::dealloc(base49, (len49 as usize) * 8, 4);
+                          
+                          result49
+                        };
+                        Some(e)
+                      }
+                      _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                    },
+                    commitment_vector: result55,
+                    opening_vector: result61,
+                    issuer_public: super::super::super::delano::wallet::types::IssuerPublicCompressed{
+                      parameters: super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{
+                        pp_commit_g1: result67,
+                        pp_commit_g2: result73,
+                      },
+                      vk: result84,
+                    },
+                  }
+                };
+                Ok(e)
+              }
+              1 => {
+                let e = {
+                  let l85 = *((ptr26 + 4) as *const i32);
+                  let l86 = *((ptr26 + 8) as *const i32);
+                  let len87 = l86 as usize;
+                  let bytes87 = Vec::from_raw_parts(l85 as *mut _, len87, len87);
+                  
+                  wit_bindgen::rt::string_lift(bytes87)
+                };
+                Err(e)
+              }
+              _ => wit_bindgen::rt::invalid_enum_discriminant(),
+            }
+          }
+        }
+        #[allow(unused_unsafe, clippy::all)]
+        /// Export a function that proves selected attributes in a given credential
+        /// Returns the selected attributes in the proper order in order to verify the proof,
+        /// as each Attribute needs to be verified from their respective Entry.
+        pub fn prove(values: &Provables,) -> Result<Proven,wit_bindgen::rt::string::String>{
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            let mut cleanup_list = Vec::new();
+            
+            #[repr(align(4))]
+            struct RetArea([u8; 128]);
+            let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
+            let ptr0 = ret_area.as_mut_ptr() as i32;let super::super::super::delano::wallet::types::Provables{ credential:credential1, entries:entries1, selected:selected1, nonce:nonce1, } = values;
+            let super::super::super::delano::wallet::types::CredentialCompressed{ sigma:sigma2, update_key:update_key2, commitment_vector:commitment_vector2, opening_vector:opening_vector2, issuer_public:issuer_public2, } = credential1;
+            let super::super::super::delano::wallet::types::SignatureCompressed{ z:z3, y_g1:y_g13, y_hat:y_hat3, t:t3, } = sigma2;
+            let vec4 = z3;
+            let ptr4 = vec4.as_ptr() as i32;
+            let len4 = vec4.len() as i32;
+            *((ptr0 + 4) as *mut i32) = len4;
+            *((ptr0 + 0) as *mut i32) = ptr4;
+            let vec5 = y_g13;
+            let ptr5 = vec5.as_ptr() as i32;
+            let len5 = vec5.len() as i32;
+            *((ptr0 + 12) as *mut i32) = len5;
+            *((ptr0 + 8) as *mut i32) = ptr5;
+            let vec6 = y_hat3;
+            let ptr6 = vec6.as_ptr() as i32;
+            let len6 = vec6.len() as i32;
+            *((ptr0 + 20) as *mut i32) = len6;
+            *((ptr0 + 16) as *mut i32) = ptr6;
+            let vec7 = t3;
+            let ptr7 = vec7.as_ptr() as i32;
+            let len7 = vec7.len() as i32;
+            *((ptr0 + 28) as *mut i32) = len7;
+            *((ptr0 + 24) as *mut i32) = ptr7;
+            match update_key2 {
+              Some(e) => {
+                *((ptr0 + 32) as *mut u8) = (1i32) as u8;
+                let vec10 = e;
+                let len10 = vec10.len() as i32;
+                let layout10 = alloc::Layout::from_size_align_unchecked(vec10.len() * 8, 4);
+                let result10 = if layout10.size() != 0
+                {
+                  let ptr = alloc::alloc(layout10);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout10);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec10.into_iter().enumerate() {
+                  let base = result10 as i32 + (i as i32) * 8;
+                  {
+                    let vec9 = e;
+                    let len9 = vec9.len() as i32;
+                    let layout9 = alloc::Layout::from_size_align_unchecked(vec9.len() * 8, 4);
+                    let result9 = if layout9.size() != 0
+                    {
+                      let ptr = alloc::alloc(layout9);
+                      if ptr.is_null()
+                      {
+                        alloc::handle_alloc_error(layout9);
+                      }
+                      ptr
+                    }else {{
+                      ::core::ptr::null_mut()
+                    }};
+                    for (i, e) in vec9.into_iter().enumerate() {
+                      let base = result9 as i32 + (i as i32) * 8;
+                      {
+                        let vec8 = e;
+                        let ptr8 = vec8.as_ptr() as i32;
+                        let len8 = vec8.len() as i32;
+                        *((base + 4) as *mut i32) = len8;
+                        *((base + 0) as *mut i32) = ptr8;
+                      }
+                    }
+                    *((base + 4) as *mut i32) = len9;
+                    *((base + 0) as *mut i32) = result9 as i32;
+                    cleanup_list.extend_from_slice(&[(result9, layout9),]);
+                  }
+                }
+                *((ptr0 + 40) as *mut i32) = len10;
+                *((ptr0 + 36) as *mut i32) = result10 as i32;
+                cleanup_list.extend_from_slice(&[(result10, layout10),]);
+              },
+              None => {
+                {
+                  *((ptr0 + 32) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let vec12 = commitment_vector2;
+            let len12 = vec12.len() as i32;
+            let layout12 = alloc::Layout::from_size_align_unchecked(vec12.len() * 8, 4);
+            let result12 = if layout12.size() != 0
+            {
+              let ptr = alloc::alloc(layout12);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout12);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec12.into_iter().enumerate() {
+              let base = result12 as i32 + (i as i32) * 8;
+              {
+                let vec11 = e;
+                let ptr11 = vec11.as_ptr() as i32;
+                let len11 = vec11.len() as i32;
+                *((base + 4) as *mut i32) = len11;
+                *((base + 0) as *mut i32) = ptr11;
+              }
+            }
+            *((ptr0 + 48) as *mut i32) = len12;
+            *((ptr0 + 44) as *mut i32) = result12 as i32;
+            let vec14 = opening_vector2;
+            let len14 = vec14.len() as i32;
+            let layout14 = alloc::Layout::from_size_align_unchecked(vec14.len() * 8, 4);
+            let result14 = if layout14.size() != 0
+            {
+              let ptr = alloc::alloc(layout14);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout14);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec14.into_iter().enumerate() {
+              let base = result14 as i32 + (i as i32) * 8;
+              {
+                let vec13 = e;
+                let ptr13 = vec13.as_ptr() as i32;
+                let len13 = vec13.len() as i32;
+                *((base + 4) as *mut i32) = len13;
+                *((base + 0) as *mut i32) = ptr13;
+              }
+            }
+            *((ptr0 + 56) as *mut i32) = len14;
+            *((ptr0 + 52) as *mut i32) = result14 as i32;
+            let super::super::super::delano::wallet::types::IssuerPublicCompressed{ parameters:parameters15, vk:vk15, } = issuer_public2;
+            let super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{ pp_commit_g1:pp_commit_g116, pp_commit_g2:pp_commit_g216, } = parameters15;
+            let vec18 = pp_commit_g116;
+            let len18 = vec18.len() as i32;
+            let layout18 = alloc::Layout::from_size_align_unchecked(vec18.len() * 8, 4);
+            let result18 = if layout18.size() != 0
+            {
+              let ptr = alloc::alloc(layout18);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout18);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec18.into_iter().enumerate() {
+              let base = result18 as i32 + (i as i32) * 8;
+              {
+                let vec17 = e;
+                let ptr17 = vec17.as_ptr() as i32;
+                let len17 = vec17.len() as i32;
+                *((base + 4) as *mut i32) = len17;
+                *((base + 0) as *mut i32) = ptr17;
+              }
+            }
+            *((ptr0 + 64) as *mut i32) = len18;
+            *((ptr0 + 60) as *mut i32) = result18 as i32;
+            let vec20 = pp_commit_g216;
+            let len20 = vec20.len() as i32;
+            let layout20 = alloc::Layout::from_size_align_unchecked(vec20.len() * 8, 4);
+            let result20 = if layout20.size() != 0
+            {
+              let ptr = alloc::alloc(layout20);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout20);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec20.into_iter().enumerate() {
+              let base = result20 as i32 + (i as i32) * 8;
+              {
+                let vec19 = e;
+                let ptr19 = vec19.as_ptr() as i32;
+                let len19 = vec19.len() as i32;
+                *((base + 4) as *mut i32) = len19;
+                *((base + 0) as *mut i32) = ptr19;
+              }
+            }
+            *((ptr0 + 72) as *mut i32) = len20;
+            *((ptr0 + 68) as *mut i32) = result20 as i32;
+            let vec24 = vk15;
+            let len24 = vec24.len() as i32;
+            let layout24 = alloc::Layout::from_size_align_unchecked(vec24.len() * 12, 4);
+            let result24 = if layout24.size() != 0
+            {
+              let ptr = alloc::alloc(layout24);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout24);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec24.into_iter().enumerate() {
+              let base = result24 as i32 + (i as i32) * 12;
+              {
+                use super::super::super::delano::wallet::types::VkCompressed as V23;
+                match e {
+                  V23::G1(e) => {
+                    *((base + 0) as *mut u8) = (0i32) as u8;
+                    let vec21 = e;
+                    let ptr21 = vec21.as_ptr() as i32;
+                    let len21 = vec21.len() as i32;
+                    *((base + 8) as *mut i32) = len21;
+                    *((base + 4) as *mut i32) = ptr21;
+                  },
+                  V23::G2(e) => {
+                    *((base + 0) as *mut u8) = (1i32) as u8;
+                    let vec22 = e;
+                    let ptr22 = vec22.as_ptr() as i32;
+                    let len22 = vec22.len() as i32;
+                    *((base + 8) as *mut i32) = len22;
+                    *((base + 4) as *mut i32) = ptr22;
+                  },
+                }
+              }
+            }
+            *((ptr0 + 80) as *mut i32) = len24;
+            *((ptr0 + 76) as *mut i32) = result24 as i32;
+            let vec27 = entries1;
+            let len27 = vec27.len() as i32;
+            let layout27 = alloc::Layout::from_size_align_unchecked(vec27.len() * 8, 4);
+            let result27 = if layout27.size() != 0
+            {
+              let ptr = alloc::alloc(layout27);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout27);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec27.into_iter().enumerate() {
+              let base = result27 as i32 + (i as i32) * 8;
+              {
+                let vec26 = e;
+                let len26 = vec26.len() as i32;
+                let layout26 = alloc::Layout::from_size_align_unchecked(vec26.len() * 8, 4);
+                let result26 = if layout26.size() != 0
+                {
+                  let ptr = alloc::alloc(layout26);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout26);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec26.into_iter().enumerate() {
+                  let base = result26 as i32 + (i as i32) * 8;
+                  {
+                    let vec25 = e;
+                    let ptr25 = vec25.as_ptr() as i32;
+                    let len25 = vec25.len() as i32;
+                    *((base + 4) as *mut i32) = len25;
+                    *((base + 0) as *mut i32) = ptr25;
+                  }
+                }
+                *((base + 4) as *mut i32) = len26;
+                *((base + 0) as *mut i32) = result26 as i32;
+                cleanup_list.extend_from_slice(&[(result26, layout26),]);
+              }
+            }
+            *((ptr0 + 88) as *mut i32) = len27;
+            *((ptr0 + 84) as *mut i32) = result27 as i32;
+            let vec29 = selected1;
+            let len29 = vec29.len() as i32;
+            let layout29 = alloc::Layout::from_size_align_unchecked(vec29.len() * 8, 4);
+            let result29 = if layout29.size() != 0
+            {
+              let ptr = alloc::alloc(layout29);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout29);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec29.into_iter().enumerate() {
+              let base = result29 as i32 + (i as i32) * 8;
+              {
+                let vec28 = e;
+                let ptr28 = vec28.as_ptr() as i32;
+                let len28 = vec28.len() as i32;
+                *((base + 4) as *mut i32) = len28;
+                *((base + 0) as *mut i32) = ptr28;
+              }
+            }
+            *((ptr0 + 96) as *mut i32) = len29;
+            *((ptr0 + 92) as *mut i32) = result29 as i32;
+            let vec30 = nonce1;
+            let ptr30 = vec30.as_ptr() as i32;
+            let len30 = vec30.len() as i32;
+            *((ptr0 + 104) as *mut i32) = len30;
+            *((ptr0 + 100) as *mut i32) = ptr30;
+            let ptr31 = ret_area.as_mut_ptr() as i32;
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
+            extern "C" {
+              #[link_name = "prove"]
+              fn wit_import(_: i32, _: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr0, ptr31);
+            let l32 = i32::from(*((ptr31 + 0) as *const u8));
+            if layout12.size() != 0 {
+              alloc::dealloc(result12, layout12);
+            }
+            if layout14.size() != 0 {
+              alloc::dealloc(result14, layout14);
+            }
+            if layout18.size() != 0 {
+              alloc::dealloc(result18, layout18);
+            }
+            if layout20.size() != 0 {
+              alloc::dealloc(result20, layout20);
+            }
+            if layout24.size() != 0 {
+              alloc::dealloc(result24, layout24);
+            }
+            if layout27.size() != 0 {
+              alloc::dealloc(result27, layout27);
+            }
+            if layout29.size() != 0 {
+              alloc::dealloc(result29, layout29);
+            }
+            for (ptr, layout) in cleanup_list {
+              
+              if layout.size() != 0 {
+                
+                alloc::dealloc(ptr, layout);
+                
+              }
+              
+            }
+            match l32 {
+              0 => {
+                let e = {
+                  let l33 = *((ptr31 + 4) as *const i32);
+                  let l34 = *((ptr31 + 8) as *const i32);
+                  let len35 = l34 as usize;
+                  let l36 = *((ptr31 + 12) as *const i32);
+                  let l37 = *((ptr31 + 16) as *const i32);
+                  let len38 = l37 as usize;
+                  let l39 = *((ptr31 + 20) as *const i32);
+                  let l40 = *((ptr31 + 24) as *const i32);
+                  let len41 = l40 as usize;
+                  let l42 = *((ptr31 + 28) as *const i32);
+                  let l43 = *((ptr31 + 32) as *const i32);
+                  let len44 = l43 as usize;
+                  let l45 = *((ptr31 + 36) as *const i32);
+                  let l46 = *((ptr31 + 40) as *const i32);
+                  let base50 = l45;
+                  let len50 = l46;
+                  let mut result50 = Vec::with_capacity(len50 as usize);
+                  for i in 0..len50 {
+                    let base = base50 + i * 8;
+                    let e50 = {
+                      let l47 = *((base + 0) as *const i32);
+                      let l48 = *((base + 4) as *const i32);
+                      let len49 = l48 as usize;
+                      
+                      Vec::from_raw_parts(l47 as *mut _, len49, len49)
+                    };
+                    result50.push(e50);
+                  }
+                  wit_bindgen::rt::dealloc(base50, (len50 as usize) * 8, 4);
+                  let l51 = *((ptr31 + 44) as *const i32);
+                  let l52 = *((ptr31 + 48) as *const i32);
+                  let len53 = l52 as usize;
+                  let l54 = *((ptr31 + 52) as *const i32);
+                  let l55 = *((ptr31 + 56) as *const i32);
+                  let len56 = l55 as usize;
+                  let l57 = *((ptr31 + 60) as *const i32);
+                  let l58 = *((ptr31 + 64) as *const i32);
+                  let len59 = l58 as usize;
+                  let l60 = *((ptr31 + 68) as *const i32);
+                  let l61 = *((ptr31 + 72) as *const i32);
+                  let len62 = l61 as usize;
+                  let l63 = i32::from(*((ptr31 + 76) as *const u8));
+                  let l67 = *((ptr31 + 88) as *const i32);
+                  let l68 = *((ptr31 + 92) as *const i32);
+                  let len69 = l68 as usize;
+                  let l70 = *((ptr31 + 96) as *const i32);
+                  let l71 = *((ptr31 + 100) as *const i32);
+                  let len72 = l71 as usize;
+                  let l73 = *((ptr31 + 104) as *const i32);
+                  let l74 = *((ptr31 + 108) as *const i32);
+                  let len75 = l74 as usize;
+                  let l76 = *((ptr31 + 112) as *const i32);
+                  let l77 = *((ptr31 + 116) as *const i32);
+                  let len78 = l77 as usize;
+                  let l79 = *((ptr31 + 120) as *const i32);
+                  let l80 = *((ptr31 + 124) as *const i32);
+                  let base87 = l79;
+                  let len87 = l80;
+                  let mut result87 = Vec::with_capacity(len87 as usize);
+                  for i in 0..len87 {
+                    let base = base87 + i * 8;
+                    let e87 = {
+                      let l81 = *((base + 0) as *const i32);
+                      let l82 = *((base + 4) as *const i32);
+                      let base86 = l81;
+                      let len86 = l82;
+                      let mut result86 = Vec::with_capacity(len86 as usize);
+                      for i in 0..len86 {
+                        let base = base86 + i * 8;
+                        let e86 = {
+                          let l83 = *((base + 0) as *const i32);
+                          let l84 = *((base + 4) as *const i32);
+                          let len85 = l84 as usize;
+                          
+                          Vec::from_raw_parts(l83 as *mut _, len85, len85)
+                        };
+                        result86.push(e86);
+                      }
+                      wit_bindgen::rt::dealloc(base86, (len86 as usize) * 8, 4);
+                      
+                      result86
+                    };
+                    result87.push(e87);
+                  }
+                  wit_bindgen::rt::dealloc(base87, (len87 as usize) * 8, 4);
+                  
+                  super::super::super::delano::wallet::types::Proven{
+                    proof: super::super::super::delano::wallet::types::CredProofCompressed{
+                      sigma: super::super::super::delano::wallet::types::SignatureCompressed{
+                        z: Vec::from_raw_parts(l33 as *mut _, len35, len35),
+                        y_g1: Vec::from_raw_parts(l36 as *mut _, len38, len38),
+                        y_hat: Vec::from_raw_parts(l39 as *mut _, len41, len41),
+                        t: Vec::from_raw_parts(l42 as *mut _, len44, len44),
+                      },
+                      commitment_vector: result50,
+                      witness_pi: Vec::from_raw_parts(l51 as *mut _, len53, len53),
+                      nym_proof: super::super::super::delano::wallet::types::NymProofCompressed{
+                        challenge: Vec::from_raw_parts(l54 as *mut _, len56, len56),
+                        pedersen_open: super::super::super::delano::wallet::types::PedersenOpenCompressed{
+                          open_randomness: Vec::from_raw_parts(l57 as *mut _, len59, len59),
+                          announce_randomness: Vec::from_raw_parts(l60 as *mut _, len62, len62),
+                          announce_element: match l63 {
+                            0 => None,
+                            1 => {
+                              let e = {
+                                let l64 = *((ptr31 + 80) as *const i32);
+                                let l65 = *((ptr31 + 84) as *const i32);
+                                let len66 = l65 as usize;
+                                
+                                Vec::from_raw_parts(l64 as *mut _, len66, len66)
+                              };
+                              Some(e)
+                            }
+                            _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                          },
+                        },
+                        pedersen_commit: Vec::from_raw_parts(l67 as *mut _, len69, len69),
+                        public_key: Vec::from_raw_parts(l70 as *mut _, len72, len72),
+                        response: Vec::from_raw_parts(l73 as *mut _, len75, len75),
+                        damgard: super::super::super::delano::wallet::types::DamgardTransformCompressed{
+                          pedersen: super::super::super::delano::wallet::types::PedersenCompressed{
+                            h: Vec::from_raw_parts(l76 as *mut _, len78, len78),
+                          },
+                        },
+                      },
+                    },
+                    selected: result87,
+                  }
+                };
+                Ok(e)
+              }
+              1 => {
+                let e = {
+                  let l88 = *((ptr31 + 4) as *const i32);
+                  let l89 = *((ptr31 + 8) as *const i32);
+                  let len90 = l89 as usize;
+                  let bytes90 = Vec::from_raw_parts(l88 as *mut _, len90, len90);
+                  
+                  wit_bindgen::rt::string_lift(bytes90)
+                };
+                Err(e)
+              }
+              _ => wit_bindgen::rt::invalid_enum_discriminant(),
+            }
+          }
+        }
+        #[allow(unused_unsafe, clippy::all)]
+        /// Export a function that verifies a proof against a public key, nonce and selected attributes
+        pub fn verify(values: &Verifiables,) -> Result<bool,wit_bindgen::rt::string::String>{
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            let mut cleanup_list = Vec::new();
+            
+            #[repr(align(4))]
+            struct RetArea([u8; 160]);
+            let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
+            let ptr0 = ret_area.as_mut_ptr() as i32;let super::super::super::delano::wallet::types::Verifiables{ proof:proof1, issuer_public:issuer_public1, nonce:nonce1, selected:selected1, } = values;
+            let super::super::super::delano::wallet::types::CredProofCompressed{ sigma:sigma2, commitment_vector:commitment_vector2, witness_pi:witness_pi2, nym_proof:nym_proof2, } = proof1;
+            let super::super::super::delano::wallet::types::SignatureCompressed{ z:z3, y_g1:y_g13, y_hat:y_hat3, t:t3, } = sigma2;
+            let vec4 = z3;
+            let ptr4 = vec4.as_ptr() as i32;
+            let len4 = vec4.len() as i32;
+            *((ptr0 + 4) as *mut i32) = len4;
+            *((ptr0 + 0) as *mut i32) = ptr4;
+            let vec5 = y_g13;
+            let ptr5 = vec5.as_ptr() as i32;
+            let len5 = vec5.len() as i32;
+            *((ptr0 + 12) as *mut i32) = len5;
+            *((ptr0 + 8) as *mut i32) = ptr5;
+            let vec6 = y_hat3;
+            let ptr6 = vec6.as_ptr() as i32;
+            let len6 = vec6.len() as i32;
+            *((ptr0 + 20) as *mut i32) = len6;
+            *((ptr0 + 16) as *mut i32) = ptr6;
+            let vec7 = t3;
+            let ptr7 = vec7.as_ptr() as i32;
+            let len7 = vec7.len() as i32;
+            *((ptr0 + 28) as *mut i32) = len7;
+            *((ptr0 + 24) as *mut i32) = ptr7;
+            let vec9 = commitment_vector2;
+            let len9 = vec9.len() as i32;
+            let layout9 = alloc::Layout::from_size_align_unchecked(vec9.len() * 8, 4);
+            let result9 = if layout9.size() != 0
+            {
+              let ptr = alloc::alloc(layout9);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout9);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec9.into_iter().enumerate() {
+              let base = result9 as i32 + (i as i32) * 8;
+              {
+                let vec8 = e;
+                let ptr8 = vec8.as_ptr() as i32;
+                let len8 = vec8.len() as i32;
+                *((base + 4) as *mut i32) = len8;
+                *((base + 0) as *mut i32) = ptr8;
+              }
+            }
+            *((ptr0 + 36) as *mut i32) = len9;
+            *((ptr0 + 32) as *mut i32) = result9 as i32;
+            let vec10 = witness_pi2;
+            let ptr10 = vec10.as_ptr() as i32;
+            let len10 = vec10.len() as i32;
+            *((ptr0 + 44) as *mut i32) = len10;
+            *((ptr0 + 40) as *mut i32) = ptr10;
+            let super::super::super::delano::wallet::types::NymProofCompressed{ challenge:challenge11, pedersen_open:pedersen_open11, pedersen_commit:pedersen_commit11, public_key:public_key11, response:response11, damgard:damgard11, } = nym_proof2;
+            let vec12 = challenge11;
+            let ptr12 = vec12.as_ptr() as i32;
+            let len12 = vec12.len() as i32;
+            *((ptr0 + 52) as *mut i32) = len12;
+            *((ptr0 + 48) as *mut i32) = ptr12;
+            let super::super::super::delano::wallet::types::PedersenOpenCompressed{ open_randomness:open_randomness13, announce_randomness:announce_randomness13, announce_element:announce_element13, } = pedersen_open11;
+            let vec14 = open_randomness13;
+            let ptr14 = vec14.as_ptr() as i32;
+            let len14 = vec14.len() as i32;
+            *((ptr0 + 60) as *mut i32) = len14;
+            *((ptr0 + 56) as *mut i32) = ptr14;
+            let vec15 = announce_randomness13;
+            let ptr15 = vec15.as_ptr() as i32;
+            let len15 = vec15.len() as i32;
+            *((ptr0 + 68) as *mut i32) = len15;
+            *((ptr0 + 64) as *mut i32) = ptr15;
+            match announce_element13 {
+              Some(e) => {
+                *((ptr0 + 72) as *mut u8) = (1i32) as u8;
+                let vec16 = e;
+                let ptr16 = vec16.as_ptr() as i32;
+                let len16 = vec16.len() as i32;
+                *((ptr0 + 80) as *mut i32) = len16;
+                *((ptr0 + 76) as *mut i32) = ptr16;
+              },
+              None => {
+                {
+                  *((ptr0 + 72) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let vec17 = pedersen_commit11;
+            let ptr17 = vec17.as_ptr() as i32;
+            let len17 = vec17.len() as i32;
+            *((ptr0 + 88) as *mut i32) = len17;
+            *((ptr0 + 84) as *mut i32) = ptr17;
+            let vec18 = public_key11;
+            let ptr18 = vec18.as_ptr() as i32;
+            let len18 = vec18.len() as i32;
+            *((ptr0 + 96) as *mut i32) = len18;
+            *((ptr0 + 92) as *mut i32) = ptr18;
+            let vec19 = response11;
+            let ptr19 = vec19.as_ptr() as i32;
+            let len19 = vec19.len() as i32;
+            *((ptr0 + 104) as *mut i32) = len19;
+            *((ptr0 + 100) as *mut i32) = ptr19;
+            let super::super::super::delano::wallet::types::DamgardTransformCompressed{ pedersen:pedersen20, } = damgard11;
+            let super::super::super::delano::wallet::types::PedersenCompressed{ h:h21, } = pedersen20;
+            let vec22 = h21;
+            let ptr22 = vec22.as_ptr() as i32;
+            let len22 = vec22.len() as i32;
+            *((ptr0 + 112) as *mut i32) = len22;
+            *((ptr0 + 108) as *mut i32) = ptr22;
+            let super::super::super::delano::wallet::types::IssuerPublicCompressed{ parameters:parameters23, vk:vk23, } = issuer_public1;
+            let super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{ pp_commit_g1:pp_commit_g124, pp_commit_g2:pp_commit_g224, } = parameters23;
+            let vec26 = pp_commit_g124;
+            let len26 = vec26.len() as i32;
+            let layout26 = alloc::Layout::from_size_align_unchecked(vec26.len() * 8, 4);
+            let result26 = if layout26.size() != 0
+            {
+              let ptr = alloc::alloc(layout26);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout26);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec26.into_iter().enumerate() {
+              let base = result26 as i32 + (i as i32) * 8;
+              {
+                let vec25 = e;
+                let ptr25 = vec25.as_ptr() as i32;
+                let len25 = vec25.len() as i32;
+                *((base + 4) as *mut i32) = len25;
+                *((base + 0) as *mut i32) = ptr25;
+              }
+            }
+            *((ptr0 + 120) as *mut i32) = len26;
+            *((ptr0 + 116) as *mut i32) = result26 as i32;
+            let vec28 = pp_commit_g224;
+            let len28 = vec28.len() as i32;
+            let layout28 = alloc::Layout::from_size_align_unchecked(vec28.len() * 8, 4);
+            let result28 = if layout28.size() != 0
+            {
+              let ptr = alloc::alloc(layout28);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout28);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec28.into_iter().enumerate() {
+              let base = result28 as i32 + (i as i32) * 8;
+              {
+                let vec27 = e;
+                let ptr27 = vec27.as_ptr() as i32;
+                let len27 = vec27.len() as i32;
+                *((base + 4) as *mut i32) = len27;
+                *((base + 0) as *mut i32) = ptr27;
+              }
+            }
+            *((ptr0 + 128) as *mut i32) = len28;
+            *((ptr0 + 124) as *mut i32) = result28 as i32;
+            let vec32 = vk23;
+            let len32 = vec32.len() as i32;
+            let layout32 = alloc::Layout::from_size_align_unchecked(vec32.len() * 12, 4);
+            let result32 = if layout32.size() != 0
+            {
+              let ptr = alloc::alloc(layout32);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout32);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec32.into_iter().enumerate() {
+              let base = result32 as i32 + (i as i32) * 12;
+              {
+                use super::super::super::delano::wallet::types::VkCompressed as V31;
+                match e {
+                  V31::G1(e) => {
+                    *((base + 0) as *mut u8) = (0i32) as u8;
+                    let vec29 = e;
+                    let ptr29 = vec29.as_ptr() as i32;
+                    let len29 = vec29.len() as i32;
+                    *((base + 8) as *mut i32) = len29;
+                    *((base + 4) as *mut i32) = ptr29;
+                  },
+                  V31::G2(e) => {
+                    *((base + 0) as *mut u8) = (1i32) as u8;
+                    let vec30 = e;
+                    let ptr30 = vec30.as_ptr() as i32;
+                    let len30 = vec30.len() as i32;
+                    *((base + 8) as *mut i32) = len30;
+                    *((base + 4) as *mut i32) = ptr30;
+                  },
+                }
+              }
+            }
+            *((ptr0 + 136) as *mut i32) = len32;
+            *((ptr0 + 132) as *mut i32) = result32 as i32;
+            match nonce1 {
+              Some(e) => {
+                *((ptr0 + 140) as *mut u8) = (1i32) as u8;
+                let vec33 = e;
+                let ptr33 = vec33.as_ptr() as i32;
+                let len33 = vec33.len() as i32;
+                *((ptr0 + 148) as *mut i32) = len33;
+                *((ptr0 + 144) as *mut i32) = ptr33;
+              },
+              None => {
+                {
+                  *((ptr0 + 140) as *mut u8) = (0i32) as u8;
+                }
+              },
+            };let vec36 = selected1;
+            let len36 = vec36.len() as i32;
+            let layout36 = alloc::Layout::from_size_align_unchecked(vec36.len() * 8, 4);
+            let result36 = if layout36.size() != 0
+            {
+              let ptr = alloc::alloc(layout36);
+              if ptr.is_null()
+              {
+                alloc::handle_alloc_error(layout36);
+              }
+              ptr
+            }else {{
+              ::core::ptr::null_mut()
+            }};
+            for (i, e) in vec36.into_iter().enumerate() {
+              let base = result36 as i32 + (i as i32) * 8;
+              {
+                let vec35 = e;
+                let len35 = vec35.len() as i32;
+                let layout35 = alloc::Layout::from_size_align_unchecked(vec35.len() * 8, 4);
+                let result35 = if layout35.size() != 0
+                {
+                  let ptr = alloc::alloc(layout35);
+                  if ptr.is_null()
+                  {
+                    alloc::handle_alloc_error(layout35);
+                  }
+                  ptr
+                }else {{
+                  ::core::ptr::null_mut()
+                }};
+                for (i, e) in vec35.into_iter().enumerate() {
+                  let base = result35 as i32 + (i as i32) * 8;
+                  {
+                    let vec34 = e;
+                    let ptr34 = vec34.as_ptr() as i32;
+                    let len34 = vec34.len() as i32;
+                    *((base + 4) as *mut i32) = len34;
+                    *((base + 0) as *mut i32) = ptr34;
+                  }
+                }
+                *((base + 4) as *mut i32) = len35;
+                *((base + 0) as *mut i32) = result35 as i32;
+                cleanup_list.extend_from_slice(&[(result35, layout35),]);
+              }
+            }
+            *((ptr0 + 156) as *mut i32) = len36;
+            *((ptr0 + 152) as *mut i32) = result36 as i32;
+            let ptr37 = ret_area.as_mut_ptr() as i32;
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
+            extern "C" {
+              #[link_name = "verify"]
+              fn wit_import(_: i32, _: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr0, ptr37);
+            let l38 = i32::from(*((ptr37 + 0) as *const u8));
+            if layout9.size() != 0 {
+              alloc::dealloc(result9, layout9);
+            }
+            if layout26.size() != 0 {
+              alloc::dealloc(result26, layout26);
+            }
+            if layout28.size() != 0 {
+              alloc::dealloc(result28, layout28);
+            }
+            if layout32.size() != 0 {
+              alloc::dealloc(result32, layout32);
+            }
+            if layout36.size() != 0 {
+              alloc::dealloc(result36, layout36);
+            }
+            for (ptr, layout) in cleanup_list {
+              
+              if layout.size() != 0 {
+                
+                alloc::dealloc(ptr, layout);
+                
+              }
+              
+            }
+            match l38 {
+              0 => {
+                let e = {
+                  let l39 = i32::from(*((ptr37 + 4) as *const u8));
+                  
+                  wit_bindgen::rt::bool_lift(l39 as u8)
+                };
+                Ok(e)
+              }
+              1 => {
+                let e = {
+                  let l40 = *((ptr37 + 4) as *const i32);
+                  let l41 = *((ptr37 + 8) as *const i32);
+                  let len42 = l41 as usize;
+                  let bytes42 = Vec::from_raw_parts(l40 as *mut _, len42, len42);
+                  
+                  wit_bindgen::rt::string_lift(bytes42)
+                };
+                Err(e)
+              }
+              _ => wit_bindgen::rt::invalid_enum_discriminant(),
+            }
+          }
+        }
+        #[allow(unused_unsafe, clippy::all)]
+        /// Returns the Issuer's public key if it exists, otherwise returns an error.
+        pub fn issuer_public() -> Result<IssuerPublicCompressed,wit_bindgen::rt::string::String>{
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            
+            #[repr(align(4))]
+            struct RetArea([u8; 28]);
+            let mut ret_area = ::core::mem::MaybeUninit::<RetArea>::uninit();
+            let ptr0 = ret_area.as_mut_ptr() as i32;
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wallet/actions@0.1.0")]
+            extern "C" {
+              #[link_name = "issuer-public"]
+              fn wit_import(_: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, ){ unreachable!() }
+            wit_import(ptr0);
+            let l1 = i32::from(*((ptr0 + 0) as *const u8));
+            match l1 {
+              0 => {
+                let e = {
+                  let l2 = *((ptr0 + 4) as *const i32);
+                  let l3 = *((ptr0 + 8) as *const i32);
+                  let base7 = l2;
+                  let len7 = l3;
+                  let mut result7 = Vec::with_capacity(len7 as usize);
+                  for i in 0..len7 {
+                    let base = base7 + i * 8;
+                    let e7 = {
+                      let l4 = *((base + 0) as *const i32);
+                      let l5 = *((base + 4) as *const i32);
+                      let len6 = l5 as usize;
+                      
+                      Vec::from_raw_parts(l4 as *mut _, len6, len6)
+                    };
+                    result7.push(e7);
+                  }
+                  wit_bindgen::rt::dealloc(base7, (len7 as usize) * 8, 4);
+                  let l8 = *((ptr0 + 12) as *const i32);
+                  let l9 = *((ptr0 + 16) as *const i32);
+                  let base13 = l8;
+                  let len13 = l9;
+                  let mut result13 = Vec::with_capacity(len13 as usize);
+                  for i in 0..len13 {
+                    let base = base13 + i * 8;
+                    let e13 = {
+                      let l10 = *((base + 0) as *const i32);
+                      let l11 = *((base + 4) as *const i32);
+                      let len12 = l11 as usize;
+                      
+                      Vec::from_raw_parts(l10 as *mut _, len12, len12)
+                    };
+                    result13.push(e13);
+                  }
+                  wit_bindgen::rt::dealloc(base13, (len13 as usize) * 8, 4);
+                  let l14 = *((ptr0 + 20) as *const i32);
+                  let l15 = *((ptr0 + 24) as *const i32);
+                  let base24 = l14;
+                  let len24 = l15;
+                  let mut result24 = Vec::with_capacity(len24 as usize);
+                  for i in 0..len24 {
+                    let base = base24 + i * 12;
+                    let e24 = {
+                      let l16 = i32::from(*((base + 0) as *const u8));
+                      use super::super::super::delano::wallet::types::VkCompressed as V23;
+                      let v23 = match l16 {
+                        0 => {
+                          let e23 = {
+                            let l17 = *((base + 4) as *const i32);
+                            let l18 = *((base + 8) as *const i32);
+                            let len19 = l18 as usize;
+                            
+                            Vec::from_raw_parts(l17 as *mut _, len19, len19)
+                          };
+                          V23::G1(e23)
+                        }
+                        n => {
+                          debug_assert_eq!(n, 1, "invalid enum discriminant");
+                          let e23 = {
+                            let l20 = *((base + 4) as *const i32);
+                            let l21 = *((base + 8) as *const i32);
+                            let len22 = l21 as usize;
+                            
+                            Vec::from_raw_parts(l20 as *mut _, len22, len22)
+                          };
+                          V23::G2(e23)
+                        }
+                      };
+                      
+                      v23
+                    };
+                    result24.push(e24);
+                  }
+                  wit_bindgen::rt::dealloc(base24, (len24 as usize) * 12, 4);
+                  
+                  super::super::super::delano::wallet::types::IssuerPublicCompressed{
+                    parameters: super::super::super::delano::wallet::types::ParamSetCommitmentCompressed{
+                      pp_commit_g1: result7,
+                      pp_commit_g2: result13,
+                    },
+                    vk: result24,
+                  }
+                };
+                Ok(e)
+              }
+              1 => {
+                let e = {
+                  let l25 = *((ptr0 + 4) as *const i32);
+                  let l26 = *((ptr0 + 8) as *const i32);
+                  let len27 = l26 as usize;
+                  let bytes27 = Vec::from_raw_parts(l25 as *mut _, len27, len27);
+                  
+                  wit_bindgen::rt::string_lift(bytes27)
+                };
+                Err(e)
+              }
+              _ => wit_bindgen::rt::invalid_enum_discriminant(),
+            }
+          }
+        }
         
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          let super::super::super::delano::wit_ui::wurbo_types::ListenDetails{ selector:selector0, ty:ty0, } = details;
-          let vec1 = selector0;
-          let ptr1 = vec1.as_ptr() as i32;
-          let len1 = vec1.len() as i32;
-          let vec2 = ty0;
-          let ptr2 = vec2.as_ptr() as i32;
-          let len2 = vec2.len() as i32;
-          
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wit-ui/wurbo-in@0.1.0")]
-          extern "C" {
-            #[link_name = "addeventlistener"]
-            fn wit_import(_: i32, _: i32, _: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, _: i32, _: i32, ){ unreachable!() }
-          wit_import(ptr1, len1, ptr2, len2);
-        }
-      }
-      #[allow(unused_unsafe, clippy::all)]
-      /// Emit events from this component. Messages should be serialized JSON strings of Event type.
-      pub fn emit(message: &str,){
-        
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-        unsafe {
-          let vec0 = message;
-          let ptr0 = vec0.as_ptr() as i32;
-          let len0 = vec0.len() as i32;
-          
-          #[cfg(target_arch = "wasm32")]
-          #[link(wasm_import_module = "delano:wit-ui/wurbo-in@0.1.0")]
-          extern "C" {
-            #[link_name = "emit"]
-            fn wit_import(_: i32, _: i32, );
-          }
-          
-          #[cfg(not(target_arch = "wasm32"))]
-          fn wit_import(_: i32, _: i32, ){ unreachable!() }
-          wit_import(ptr0, len0);
-        }
       }
       
     }
-    
-    
-    #[allow(clippy::all)]
-    pub mod context_types {
-      #[used]
-      #[doc(hidden)]
-      #[cfg(target_arch = "wasm32")]
-      static __FORCE_SECTION_REF: fn() = super::super::super::__link_section;
-      /// The type of the app
-      #[derive(Clone)]
-      pub struct Page {
-        pub name: wit_bindgen::rt::string::String,
-        pub version: wit_bindgen::rt::string::String,
-        pub description: wit_bindgen::rt::string::String,
-      }
-      impl ::core::fmt::Debug for Page {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("Page").field("name", &self.name).field("version", &self.version).field("description", &self.description).finish()
-        }
-      }
-      #[derive(Clone)]
-      pub struct Everything {
-        pub page: Option<Page>,
-        /// issue: option<issuer>,
-        /// The base64URLsafe unpadded encoded JSON string of the loadable data (offer or proof)
-        pub load: Option<wit_bindgen::rt::string::String>,
-      }
-      impl ::core::fmt::Debug for Everything {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("Everything").field("page", &self.page).field("load", &self.load).finish()
-        }
-      }
-      #[derive(Clone, Copy)]
-      pub enum Kovindex{
-        Key(u32),
-        Op(u32),
-        Value(u32),
-        Selected(u32),
-      }
-      impl ::core::fmt::Debug for Kovindex {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          match self {
-            Kovindex::Key(e) => {
-              f.debug_tuple("Kovindex::Key").field(e).finish()
-            }
-            Kovindex::Op(e) => {
-              f.debug_tuple("Kovindex::Op").field(e).finish()
-            }
-            Kovindex::Value(e) => {
-              f.debug_tuple("Kovindex::Value").field(e).finish()
-            }
-            Kovindex::Selected(e) => {
-              f.debug_tuple("Kovindex::Selected").field(e).finish()
-            }
-          }
-        }
-      }
-      #[repr(C)]
-      #[derive(Clone, Copy)]
-      pub struct Entry {
-        pub idx: u32,
-        pub val: Kovindex,
-      }
-      impl ::core::fmt::Debug for Entry {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("Entry").field("idx", &self.idx).field("val", &self.val).finish()
-        }
-      }
-      #[derive(Clone)]
-      pub struct Kvctx {
-        pub ctx: Entry,
-        pub value: wit_bindgen::rt::string::String,
-      }
-      impl ::core::fmt::Debug for Kvctx {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          f.debug_struct("Kvctx").field("ctx", &self.ctx).field("value", &self.value).finish()
-        }
-      }
-      /// The type of context provided
-      #[derive(Clone)]
-      pub enum Context{
-        AllContent(Everything),
-        /// issuing(issuer),
-        /// Adds a new attribute to an existing Entry of the Credential
-        Addattribute,
-        /// Adds a New Entry to the Credential
-        Newentry,
-        Editattribute(Kvctx),
-        Editmaxentries(u8),
-        /// Attempt to generate an offer
-        Generateoffer,
-        /// Attempt to generate a proof
-        Generateproof,
-        /// emit a publish event with the proof data
-        Publishproof,
-      }
-      impl ::core::fmt::Debug for Context {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-          match self {
-            Context::AllContent(e) => {
-              f.debug_tuple("Context::AllContent").field(e).finish()
-            }
-            Context::Addattribute => {
-              f.debug_tuple("Context::Addattribute").finish()
-            }
-            Context::Newentry => {
-              f.debug_tuple("Context::Newentry").finish()
-            }
-            Context::Editattribute(e) => {
-              f.debug_tuple("Context::Editattribute").field(e).finish()
-            }
-            Context::Editmaxentries(e) => {
-              f.debug_tuple("Context::Editmaxentries").field(e).finish()
-            }
-            Context::Generateoffer => {
-              f.debug_tuple("Context::Generateoffer").finish()
-            }
-            Context::Generateproof => {
-              f.debug_tuple("Context::Generateproof").finish()
-            }
-            Context::Publishproof => {
-              f.debug_tuple("Context::Publishproof").finish()
-            }
-          }
-        }
-      }
-      
-    }
-    
-  }
-}
-pub mod exports {
-  pub mod delano {
     pub mod wit_ui {
       
       #[allow(clippy::all)]
-      pub mod wurbo_out {
+      pub mod wurbo_types {
         #[used]
         #[doc(hidden)]
         #[cfg(target_arch = "wasm32")]
-        static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_section;
-        pub type Context = super::super::super::super::delano::wit_ui::context_types::Context;
-        const _: () = {
-          
-          #[doc(hidden)]
-          #[export_name = "delano:wit-ui/wurbo-out@0.1.0#render"]
-          #[allow(non_snake_case)]
-          unsafe extern "C" fn __export_render(arg0: i32,arg1: i32,arg2: i32,arg3: i32,arg4: i32,arg5: i32,arg6: i32,arg7: i32,arg8: i32,arg9: i32,arg10: i32,) -> i32 {
-            #[allow(unused_imports)]
-            use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-            
-            // Before executing any other code, use this function to run all static
-            // constructors, if they have not yet been run. This is a hack required
-            // to work around wasi-libc ctors calling import functions to initialize
-            // the environment.
-            //
-            // This functionality will be removed once rust 1.69.0 is stable, at which
-            // point wasi-libc will no longer have this behavior.
-            //
-            // See
-            // https://github.com/bytecodealliance/preview2-prototyping/issues/99
-            // for more details.
-            #[cfg(target_arch="wasm32")]
-            wit_bindgen::rt::run_ctors_once();
-            
-            use super::super::super::super::delano::wit_ui::context_types::Context as V6;
-            let v6 = match arg0 {
-              0 => {
-                let e6 = super::super::super::super::delano::wit_ui::context_types::Everything{
-                  page: match arg1 {
-                    0 => None,
-                    1 => {
-                      let e = {
-                        let len0 = arg3 as usize;
-                        let bytes0 = Vec::from_raw_parts(arg2 as *mut _, len0, len0);
-                        let len1 = arg5 as usize;
-                        let bytes1 = Vec::from_raw_parts(arg4 as *mut _, len1, len1);
-                        let len2 = arg7 as usize;
-                        let bytes2 = Vec::from_raw_parts(arg6 as *mut _, len2, len2);
-                        
-                        super::super::super::super::delano::wit_ui::context_types::Page{
-                          name: wit_bindgen::rt::string_lift(bytes0),
-                          version: wit_bindgen::rt::string_lift(bytes1),
-                          description: wit_bindgen::rt::string_lift(bytes2),
-                        }
-                      };
-                      Some(e)
-                    }
-                    _ => wit_bindgen::rt::invalid_enum_discriminant(),
-                  },
-                  load: match arg8 {
-                    0 => None,
-                    1 => {
-                      let e = {
-                        let len3 = arg10 as usize;
-                        let bytes3 = Vec::from_raw_parts(arg9 as *mut _, len3, len3);
-                        
-                        wit_bindgen::rt::string_lift(bytes3)
-                      };
-                      Some(e)
-                    }
-                    _ => wit_bindgen::rt::invalid_enum_discriminant(),
-                  },
-                };
-                V6::AllContent(e6)
-              }
-              1 => {
-                V6::Addattribute
-              }
-              2 => {
-                V6::Newentry
-              }
-              3 => {
-                let e6 = {
-                  use super::super::super::super::delano::wit_ui::context_types::Kovindex as V4;
-                  let v4 = match arg2 {
-                    0 => {
-                      let e4 = arg3 as u32;
-                      V4::Key(e4)
-                    }
-                    1 => {
-                      let e4 = arg3 as u32;
-                      V4::Op(e4)
-                    }
-                    2 => {
-                      let e4 = arg3 as u32;
-                      V4::Value(e4)
-                    }
-                    n => {
-                      debug_assert_eq!(n, 3, "invalid enum discriminant");
-                      let e4 = arg3 as u32;
-                      V4::Selected(e4)
-                    }
-                  };
-                  let len5 = arg5 as usize;
-                  let bytes5 = Vec::from_raw_parts(arg4 as *mut _, len5, len5);
-                  
-                  super::super::super::super::delano::wit_ui::context_types::Kvctx{
-                    ctx: super::super::super::super::delano::wit_ui::context_types::Entry{
-                      idx: arg1 as u32,
-                      val: v4,
-                    },
-                    value: wit_bindgen::rt::string_lift(bytes5),
-                  }
-                };
-                V6::Editattribute(e6)
-              }
-              4 => {
-                let e6 = arg1 as u8;
-                V6::Editmaxentries(e6)
-              }
-              5 => {
-                V6::Generateoffer
-              }
-              6 => {
-                V6::Generateproof
-              }
-              n => {
-                debug_assert_eq!(n, 7, "invalid enum discriminant");
-                V6::Publishproof
-              }
-            };
-            let result7 = <_GuestImpl as Guest>::render(v6);
-            let ptr8 = _RET_AREA.0.as_mut_ptr() as i32;
-            match result7 {
-              Ok(e) => { {
-                *((ptr8 + 0) as *mut u8) = (0i32) as u8;
-                let vec9 = (e.into_bytes()).into_boxed_slice();
-                let ptr9 = vec9.as_ptr() as i32;
-                let len9 = vec9.len() as i32;
-                ::core::mem::forget(vec9);
-                *((ptr8 + 8) as *mut i32) = len9;
-                *((ptr8 + 4) as *mut i32) = ptr9;
-              } },
-              Err(e) => { {
-                *((ptr8 + 0) as *mut u8) = (1i32) as u8;
-                let vec10 = (e.into_bytes()).into_boxed_slice();
-                let ptr10 = vec10.as_ptr() as i32;
-                let len10 = vec10.len() as i32;
-                ::core::mem::forget(vec10);
-                *((ptr8 + 8) as *mut i32) = len10;
-                *((ptr8 + 4) as *mut i32) = ptr10;
-              } },
-            };ptr8
+        static __FORCE_SECTION_REF: fn() = super::super::super::__link_section;
+        /// Details required in order to add an event listener to an element
+        #[derive(Clone, serde::Deserialize, serde::Serialize)]
+        pub struct ListenDetails {
+          pub selector: wit_bindgen::rt::string::String,
+          pub ty: wit_bindgen::rt::string::String,
+        }
+        impl ::core::fmt::Debug for ListenDetails {
+          fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            f.debug_struct("ListenDetails").field("selector", &self.selector).field("ty", &self.ty).finish()
           }
-          
-          const _: () = {
-            #[doc(hidden)]
-            #[export_name = "cabi_post_delano:wit-ui/wurbo-out@0.1.0#render"]
-            #[allow(non_snake_case)]
-            unsafe extern "C" fn __post_return_render(arg0: i32,) {
-              let l0 = i32::from(*((arg0 + 0) as *const u8));
-              match l0 {
-                0 => {
-                  let l1 = *((arg0 + 4) as *const i32);
-                  let l2 = *((arg0 + 8) as *const i32);
-                  wit_bindgen::rt::dealloc(l1, (l2) as usize, 1);
-                },
-                _ => {
-                  let l3 = *((arg0 + 4) as *const i32);
-                  let l4 = *((arg0 + 8) as *const i32);
-                  wit_bindgen::rt::dealloc(l3, (l4) as usize, 1);
-                },
-              }
-            }
-          };
-        };
-        const _: () = {
-          
-          #[doc(hidden)]
-          #[export_name = "delano:wit-ui/wurbo-out@0.1.0#activate"]
-          #[allow(non_snake_case)]
-          unsafe extern "C" fn __export_activate(arg0: i32,arg1: i32,arg2: i32,) {
-            #[allow(unused_imports)]
-            use wit_bindgen::rt::{alloc, vec::Vec, string::String};
-            
-            // Before executing any other code, use this function to run all static
-            // constructors, if they have not yet been run. This is a hack required
-            // to work around wasi-libc ctors calling import functions to initialize
-            // the environment.
-            //
-            // This functionality will be removed once rust 1.69.0 is stable, at which
-            // point wasi-libc will no longer have this behavior.
-            //
-            // See
-            // https://github.com/bytecodealliance/preview2-prototyping/issues/99
-            // for more details.
-            #[cfg(target_arch="wasm32")]
-            wit_bindgen::rt::run_ctors_once();
-            
-            <_GuestImpl as Guest>::activate(match arg0 {
-              0 => None,
-              1 => {
-                let e = {
-                  let base3 = arg1;
-                  let len3 = arg2;
-                  let mut result3 = Vec::with_capacity(len3 as usize);
-                  for i in 0..len3 {
-                    let base = base3 + i * 8;
-                    let e3 = {
-                      let l0 = *((base + 0) as *const i32);
-                      let l1 = *((base + 4) as *const i32);
-                      let len2 = l1 as usize;
-                      let bytes2 = Vec::from_raw_parts(l0 as *mut _, len2, len2);
-                      
-                      wit_bindgen::rt::string_lift(bytes2)
-                    };
-                    result3.push(e3);
-                  }
-                  wit_bindgen::rt::dealloc(base3, (len3 as usize) * 8, 4);
-                  
-                  result3
-                };
-                Some(e)
-              }
-              _ => wit_bindgen::rt::invalid_enum_discriminant(),
-            });
-          }
-        };
-        use super::super::super::super::super::Component as _GuestImpl;
-        pub trait Guest {
-          /// renders the initial Web component with the given data
-          /// and the target template to use as top level entry point
-          fn render(ctx: Context,) -> Result<wit_bindgen::rt::string::String,wit_bindgen::rt::string::String>;
-          /// listen on all or given selectors
-          fn activate(selectors: Option<wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::string::String>>,);
         }
         
-        #[allow(unused_imports)]
-        use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+      }
+      
+      
+      #[allow(clippy::all)]
+      pub mod wurbo_in {
+        #[used]
+        #[doc(hidden)]
+        #[cfg(target_arch = "wasm32")]
+        static __FORCE_SECTION_REF: fn() = super::super::super::__link_section;
+        pub type ListenDetails = super::super::super::delano::wit_ui::wurbo_types::ListenDetails;
+        #[allow(unused_unsafe, clippy::all)]
+        /// Add an event listener to the given element
+        pub fn addeventlistener(details: &ListenDetails,){
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            let super::super::super::delano::wit_ui::wurbo_types::ListenDetails{ selector:selector0, ty:ty0, } = details;
+            let vec1 = selector0;
+            let ptr1 = vec1.as_ptr() as i32;
+            let len1 = vec1.len() as i32;
+            let vec2 = ty0;
+            let ptr2 = vec2.as_ptr() as i32;
+            let len2 = vec2.len() as i32;
+            
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wit-ui/wurbo-in@0.1.0")]
+            extern "C" {
+              #[link_name = "addeventlistener"]
+              fn wit_import(_: i32, _: i32, _: i32, _: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, _: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr1, len1, ptr2, len2);
+          }
+        }
+        #[allow(unused_unsafe, clippy::all)]
+        /// Emit events from this component. Messages should be serialized JSON strings of Event type.
+        pub fn emit(message: &str,){
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          unsafe {
+            let vec0 = message;
+            let ptr0 = vec0.as_ptr() as i32;
+            let len0 = vec0.len() as i32;
+            
+            #[cfg(target_arch = "wasm32")]
+            #[link(wasm_import_module = "delano:wit-ui/wurbo-in@0.1.0")]
+            extern "C" {
+              #[link_name = "emit"]
+              fn wit_import(_: i32, _: i32, );
+            }
+            
+            #[cfg(not(target_arch = "wasm32"))]
+            fn wit_import(_: i32, _: i32, ){ unreachable!() }
+            wit_import(ptr0, len0);
+          }
+        }
         
-        #[repr(align(4))]
-        struct _RetArea([u8; 12]);
-        static mut _RET_AREA: _RetArea = _RetArea([0; 12]);
+      }
+      
+      
+      #[allow(clippy::all)]
+      pub mod context_types {
+        #[used]
+        #[doc(hidden)]
+        #[cfg(target_arch = "wasm32")]
+        static __FORCE_SECTION_REF: fn() = super::super::super::__link_section;
+        /// The type of the app
+        #[derive(Clone, serde::Deserialize, serde::Serialize)]
+        pub struct Page {
+          pub name: wit_bindgen::rt::string::String,
+          pub version: wit_bindgen::rt::string::String,
+          pub description: wit_bindgen::rt::string::String,
+        }
+        impl ::core::fmt::Debug for Page {
+          fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            f.debug_struct("Page").field("name", &self.name).field("version", &self.version).field("description", &self.description).finish()
+          }
+        }
+        #[derive(Clone, serde::Deserialize, serde::Serialize)]
+        pub struct Everything {
+          pub page: Option<Page>,
+          /// issue: option<issuer>,
+          /// The base64URLsafe unpadded encoded JSON string of the loadable data (offer or proof)
+          pub load: Option<wit_bindgen::rt::string::String>,
+        }
+        impl ::core::fmt::Debug for Everything {
+          fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            f.debug_struct("Everything").field("page", &self.page).field("load", &self.load).finish()
+          }
+        }
+        #[derive(Clone, Copy, serde::Deserialize, serde::Serialize)]
+        pub enum Kovindex{
+          Key(u32),
+          Op(u32),
+          Value(u32),
+          Selected(u32),
+        }
+        impl ::core::fmt::Debug for Kovindex {
+          fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            match self {
+              Kovindex::Key(e) => {
+                f.debug_tuple("Kovindex::Key").field(e).finish()
+              }
+              Kovindex::Op(e) => {
+                f.debug_tuple("Kovindex::Op").field(e).finish()
+              }
+              Kovindex::Value(e) => {
+                f.debug_tuple("Kovindex::Value").field(e).finish()
+              }
+              Kovindex::Selected(e) => {
+                f.debug_tuple("Kovindex::Selected").field(e).finish()
+              }
+            }
+          }
+        }
+        #[repr(C)]
+        #[derive(Clone, Copy, serde::Deserialize, serde::Serialize)]
+        pub struct Entry {
+          pub idx: u32,
+          pub val: Kovindex,
+        }
+        impl ::core::fmt::Debug for Entry {
+          fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            f.debug_struct("Entry").field("idx", &self.idx).field("val", &self.val).finish()
+          }
+        }
+        #[derive(Clone, serde::Deserialize, serde::Serialize)]
+        pub struct Kvctx {
+          pub ctx: Entry,
+          pub value: wit_bindgen::rt::string::String,
+        }
+        impl ::core::fmt::Debug for Kvctx {
+          fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            f.debug_struct("Kvctx").field("ctx", &self.ctx).field("value", &self.value).finish()
+          }
+        }
+        /// The type of context provided
+        #[derive(Clone, serde::Deserialize, serde::Serialize)]
+        pub enum Context{
+          AllContent(Everything),
+          /// issuing(issuer),
+          /// Adds a new attribute to an existing Entry of the Credential
+          Addattribute,
+          /// Adds a New Entry to the Credential
+          Newentry,
+          Editattribute(Kvctx),
+          Editmaxentries(u8),
+          /// Attempt to generate an offer
+          Generateoffer,
+          /// Attempt to generate a proof
+          Generateproof,
+          /// emit a publish event with the proof data
+          Publishproof,
+        }
+        impl ::core::fmt::Debug for Context {
+          fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            match self {
+              Context::AllContent(e) => {
+                f.debug_tuple("Context::AllContent").field(e).finish()
+              }
+              Context::Addattribute => {
+                f.debug_tuple("Context::Addattribute").finish()
+              }
+              Context::Newentry => {
+                f.debug_tuple("Context::Newentry").finish()
+              }
+              Context::Editattribute(e) => {
+                f.debug_tuple("Context::Editattribute").field(e).finish()
+              }
+              Context::Editmaxentries(e) => {
+                f.debug_tuple("Context::Editmaxentries").field(e).finish()
+              }
+              Context::Generateoffer => {
+                f.debug_tuple("Context::Generateoffer").finish()
+              }
+              Context::Generateproof => {
+                f.debug_tuple("Context::Generateproof").finish()
+              }
+              Context::Publishproof => {
+                f.debug_tuple("Context::Publishproof").finish()
+              }
+            }
+          }
+        }
         
       }
       
     }
   }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[link_section = "component-type:delanocreds-wit-ui"]
-#[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 4458] = [3, 0, 18, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 0, 97, 115, 109, 13, 0, 1, 0, 7, 136, 3, 1, 65, 2, 1, 66, 16, 1, 114, 3, 4, 110, 97, 109, 101, 115, 7, 118, 101, 114, 115, 105, 111, 110, 115, 11, 100, 101, 115, 99, 114, 105, 112, 116, 105, 111, 110, 115, 4, 0, 4, 112, 97, 103, 101, 3, 0, 0, 1, 107, 1, 1, 107, 115, 1, 114, 2, 4, 112, 97, 103, 101, 2, 4, 108, 111, 97, 100, 3, 4, 0, 10, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 3, 0, 4, 1, 114, 2, 3, 107, 101, 121, 115, 5, 118, 97, 108, 117, 101, 115, 4, 0, 9, 105, 110, 112, 117, 116, 45, 99, 116, 120, 3, 0, 6, 1, 113, 4, 3, 107, 101, 121, 1, 121, 0, 2, 111, 112, 1, 121, 0, 5, 118, 97, 108, 117, 101, 1, 121, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 1, 121, 0, 4, 0, 8, 107, 111, 118, 105, 110, 100, 101, 120, 3, 0, 8, 1, 114, 2, 3, 105, 100, 120, 121, 3, 118, 97, 108, 9, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 10, 1, 114, 2, 3, 99, 116, 120, 11, 5, 118, 97, 108, 117, 101, 115, 4, 0, 5, 107, 118, 99, 116, 120, 3, 0, 12, 1, 113, 8, 11, 97, 108, 108, 45, 99, 111, 110, 116, 101, 110, 116, 1, 5, 0, 12, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 0, 0, 8, 110, 101, 119, 101, 110, 116, 114, 121, 0, 0, 13, 101, 100, 105, 116, 97, 116, 116, 114, 105, 98, 117, 116, 101, 1, 13, 0, 14, 101, 100, 105, 116, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 1, 125, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 0, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 0, 0, 12, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 0, 0, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 14, 4, 1, 33, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 11, 19, 1, 0, 13, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 3, 0, 0, 7, 79, 1, 65, 2, 1, 66, 2, 1, 114, 2, 8, 115, 101, 108, 101, 99, 116, 111, 114, 115, 2, 116, 121, 115, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 4, 1, 31, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 11, 17, 1, 0, 11, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 3, 2, 0, 7, 217, 1, 1, 65, 5, 1, 66, 2, 1, 114, 2, 8, 115, 101, 108, 101, 99, 116, 111, 114, 115, 2, 116, 121, 115, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 3, 1, 31, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 2, 3, 0, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 1, 66, 6, 2, 3, 2, 1, 1, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 1, 64, 1, 7, 100, 101, 116, 97, 105, 108, 115, 1, 1, 0, 4, 0, 16, 97, 100, 100, 101, 118, 101, 110, 116, 108, 105, 115, 116, 101, 110, 101, 114, 1, 2, 1, 64, 1, 7, 109, 101, 115, 115, 97, 103, 101, 115, 1, 0, 4, 0, 4, 101, 109, 105, 116, 1, 3, 4, 1, 28, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 105, 110, 64, 48, 46, 49, 46, 48, 5, 2, 11, 14, 1, 0, 8, 119, 117, 114, 98, 111, 45, 105, 110, 3, 4, 0, 7, 137, 4, 1, 65, 5, 1, 66, 16, 1, 114, 3, 4, 110, 97, 109, 101, 115, 7, 118, 101, 114, 115, 105, 111, 110, 115, 11, 100, 101, 115, 99, 114, 105, 112, 116, 105, 111, 110, 115, 4, 0, 4, 112, 97, 103, 101, 3, 0, 0, 1, 107, 1, 1, 107, 115, 1, 114, 2, 4, 112, 97, 103, 101, 2, 4, 108, 111, 97, 100, 3, 4, 0, 10, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 3, 0, 4, 1, 114, 2, 3, 107, 101, 121, 115, 5, 118, 97, 108, 117, 101, 115, 4, 0, 9, 105, 110, 112, 117, 116, 45, 99, 116, 120, 3, 0, 6, 1, 113, 4, 3, 107, 101, 121, 1, 121, 0, 2, 111, 112, 1, 121, 0, 5, 118, 97, 108, 117, 101, 1, 121, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 1, 121, 0, 4, 0, 8, 107, 111, 118, 105, 110, 100, 101, 120, 3, 0, 8, 1, 114, 2, 3, 105, 100, 120, 121, 3, 118, 97, 108, 9, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 10, 1, 114, 2, 3, 99, 116, 120, 11, 5, 118, 97, 108, 117, 101, 115, 4, 0, 5, 107, 118, 99, 116, 120, 3, 0, 12, 1, 113, 8, 11, 97, 108, 108, 45, 99, 111, 110, 116, 101, 110, 116, 1, 5, 0, 12, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 0, 0, 8, 110, 101, 119, 101, 110, 116, 114, 121, 0, 0, 13, 101, 100, 105, 116, 97, 116, 116, 114, 105, 98, 117, 116, 101, 1, 13, 0, 14, 101, 100, 105, 116, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 1, 125, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 0, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 0, 0, 12, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 0, 0, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 14, 3, 1, 33, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 2, 3, 0, 0, 7, 99, 111, 110, 116, 101, 120, 116, 1, 66, 9, 2, 3, 2, 1, 1, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 0, 1, 106, 1, 115, 1, 115, 1, 64, 1, 3, 99, 116, 120, 1, 0, 2, 4, 0, 6, 114, 101, 110, 100, 101, 114, 1, 3, 1, 112, 115, 1, 107, 4, 1, 64, 1, 9, 115, 101, 108, 101, 99, 116, 111, 114, 115, 5, 1, 0, 4, 0, 8, 97, 99, 116, 105, 118, 97, 116, 101, 1, 6, 4, 1, 29, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 111, 117, 116, 64, 48, 46, 49, 46, 48, 5, 2, 11, 15, 1, 0, 9, 119, 117, 114, 98, 111, 45, 111, 117, 116, 3, 6, 0, 7, 227, 13, 1, 65, 2, 1, 65, 22, 1, 66, 29, 1, 112, 125, 4, 0, 9, 97, 116, 116, 114, 105, 98, 117, 116, 101, 3, 0, 0, 1, 112, 1, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 2, 1, 112, 125, 4, 0, 5, 110, 111, 110, 99, 101, 3, 0, 4, 1, 112, 125, 4, 0, 5, 112, 114, 111, 111, 102, 3, 0, 6, 1, 112, 3, 4, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 3, 0, 8, 1, 112, 125, 1, 112, 3, 1, 112, 1, 1, 114, 4, 10, 99, 114, 101, 100, 101, 110, 116, 105, 97, 108, 10, 7, 101, 110, 116, 114, 105, 101, 115, 11, 8, 115, 101, 108, 101, 99, 116, 101, 100, 12, 5, 110, 111, 110, 99, 101, 10, 4, 0, 9, 112, 114, 111, 118, 97, 98, 108, 101, 115, 3, 0, 13, 1, 114, 2, 5, 112, 114, 111, 111, 102, 10, 8, 115, 101, 108, 101, 99, 116, 101, 100, 11, 4, 0, 6, 112, 114, 111, 118, 101, 110, 3, 0, 15, 1, 107, 10, 1, 114, 4, 5, 112, 114, 111, 111, 102, 10, 13, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 10, 5, 110, 111, 110, 99, 101, 17, 8, 115, 101, 108, 101, 99, 116, 101, 100, 9, 4, 0, 11, 118, 101, 114, 105, 102, 105, 97, 98, 108, 101, 115, 3, 0, 18, 1, 114, 2, 8, 110, 121, 109, 112, 114, 111, 111, 102, 10, 5, 110, 111, 110, 99, 101, 17, 4, 0, 13, 105, 115, 115, 117, 101, 45, 111, 112, 116, 105, 111, 110, 115, 3, 0, 20, 1, 114, 2, 7, 101, 110, 116, 114, 105, 101, 115, 11, 6, 114, 101, 109, 111, 118, 101, 12, 4, 0, 11, 114, 101, 100, 97, 99, 116, 97, 98, 108, 101, 115, 3, 0, 22, 1, 107, 23, 1, 107, 3, 1, 107, 125, 1, 114, 3, 6, 114, 101, 100, 97, 99, 116, 24, 16, 97, 100, 100, 105, 116, 105, 111, 110, 97, 108, 45, 101, 110, 116, 114, 121, 25, 11, 109, 97, 120, 45, 101, 110, 116, 114, 105, 101, 115, 26, 4, 0, 12, 111, 102, 102, 101, 114, 45, 99, 111, 110, 102, 105, 103, 3, 0, 27, 3, 1, 25, 100, 101, 108, 97, 110, 111, 58, 119, 97, 108, 108, 101, 116, 47, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 2, 3, 0, 0, 9, 97, 116, 116, 114, 105, 98, 117, 116, 101, 2, 3, 0, 0, 9, 112, 114, 111, 118, 97, 98, 108, 101, 115, 2, 3, 0, 0, 11, 118, 101, 114, 105, 102, 105, 97, 98, 108, 101, 115, 2, 3, 0, 0, 12, 111, 102, 102, 101, 114, 45, 99, 111, 110, 102, 105, 103, 2, 3, 0, 0, 13, 105, 115, 115, 117, 101, 45, 111, 112, 116, 105, 111, 110, 115, 2, 3, 0, 0, 5, 110, 111, 110, 99, 101, 2, 3, 0, 0, 5, 101, 110, 116, 114, 121, 2, 3, 0, 0, 6, 112, 114, 111, 118, 101, 110, 1, 66, 40, 2, 3, 2, 1, 1, 4, 0, 9, 97, 116, 116, 114, 105, 98, 117, 116, 101, 3, 0, 0, 2, 3, 2, 1, 2, 4, 0, 9, 112, 114, 111, 118, 97, 98, 108, 101, 115, 3, 0, 2, 2, 3, 2, 1, 3, 4, 0, 11, 118, 101, 114, 105, 102, 105, 97, 98, 108, 101, 115, 3, 0, 4, 2, 3, 2, 1, 4, 4, 0, 12, 111, 102, 102, 101, 114, 45, 99, 111, 110, 102, 105, 103, 3, 0, 6, 2, 3, 2, 1, 5, 4, 0, 13, 105, 115, 115, 117, 101, 45, 111, 112, 116, 105, 111, 110, 115, 3, 0, 8, 2, 3, 2, 1, 6, 4, 0, 5, 110, 111, 110, 99, 101, 3, 0, 10, 2, 3, 2, 1, 7, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 12, 2, 3, 2, 1, 8, 4, 0, 6, 112, 114, 111, 118, 101, 110, 3, 0, 14, 1, 112, 125, 1, 106, 1, 16, 1, 115, 1, 64, 1, 5, 110, 111, 110, 99, 101, 11, 0, 17, 4, 0, 13, 103, 101, 116, 45, 110, 121, 109, 45, 112, 114, 111, 111, 102, 1, 18, 1, 112, 1, 1, 107, 9, 1, 64, 3, 10, 97, 116, 116, 114, 105, 98, 117, 116, 101, 115, 19, 10, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 125, 7, 111, 112, 116, 105, 111, 110, 115, 20, 0, 17, 4, 0, 5, 105, 115, 115, 117, 101, 1, 21, 1, 64, 2, 4, 99, 114, 101, 100, 16, 6, 99, 111, 110, 102, 105, 103, 7, 0, 17, 4, 0, 5, 111, 102, 102, 101, 114, 1, 22, 1, 64, 1, 5, 111, 102, 102, 101, 114, 16, 0, 17, 4, 0, 6, 97, 99, 99, 101, 112, 116, 1, 23, 1, 64, 2, 4, 99, 114, 101, 100, 16, 5, 101, 110, 116, 114, 121, 13, 0, 17, 4, 0, 6, 101, 120, 116, 101, 110, 100, 1, 24, 1, 106, 1, 15, 1, 115, 1, 64, 1, 6, 118, 97, 108, 117, 101, 115, 3, 0, 25, 4, 0, 5, 112, 114, 111, 118, 101, 1, 26, 1, 106, 1, 127, 1, 115, 1, 64, 1, 6, 118, 97, 108, 117, 101, 115, 5, 0, 27, 4, 0, 6, 118, 101, 114, 105, 102, 121, 1, 28, 1, 112, 16, 1, 106, 1, 29, 1, 115, 1, 64, 0, 0, 30, 4, 0, 13, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 1, 31, 3, 1, 27, 100, 101, 108, 97, 110, 111, 58, 119, 97, 108, 108, 101, 116, 47, 97, 99, 116, 105, 111, 110, 115, 64, 48, 46, 49, 46, 48, 5, 9, 1, 66, 2, 1, 114, 2, 8, 115, 101, 108, 101, 99, 116, 111, 114, 115, 2, 116, 121, 115, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 3, 1, 31, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 10, 2, 3, 0, 2, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 1, 66, 6, 2, 3, 2, 1, 11, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 1, 64, 1, 7, 100, 101, 116, 97, 105, 108, 115, 1, 1, 0, 4, 0, 16, 97, 100, 100, 101, 118, 101, 110, 116, 108, 105, 115, 116, 101, 110, 101, 114, 1, 2, 1, 64, 1, 7, 109, 101, 115, 115, 97, 103, 101, 115, 1, 0, 4, 0, 4, 101, 109, 105, 116, 1, 3, 3, 1, 28, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 105, 110, 64, 48, 46, 49, 46, 48, 5, 12, 1, 66, 16, 1, 114, 3, 4, 110, 97, 109, 101, 115, 7, 118, 101, 114, 115, 105, 111, 110, 115, 11, 100, 101, 115, 99, 114, 105, 112, 116, 105, 111, 110, 115, 4, 0, 4, 112, 97, 103, 101, 3, 0, 0, 1, 107, 1, 1, 107, 115, 1, 114, 2, 4, 112, 97, 103, 101, 2, 4, 108, 111, 97, 100, 3, 4, 0, 10, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 3, 0, 4, 1, 114, 2, 3, 107, 101, 121, 115, 5, 118, 97, 108, 117, 101, 115, 4, 0, 9, 105, 110, 112, 117, 116, 45, 99, 116, 120, 3, 0, 6, 1, 113, 4, 3, 107, 101, 121, 1, 121, 0, 2, 111, 112, 1, 121, 0, 5, 118, 97, 108, 117, 101, 1, 121, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 1, 121, 0, 4, 0, 8, 107, 111, 118, 105, 110, 100, 101, 120, 3, 0, 8, 1, 114, 2, 3, 105, 100, 120, 121, 3, 118, 97, 108, 9, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 10, 1, 114, 2, 3, 99, 116, 120, 11, 5, 118, 97, 108, 117, 101, 115, 4, 0, 5, 107, 118, 99, 116, 120, 3, 0, 12, 1, 113, 8, 11, 97, 108, 108, 45, 99, 111, 110, 116, 101, 110, 116, 1, 5, 0, 12, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 0, 0, 8, 110, 101, 119, 101, 110, 116, 114, 121, 0, 0, 13, 101, 100, 105, 116, 97, 116, 116, 114, 105, 98, 117, 116, 101, 1, 13, 0, 14, 101, 100, 105, 116, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 1, 125, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 0, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 0, 0, 12, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 0, 0, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 14, 3, 1, 33, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 13, 2, 3, 0, 4, 7, 99, 111, 110, 116, 101, 120, 116, 1, 66, 9, 2, 3, 2, 1, 14, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 0, 1, 106, 1, 115, 1, 115, 1, 64, 1, 3, 99, 116, 120, 1, 0, 2, 4, 0, 6, 114, 101, 110, 100, 101, 114, 1, 3, 1, 112, 115, 1, 107, 4, 1, 64, 1, 9, 115, 101, 108, 101, 99, 116, 111, 114, 115, 5, 1, 0, 4, 0, 8, 97, 99, 116, 105, 118, 97, 116, 101, 1, 6, 4, 1, 29, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 111, 117, 116, 64, 48, 46, 49, 46, 48, 5, 15, 4, 1, 38, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 64, 48, 46, 49, 46, 48, 4, 0, 11, 24, 1, 0, 18, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 3, 8, 0, 0, 245, 9, 12, 112, 97, 99, 107, 97, 103, 101, 45, 100, 111, 99, 115, 0, 123, 34, 119, 111, 114, 108, 100, 115, 34, 58, 123, 34, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 65, 110, 32, 101, 120, 97, 109, 112, 108, 101, 32, 119, 111, 114, 108, 100, 32, 102, 111, 114, 32, 116, 104, 101, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 32, 116, 111, 32, 116, 97, 114, 103, 101, 116, 46, 34, 125, 125, 44, 34, 105, 110, 116, 101, 114, 102, 97, 99, 101, 115, 34, 58, 123, 34, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 34, 58, 123, 34, 116, 121, 112, 101, 115, 34, 58, 123, 34, 112, 97, 103, 101, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 84, 104, 101, 32, 116, 121, 112, 101, 32, 111, 102, 32, 116, 104, 101, 32, 97, 112, 112, 34, 125, 44, 34, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 34, 58, 123, 34, 105, 116, 101, 109, 115, 34, 58, 123, 34, 108, 111, 97, 100, 34, 58, 34, 105, 115, 115, 117, 101, 58, 32, 111, 112, 116, 105, 111, 110, 60, 105, 115, 115, 117, 101, 114, 62, 44, 92, 110, 84, 104, 101, 32, 98, 97, 115, 101, 54, 52, 85, 82, 76, 115, 97, 102, 101, 32, 117, 110, 112, 97, 100, 100, 101, 100, 32, 101, 110, 99, 111, 100, 101, 100, 32, 74, 83, 79, 78, 32, 115, 116, 114, 105, 110, 103, 32, 111, 102, 32, 116, 104, 101, 32, 108, 111, 97, 100, 97, 98, 108, 101, 32, 100, 97, 116, 97, 32, 40, 111, 102, 102, 101, 114, 32, 111, 114, 32, 112, 114, 111, 111, 102, 41, 34, 125, 125, 44, 34, 99, 111, 110, 116, 101, 120, 116, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 84, 104, 101, 32, 116, 121, 112, 101, 32, 111, 102, 32, 99, 111, 110, 116, 101, 120, 116, 32, 112, 114, 111, 118, 105, 100, 101, 100, 34, 44, 34, 105, 116, 101, 109, 115, 34, 58, 123, 34, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 34, 58, 34, 105, 115, 115, 117, 105, 110, 103, 40, 105, 115, 115, 117, 101, 114, 41, 44, 92, 110, 65, 100, 100, 115, 32, 97, 32, 110, 101, 119, 32, 97, 116, 116, 114, 105, 98, 117, 116, 101, 32, 116, 111, 32, 97, 110, 32, 101, 120, 105, 115, 116, 105, 110, 103, 32, 69, 110, 116, 114, 121, 32, 111, 102, 32, 116, 104, 101, 32, 67, 114, 101, 100, 101, 110, 116, 105, 97, 108, 34, 44, 34, 110, 101, 119, 101, 110, 116, 114, 121, 34, 58, 34, 65, 100, 100, 115, 32, 97, 32, 78, 101, 119, 32, 69, 110, 116, 114, 121, 32, 116, 111, 32, 116, 104, 101, 32, 67, 114, 101, 100, 101, 110, 116, 105, 97, 108, 34, 44, 34, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 34, 58, 34, 65, 116, 116, 101, 109, 112, 116, 32, 116, 111, 32, 103, 101, 110, 101, 114, 97, 116, 101, 32, 97, 110, 32, 111, 102, 102, 101, 114, 34, 44, 34, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 34, 58, 34, 65, 116, 116, 101, 109, 112, 116, 32, 116, 111, 32, 103, 101, 110, 101, 114, 97, 116, 101, 32, 97, 32, 112, 114, 111, 111, 102, 34, 44, 34, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 34, 58, 34, 101, 109, 105, 116, 32, 97, 32, 112, 117, 98, 108, 105, 115, 104, 32, 101, 118, 101, 110, 116, 32, 119, 105, 116, 104, 32, 116, 104, 101, 32, 112, 114, 111, 111, 102, 32, 100, 97, 116, 97, 34, 125, 125, 125, 125, 44, 34, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 34, 58, 123, 34, 116, 121, 112, 101, 115, 34, 58, 123, 34, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 68, 101, 116, 97, 105, 108, 115, 32, 114, 101, 113, 117, 105, 114, 101, 100, 32, 105, 110, 32, 111, 114, 100, 101, 114, 32, 116, 111, 32, 97, 100, 100, 32, 97, 110, 32, 101, 118, 101, 110, 116, 32, 108, 105, 115, 116, 101, 110, 101, 114, 32, 116, 111, 32, 97, 110, 32, 101, 108, 101, 109, 101, 110, 116, 34, 125, 125, 125, 44, 34, 119, 117, 114, 98, 111, 45, 105, 110, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 65, 110, 32, 105, 110, 116, 101, 114, 102, 97, 99, 101, 32, 116, 104, 97, 116, 32, 112, 114, 111, 118, 105, 100, 101, 115, 32, 97, 110, 32, 101, 118, 101, 110, 116, 32, 108, 105, 115, 116, 101, 110, 101, 114, 32, 116, 111, 32, 109, 97, 107, 101, 32, 116, 104, 101, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 32, 105, 110, 116, 101, 114, 97, 99, 116, 105, 118, 101, 46, 34, 44, 34, 102, 117, 110, 99, 115, 34, 58, 123, 34, 97, 100, 100, 101, 118, 101, 110, 116, 108, 105, 115, 116, 101, 110, 101, 114, 34, 58, 34, 65, 100, 100, 32, 97, 110, 32, 101, 118, 101, 110, 116, 32, 108, 105, 115, 116, 101, 110, 101, 114, 32, 116, 111, 32, 116, 104, 101, 32, 103, 105, 118, 101, 110, 32, 101, 108, 101, 109, 101, 110, 116, 34, 44, 34, 101, 109, 105, 116, 34, 58, 34, 69, 109, 105, 116, 32, 101, 118, 101, 110, 116, 115, 32, 102, 114, 111, 109, 32, 116, 104, 105, 115, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 46, 32, 77, 101, 115, 115, 97, 103, 101, 115, 32, 115, 104, 111, 117, 108, 100, 32, 98, 101, 32, 115, 101, 114, 105, 97, 108, 105, 122, 101, 100, 32, 74, 83, 79, 78, 32, 115, 116, 114, 105, 110, 103, 115, 32, 111, 102, 32, 69, 118, 101, 110, 116, 32, 116, 121, 112, 101, 46, 34, 125, 125, 44, 34, 119, 117, 114, 98, 111, 45, 111, 117, 116, 34, 58, 123, 34, 102, 117, 110, 99, 115, 34, 58, 123, 34, 114, 101, 110, 100, 101, 114, 34, 58, 34, 114, 101, 110, 100, 101, 114, 115, 32, 116, 104, 101, 32, 105, 110, 105, 116, 105, 97, 108, 32, 87, 101, 98, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 32, 119, 105, 116, 104, 32, 116, 104, 101, 32, 103, 105, 118, 101, 110, 32, 100, 97, 116, 97, 92, 110, 97, 110, 100, 32, 116, 104, 101, 32, 116, 97, 114, 103, 101, 116, 32, 116, 101, 109, 112, 108, 97, 116, 101, 32, 116, 111, 32, 117, 115, 101, 32, 97, 115, 32, 116, 111, 112, 32, 108, 101, 118, 101, 108, 32, 101, 110, 116, 114, 121, 32, 112, 111, 105, 110, 116, 34, 44, 34, 97, 99, 116, 105, 118, 97, 116, 101, 34, 58, 34, 108, 105, 115, 116, 101, 110, 32, 111, 110, 32, 97, 108, 108, 32, 111, 114, 32, 103, 105, 118, 101, 110, 32, 115, 101, 108, 101, 99, 116, 111, 114, 115, 34, 125, 125, 125, 125, 0, 70, 9, 112, 114, 111, 100, 117, 99, 101, 114, 115, 1, 12, 112, 114, 111, 99, 101, 115, 115, 101, 100, 45, 98, 121, 2, 13, 119, 105, 116, 45, 99, 111, 109, 112, 111, 110, 101, 110, 116, 6, 48, 46, 49, 56, 46, 50, 16, 119, 105, 116, 45, 98, 105, 110, 100, 103, 101, 110, 45, 114, 117, 115, 116, 6, 48, 46, 49, 54, 46, 48];
-
-#[inline(never)]
-#[doc(hidden)]
-#[cfg(target_arch = "wasm32")]
-pub fn __link_section() {}
+  pub mod exports {
+    pub mod delano {
+      pub mod wit_ui {
+        
+        #[allow(clippy::all)]
+        pub mod wurbo_out {
+          #[used]
+          #[doc(hidden)]
+          #[cfg(target_arch = "wasm32")]
+          static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_section;
+          pub type Context = super::super::super::super::delano::wit_ui::context_types::Context;
+          const _: () = {
+            
+            #[doc(hidden)]
+            #[export_name = "delano:wit-ui/wurbo-out@0.1.0#render"]
+            #[allow(non_snake_case)]
+            unsafe extern "C" fn __export_render(arg0: i32,arg1: i32,arg2: i32,arg3: i32,arg4: i32,arg5: i32,arg6: i32,arg7: i32,arg8: i32,arg9: i32,arg10: i32,) -> i32 {
+              #[allow(unused_imports)]
+              use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+              
+              // Before executing any other code, use this function to run all static
+              // constructors, if they have not yet been run. This is a hack required
+              // to work around wasi-libc ctors calling import functions to initialize
+              // the environment.
+              //
+              // This functionality will be removed once rust 1.69.0 is stable, at which
+              // point wasi-libc will no longer have this behavior.
+              //
+              // See
+              // https://github.com/bytecodealliance/preview2-prototyping/issues/99
+              // for more details.
+              #[cfg(target_arch="wasm32")]
+              wit_bindgen::rt::run_ctors_once();
+              
+              use super::super::super::super::delano::wit_ui::context_types::Context as V6;
+              let v6 = match arg0 {
+                0 => {
+                  let e6 = super::super::super::super::delano::wit_ui::context_types::Everything{
+                    page: match arg1 {
+                      0 => None,
+                      1 => {
+                        let e = {
+                          let len0 = arg3 as usize;
+                          let bytes0 = Vec::from_raw_parts(arg2 as *mut _, len0, len0);
+                          let len1 = arg5 as usize;
+                          let bytes1 = Vec::from_raw_parts(arg4 as *mut _, len1, len1);
+                          let len2 = arg7 as usize;
+                          let bytes2 = Vec::from_raw_parts(arg6 as *mut _, len2, len2);
+                          
+                          super::super::super::super::delano::wit_ui::context_types::Page{
+                            name: wit_bindgen::rt::string_lift(bytes0),
+                            version: wit_bindgen::rt::string_lift(bytes1),
+                            description: wit_bindgen::rt::string_lift(bytes2),
+                          }
+                        };
+                        Some(e)
+                      }
+                      _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                    },
+                    load: match arg8 {
+                      0 => None,
+                      1 => {
+                        let e = {
+                          let len3 = arg10 as usize;
+                          let bytes3 = Vec::from_raw_parts(arg9 as *mut _, len3, len3);
+                          
+                          wit_bindgen::rt::string_lift(bytes3)
+                        };
+                        Some(e)
+                      }
+                      _ => wit_bindgen::rt::invalid_enum_discriminant(),
+                    },
+                  };
+                  V6::AllContent(e6)
+                }
+                1 => {
+                  V6::Addattribute
+                }
+                2 => {
+                  V6::Newentry
+                }
+                3 => {
+                  let e6 = {
+                    use super::super::super::super::delano::wit_ui::context_types::Kovindex as V4;
+                    let v4 = match arg2 {
+                      0 => {
+                        let e4 = arg3 as u32;
+                        V4::Key(e4)
+                      }
+                      1 => {
+                        let e4 = arg3 as u32;
+                        V4::Op(e4)
+                      }
+                      2 => {
+                        let e4 = arg3 as u32;
+                        V4::Value(e4)
+                      }
+                      n => {
+                        debug_assert_eq!(n, 3, "invalid enum discriminant");
+                        let e4 = arg3 as u32;
+                        V4::Selected(e4)
+                      }
+                    };
+                    let len5 = arg5 as usize;
+                    let bytes5 = Vec::from_raw_parts(arg4 as *mut _, len5, len5);
+                    
+                    super::super::super::super::delano::wit_ui::context_types::Kvctx{
+                      ctx: super::super::super::super::delano::wit_ui::context_types::Entry{
+                        idx: arg1 as u32,
+                        val: v4,
+                      },
+                      value: wit_bindgen::rt::string_lift(bytes5),
+                    }
+                  };
+                  V6::Editattribute(e6)
+                }
+                4 => {
+                  let e6 = arg1 as u8;
+                  V6::Editmaxentries(e6)
+                }
+                5 => {
+                  V6::Generateoffer
+                }
+                6 => {
+                  V6::Generateproof
+                }
+                n => {
+                  debug_assert_eq!(n, 7, "invalid enum discriminant");
+                  V6::Publishproof
+                }
+              };
+              let result7 = <_GuestImpl as Guest>::render(v6);
+              let ptr8 = _RET_AREA.0.as_mut_ptr() as i32;
+              match result7 {
+                Ok(e) => { {
+                  *((ptr8 + 0) as *mut u8) = (0i32) as u8;
+                  let vec9 = (e.into_bytes()).into_boxed_slice();
+                  let ptr9 = vec9.as_ptr() as i32;
+                  let len9 = vec9.len() as i32;
+                  ::core::mem::forget(vec9);
+                  *((ptr8 + 8) as *mut i32) = len9;
+                  *((ptr8 + 4) as *mut i32) = ptr9;
+                } },
+                Err(e) => { {
+                  *((ptr8 + 0) as *mut u8) = (1i32) as u8;
+                  let vec10 = (e.into_bytes()).into_boxed_slice();
+                  let ptr10 = vec10.as_ptr() as i32;
+                  let len10 = vec10.len() as i32;
+                  ::core::mem::forget(vec10);
+                  *((ptr8 + 8) as *mut i32) = len10;
+                  *((ptr8 + 4) as *mut i32) = ptr10;
+                } },
+              };ptr8
+            }
+            
+            const _: () = {
+              #[doc(hidden)]
+              #[export_name = "cabi_post_delano:wit-ui/wurbo-out@0.1.0#render"]
+              #[allow(non_snake_case)]
+              unsafe extern "C" fn __post_return_render(arg0: i32,) {
+                let l0 = i32::from(*((arg0 + 0) as *const u8));
+                match l0 {
+                  0 => {
+                    let l1 = *((arg0 + 4) as *const i32);
+                    let l2 = *((arg0 + 8) as *const i32);
+                    wit_bindgen::rt::dealloc(l1, (l2) as usize, 1);
+                  },
+                  _ => {
+                    let l3 = *((arg0 + 4) as *const i32);
+                    let l4 = *((arg0 + 8) as *const i32);
+                    wit_bindgen::rt::dealloc(l3, (l4) as usize, 1);
+                  },
+                }
+              }
+            };
+          };
+          const _: () = {
+            
+            #[doc(hidden)]
+            #[export_name = "delano:wit-ui/wurbo-out@0.1.0#activate"]
+            #[allow(non_snake_case)]
+            unsafe extern "C" fn __export_activate(arg0: i32,arg1: i32,arg2: i32,) {
+              #[allow(unused_imports)]
+              use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+              
+              // Before executing any other code, use this function to run all static
+              // constructors, if they have not yet been run. This is a hack required
+              // to work around wasi-libc ctors calling import functions to initialize
+              // the environment.
+              //
+              // This functionality will be removed once rust 1.69.0 is stable, at which
+              // point wasi-libc will no longer have this behavior.
+              //
+              // See
+              // https://github.com/bytecodealliance/preview2-prototyping/issues/99
+              // for more details.
+              #[cfg(target_arch="wasm32")]
+              wit_bindgen::rt::run_ctors_once();
+              
+              <_GuestImpl as Guest>::activate(match arg0 {
+                0 => None,
+                1 => {
+                  let e = {
+                    let base3 = arg1;
+                    let len3 = arg2;
+                    let mut result3 = Vec::with_capacity(len3 as usize);
+                    for i in 0..len3 {
+                      let base = base3 + i * 8;
+                      let e3 = {
+                        let l0 = *((base + 0) as *const i32);
+                        let l1 = *((base + 4) as *const i32);
+                        let len2 = l1 as usize;
+                        let bytes2 = Vec::from_raw_parts(l0 as *mut _, len2, len2);
+                        
+                        wit_bindgen::rt::string_lift(bytes2)
+                      };
+                      result3.push(e3);
+                    }
+                    wit_bindgen::rt::dealloc(base3, (len3 as usize) * 8, 4);
+                    
+                    result3
+                  };
+                  Some(e)
+                }
+                _ => wit_bindgen::rt::invalid_enum_discriminant(),
+              });
+            }
+          };
+          use super::super::super::super::super::Component as _GuestImpl;
+          pub trait Guest {
+            /// renders the initial Web component with the given data
+            /// and the target template to use as top level entry point
+            fn render(ctx: Context,) -> Result<wit_bindgen::rt::string::String,wit_bindgen::rt::string::String>;
+            /// listen on all or given selectors
+            fn activate(selectors: Option<wit_bindgen::rt::vec::Vec::<wit_bindgen::rt::string::String>>,);
+          }
+          
+          #[allow(unused_imports)]
+          use wit_bindgen::rt::{alloc, vec::Vec, string::String};
+          
+          #[repr(align(4))]
+          struct _RetArea([u8; 12]);
+          static mut _RET_AREA: _RetArea = _RetArea([0; 12]);
+          
+        }
+        
+      }
+    }
+  }
+  
+  #[cfg(target_arch = "wasm32")]
+  #[link_section = "component-type:delanocreds-wit-ui"]
+  #[doc(hidden)]
+  pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 5298] = [3, 0, 18, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 0, 97, 115, 109, 13, 0, 1, 0, 7, 136, 3, 1, 65, 2, 1, 66, 16, 1, 114, 3, 4, 110, 97, 109, 101, 115, 7, 118, 101, 114, 115, 105, 111, 110, 115, 11, 100, 101, 115, 99, 114, 105, 112, 116, 105, 111, 110, 115, 4, 0, 4, 112, 97, 103, 101, 3, 0, 0, 1, 107, 1, 1, 107, 115, 1, 114, 2, 4, 112, 97, 103, 101, 2, 4, 108, 111, 97, 100, 3, 4, 0, 10, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 3, 0, 4, 1, 114, 2, 3, 107, 101, 121, 115, 5, 118, 97, 108, 117, 101, 115, 4, 0, 9, 105, 110, 112, 117, 116, 45, 99, 116, 120, 3, 0, 6, 1, 113, 4, 3, 107, 101, 121, 1, 121, 0, 2, 111, 112, 1, 121, 0, 5, 118, 97, 108, 117, 101, 1, 121, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 1, 121, 0, 4, 0, 8, 107, 111, 118, 105, 110, 100, 101, 120, 3, 0, 8, 1, 114, 2, 3, 105, 100, 120, 121, 3, 118, 97, 108, 9, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 10, 1, 114, 2, 3, 99, 116, 120, 11, 5, 118, 97, 108, 117, 101, 115, 4, 0, 5, 107, 118, 99, 116, 120, 3, 0, 12, 1, 113, 8, 11, 97, 108, 108, 45, 99, 111, 110, 116, 101, 110, 116, 1, 5, 0, 12, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 0, 0, 8, 110, 101, 119, 101, 110, 116, 114, 121, 0, 0, 13, 101, 100, 105, 116, 97, 116, 116, 114, 105, 98, 117, 116, 101, 1, 13, 0, 14, 101, 100, 105, 116, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 1, 125, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 0, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 0, 0, 12, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 0, 0, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 14, 4, 1, 33, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 11, 19, 1, 0, 13, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 3, 0, 0, 7, 79, 1, 65, 2, 1, 66, 2, 1, 114, 2, 8, 115, 101, 108, 101, 99, 116, 111, 114, 115, 2, 116, 121, 115, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 4, 1, 31, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 11, 17, 1, 0, 11, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 3, 2, 0, 7, 217, 1, 1, 65, 5, 1, 66, 2, 1, 114, 2, 8, 115, 101, 108, 101, 99, 116, 111, 114, 115, 2, 116, 121, 115, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 3, 1, 31, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 2, 3, 0, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 1, 66, 6, 2, 3, 2, 1, 1, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 1, 64, 1, 7, 100, 101, 116, 97, 105, 108, 115, 1, 1, 0, 4, 0, 16, 97, 100, 100, 101, 118, 101, 110, 116, 108, 105, 115, 116, 101, 110, 101, 114, 1, 2, 1, 64, 1, 7, 109, 101, 115, 115, 97, 103, 101, 115, 1, 0, 4, 0, 4, 101, 109, 105, 116, 1, 3, 4, 1, 28, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 105, 110, 64, 48, 46, 49, 46, 48, 5, 2, 11, 14, 1, 0, 8, 119, 117, 114, 98, 111, 45, 105, 110, 3, 4, 0, 7, 137, 4, 1, 65, 5, 1, 66, 16, 1, 114, 3, 4, 110, 97, 109, 101, 115, 7, 118, 101, 114, 115, 105, 111, 110, 115, 11, 100, 101, 115, 99, 114, 105, 112, 116, 105, 111, 110, 115, 4, 0, 4, 112, 97, 103, 101, 3, 0, 0, 1, 107, 1, 1, 107, 115, 1, 114, 2, 4, 112, 97, 103, 101, 2, 4, 108, 111, 97, 100, 3, 4, 0, 10, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 3, 0, 4, 1, 114, 2, 3, 107, 101, 121, 115, 5, 118, 97, 108, 117, 101, 115, 4, 0, 9, 105, 110, 112, 117, 116, 45, 99, 116, 120, 3, 0, 6, 1, 113, 4, 3, 107, 101, 121, 1, 121, 0, 2, 111, 112, 1, 121, 0, 5, 118, 97, 108, 117, 101, 1, 121, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 1, 121, 0, 4, 0, 8, 107, 111, 118, 105, 110, 100, 101, 120, 3, 0, 8, 1, 114, 2, 3, 105, 100, 120, 121, 3, 118, 97, 108, 9, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 10, 1, 114, 2, 3, 99, 116, 120, 11, 5, 118, 97, 108, 117, 101, 115, 4, 0, 5, 107, 118, 99, 116, 120, 3, 0, 12, 1, 113, 8, 11, 97, 108, 108, 45, 99, 111, 110, 116, 101, 110, 116, 1, 5, 0, 12, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 0, 0, 8, 110, 101, 119, 101, 110, 116, 114, 121, 0, 0, 13, 101, 100, 105, 116, 97, 116, 116, 114, 105, 98, 117, 116, 101, 1, 13, 0, 14, 101, 100, 105, 116, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 1, 125, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 0, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 0, 0, 12, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 0, 0, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 14, 3, 1, 33, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 2, 3, 0, 0, 7, 99, 111, 110, 116, 101, 120, 116, 1, 66, 9, 2, 3, 2, 1, 1, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 0, 1, 106, 1, 115, 1, 115, 1, 64, 1, 3, 99, 116, 120, 1, 0, 2, 4, 0, 6, 114, 101, 110, 100, 101, 114, 1, 3, 1, 112, 115, 1, 107, 4, 1, 64, 1, 9, 115, 101, 108, 101, 99, 116, 111, 114, 115, 5, 1, 0, 4, 0, 8, 97, 99, 116, 105, 118, 97, 116, 101, 1, 6, 4, 1, 29, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 111, 117, 116, 64, 48, 46, 49, 46, 48, 5, 2, 11, 15, 1, 0, 9, 119, 117, 114, 98, 111, 45, 111, 117, 116, 3, 6, 0, 7, 171, 20, 1, 65, 2, 1, 65, 25, 1, 66, 53, 1, 112, 125, 4, 0, 9, 97, 116, 116, 114, 105, 98, 117, 116, 101, 3, 0, 0, 1, 112, 1, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 2, 1, 112, 125, 4, 0, 5, 110, 111, 110, 99, 101, 3, 0, 4, 1, 112, 125, 4, 0, 5, 112, 114, 111, 111, 102, 3, 0, 6, 1, 112, 3, 4, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 3, 0, 8, 1, 112, 3, 1, 112, 1, 1, 114, 2, 7, 101, 110, 116, 114, 105, 101, 115, 10, 6, 114, 101, 109, 111, 118, 101, 11, 4, 0, 11, 114, 101, 100, 97, 99, 116, 97, 98, 108, 101, 115, 3, 0, 12, 1, 107, 13, 1, 107, 3, 1, 107, 125, 1, 114, 3, 6, 114, 101, 100, 97, 99, 116, 14, 16, 97, 100, 100, 105, 116, 105, 111, 110, 97, 108, 45, 101, 110, 116, 114, 121, 15, 11, 109, 97, 120, 45, 101, 110, 116, 114, 105, 101, 115, 16, 4, 0, 12, 111, 102, 102, 101, 114, 45, 99, 111, 110, 102, 105, 103, 3, 0, 17, 1, 112, 125, 1, 114, 4, 1, 122, 19, 4, 121, 45, 103, 49, 19, 5, 121, 45, 104, 97, 116, 19, 1, 116, 19, 4, 0, 20, 115, 105, 103, 110, 97, 116, 117, 114, 101, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 20, 1, 112, 19, 1, 114, 2, 12, 112, 112, 45, 99, 111, 109, 109, 105, 116, 45, 103, 49, 22, 12, 112, 112, 45, 99, 111, 109, 109, 105, 116, 45, 103, 50, 22, 4, 0, 31, 112, 97, 114, 97, 109, 45, 115, 101, 116, 45, 99, 111, 109, 109, 105, 116, 109, 101, 110, 116, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 23, 1, 113, 2, 2, 103, 49, 1, 19, 0, 2, 103, 50, 1, 19, 0, 4, 0, 13, 118, 107, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 25, 1, 112, 26, 1, 114, 2, 10, 112, 97, 114, 97, 109, 101, 116, 101, 114, 115, 24, 2, 118, 107, 27, 4, 0, 24, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 28, 1, 112, 22, 1, 107, 30, 1, 114, 5, 5, 115, 105, 103, 109, 97, 21, 10, 117, 112, 100, 97, 116, 101, 45, 107, 101, 121, 31, 17, 99, 111, 109, 109, 105, 116, 109, 101, 110, 116, 45, 118, 101, 99, 116, 111, 114, 22, 14, 111, 112, 101, 110, 105, 110, 103, 45, 118, 101, 99, 116, 111, 114, 22, 13, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 29, 4, 0, 21, 99, 114, 101, 100, 101, 110, 116, 105, 97, 108, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 32, 1, 114, 4, 10, 99, 114, 101, 100, 101, 110, 116, 105, 97, 108, 33, 7, 101, 110, 116, 114, 105, 101, 115, 10, 8, 115, 101, 108, 101, 99, 116, 101, 100, 11, 5, 110, 111, 110, 99, 101, 19, 4, 0, 9, 112, 114, 111, 118, 97, 98, 108, 101, 115, 3, 0, 34, 1, 114, 1, 1, 104, 19, 4, 0, 19, 112, 101, 100, 101, 114, 115, 101, 110, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 36, 1, 114, 1, 8, 112, 101, 100, 101, 114, 115, 101, 110, 37, 4, 0, 28, 100, 97, 109, 103, 97, 114, 100, 45, 116, 114, 97, 110, 115, 102, 111, 114, 109, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 38, 1, 107, 19, 1, 114, 3, 15, 111, 112, 101, 110, 45, 114, 97, 110, 100, 111, 109, 110, 101, 115, 115, 19, 19, 97, 110, 110, 111, 117, 110, 99, 101, 45, 114, 97, 110, 100, 111, 109, 110, 101, 115, 115, 19, 16, 97, 110, 110, 111, 117, 110, 99, 101, 45, 101, 108, 101, 109, 101, 110, 116, 40, 4, 0, 24, 112, 101, 100, 101, 114, 115, 101, 110, 45, 111, 112, 101, 110, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 41, 1, 114, 6, 9, 99, 104, 97, 108, 108, 101, 110, 103, 101, 19, 13, 112, 101, 100, 101, 114, 115, 101, 110, 45, 111, 112, 101, 110, 42, 15, 112, 101, 100, 101, 114, 115, 101, 110, 45, 99, 111, 109, 109, 105, 116, 19, 10, 112, 117, 98, 108, 105, 99, 45, 107, 101, 121, 19, 8, 114, 101, 115, 112, 111, 110, 115, 101, 19, 7, 100, 97, 109, 103, 97, 114, 100, 39, 4, 0, 20, 110, 121, 109, 45, 112, 114, 111, 111, 102, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 43, 1, 114, 2, 8, 110, 121, 109, 112, 114, 111, 111, 102, 44, 5, 110, 111, 110, 99, 101, 40, 4, 0, 13, 105, 115, 115, 117, 101, 45, 111, 112, 116, 105, 111, 110, 115, 3, 0, 45, 1, 114, 4, 5, 115, 105, 103, 109, 97, 21, 17, 99, 111, 109, 109, 105, 116, 109, 101, 110, 116, 45, 118, 101, 99, 116, 111, 114, 22, 10, 119, 105, 116, 110, 101, 115, 115, 45, 112, 105, 19, 9, 110, 121, 109, 45, 112, 114, 111, 111, 102, 44, 4, 0, 21, 99, 114, 101, 100, 45, 112, 114, 111, 111, 102, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 47, 1, 114, 2, 5, 112, 114, 111, 111, 102, 48, 8, 115, 101, 108, 101, 99, 116, 101, 100, 9, 4, 0, 6, 112, 114, 111, 118, 101, 110, 3, 0, 49, 1, 114, 4, 5, 112, 114, 111, 111, 102, 48, 13, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 29, 5, 110, 111, 110, 99, 101, 40, 8, 115, 101, 108, 101, 99, 116, 101, 100, 9, 4, 0, 11, 118, 101, 114, 105, 102, 105, 97, 98, 108, 101, 115, 3, 0, 51, 3, 1, 25, 100, 101, 108, 97, 110, 111, 58, 119, 97, 108, 108, 101, 116, 47, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 0, 2, 3, 0, 0, 9, 97, 116, 116, 114, 105, 98, 117, 116, 101, 2, 3, 0, 0, 9, 112, 114, 111, 118, 97, 98, 108, 101, 115, 2, 3, 0, 0, 11, 118, 101, 114, 105, 102, 105, 97, 98, 108, 101, 115, 2, 3, 0, 0, 12, 111, 102, 102, 101, 114, 45, 99, 111, 110, 102, 105, 103, 2, 3, 0, 0, 13, 105, 115, 115, 117, 101, 45, 111, 112, 116, 105, 111, 110, 115, 2, 3, 0, 0, 5, 110, 111, 110, 99, 101, 2, 3, 0, 0, 5, 101, 110, 116, 114, 121, 2, 3, 0, 0, 6, 112, 114, 111, 118, 101, 110, 2, 3, 0, 0, 21, 99, 114, 101, 100, 101, 110, 116, 105, 97, 108, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 2, 3, 0, 0, 20, 110, 121, 109, 45, 112, 114, 111, 111, 102, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 2, 3, 0, 0, 24, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 1, 66, 46, 2, 3, 2, 1, 1, 4, 0, 9, 97, 116, 116, 114, 105, 98, 117, 116, 101, 3, 0, 0, 2, 3, 2, 1, 2, 4, 0, 9, 112, 114, 111, 118, 97, 98, 108, 101, 115, 3, 0, 2, 2, 3, 2, 1, 3, 4, 0, 11, 118, 101, 114, 105, 102, 105, 97, 98, 108, 101, 115, 3, 0, 4, 2, 3, 2, 1, 4, 4, 0, 12, 111, 102, 102, 101, 114, 45, 99, 111, 110, 102, 105, 103, 3, 0, 6, 2, 3, 2, 1, 5, 4, 0, 13, 105, 115, 115, 117, 101, 45, 111, 112, 116, 105, 111, 110, 115, 3, 0, 8, 2, 3, 2, 1, 6, 4, 0, 5, 110, 111, 110, 99, 101, 3, 0, 10, 2, 3, 2, 1, 7, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 12, 2, 3, 2, 1, 8, 4, 0, 6, 112, 114, 111, 118, 101, 110, 3, 0, 14, 2, 3, 2, 1, 9, 4, 0, 21, 99, 114, 101, 100, 101, 110, 116, 105, 97, 108, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 16, 2, 3, 2, 1, 10, 4, 0, 20, 110, 121, 109, 45, 112, 114, 111, 111, 102, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 18, 2, 3, 2, 1, 11, 4, 0, 24, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 45, 99, 111, 109, 112, 114, 101, 115, 115, 101, 100, 3, 0, 20, 1, 112, 125, 1, 106, 1, 19, 1, 115, 1, 64, 1, 5, 110, 111, 110, 99, 101, 22, 0, 23, 4, 0, 13, 103, 101, 116, 45, 110, 121, 109, 45, 112, 114, 111, 111, 102, 1, 24, 1, 112, 1, 1, 107, 9, 1, 106, 1, 17, 1, 115, 1, 64, 3, 10, 97, 116, 116, 114, 105, 98, 117, 116, 101, 115, 25, 10, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 125, 7, 111, 112, 116, 105, 111, 110, 115, 26, 0, 27, 4, 0, 5, 105, 115, 115, 117, 101, 1, 28, 1, 64, 2, 4, 99, 114, 101, 100, 17, 6, 99, 111, 110, 102, 105, 103, 7, 0, 27, 4, 0, 5, 111, 102, 102, 101, 114, 1, 29, 1, 64, 1, 5, 111, 102, 102, 101, 114, 17, 0, 27, 4, 0, 6, 97, 99, 99, 101, 112, 116, 1, 30, 1, 64, 2, 4, 99, 114, 101, 100, 17, 5, 101, 110, 116, 114, 121, 13, 0, 27, 4, 0, 6, 101, 120, 116, 101, 110, 100, 1, 31, 1, 106, 1, 15, 1, 115, 1, 64, 1, 6, 118, 97, 108, 117, 101, 115, 3, 0, 32, 4, 0, 5, 112, 114, 111, 118, 101, 1, 33, 1, 106, 1, 127, 1, 115, 1, 64, 1, 6, 118, 97, 108, 117, 101, 115, 5, 0, 34, 4, 0, 6, 118, 101, 114, 105, 102, 121, 1, 35, 1, 106, 1, 21, 1, 115, 1, 64, 0, 0, 36, 4, 0, 13, 105, 115, 115, 117, 101, 114, 45, 112, 117, 98, 108, 105, 99, 1, 37, 3, 1, 27, 100, 101, 108, 97, 110, 111, 58, 119, 97, 108, 108, 101, 116, 47, 97, 99, 116, 105, 111, 110, 115, 64, 48, 46, 49, 46, 48, 5, 12, 1, 66, 2, 1, 114, 2, 8, 115, 101, 108, 101, 99, 116, 111, 114, 115, 2, 116, 121, 115, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 3, 1, 31, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 13, 2, 3, 0, 2, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 1, 66, 6, 2, 3, 2, 1, 14, 4, 0, 14, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 3, 0, 0, 1, 64, 1, 7, 100, 101, 116, 97, 105, 108, 115, 1, 1, 0, 4, 0, 16, 97, 100, 100, 101, 118, 101, 110, 116, 108, 105, 115, 116, 101, 110, 101, 114, 1, 2, 1, 64, 1, 7, 109, 101, 115, 115, 97, 103, 101, 115, 1, 0, 4, 0, 4, 101, 109, 105, 116, 1, 3, 3, 1, 28, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 105, 110, 64, 48, 46, 49, 46, 48, 5, 15, 1, 66, 16, 1, 114, 3, 4, 110, 97, 109, 101, 115, 7, 118, 101, 114, 115, 105, 111, 110, 115, 11, 100, 101, 115, 99, 114, 105, 112, 116, 105, 111, 110, 115, 4, 0, 4, 112, 97, 103, 101, 3, 0, 0, 1, 107, 1, 1, 107, 115, 1, 114, 2, 4, 112, 97, 103, 101, 2, 4, 108, 111, 97, 100, 3, 4, 0, 10, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 3, 0, 4, 1, 114, 2, 3, 107, 101, 121, 115, 5, 118, 97, 108, 117, 101, 115, 4, 0, 9, 105, 110, 112, 117, 116, 45, 99, 116, 120, 3, 0, 6, 1, 113, 4, 3, 107, 101, 121, 1, 121, 0, 2, 111, 112, 1, 121, 0, 5, 118, 97, 108, 117, 101, 1, 121, 0, 8, 115, 101, 108, 101, 99, 116, 101, 100, 1, 121, 0, 4, 0, 8, 107, 111, 118, 105, 110, 100, 101, 120, 3, 0, 8, 1, 114, 2, 3, 105, 100, 120, 121, 3, 118, 97, 108, 9, 4, 0, 5, 101, 110, 116, 114, 121, 3, 0, 10, 1, 114, 2, 3, 99, 116, 120, 11, 5, 118, 97, 108, 117, 101, 115, 4, 0, 5, 107, 118, 99, 116, 120, 3, 0, 12, 1, 113, 8, 11, 97, 108, 108, 45, 99, 111, 110, 116, 101, 110, 116, 1, 5, 0, 12, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 0, 0, 8, 110, 101, 119, 101, 110, 116, 114, 121, 0, 0, 13, 101, 100, 105, 116, 97, 116, 116, 114, 105, 98, 117, 116, 101, 1, 13, 0, 14, 101, 100, 105, 116, 109, 97, 120, 101, 110, 116, 114, 105, 101, 115, 1, 125, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 0, 0, 13, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 0, 0, 12, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 0, 0, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 14, 3, 1, 33, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 64, 48, 46, 49, 46, 48, 5, 16, 2, 3, 0, 4, 7, 99, 111, 110, 116, 101, 120, 116, 1, 66, 9, 2, 3, 2, 1, 17, 4, 0, 7, 99, 111, 110, 116, 101, 120, 116, 3, 0, 0, 1, 106, 1, 115, 1, 115, 1, 64, 1, 3, 99, 116, 120, 1, 0, 2, 4, 0, 6, 114, 101, 110, 100, 101, 114, 1, 3, 1, 112, 115, 1, 107, 4, 1, 64, 1, 9, 115, 101, 108, 101, 99, 116, 111, 114, 115, 5, 1, 0, 4, 0, 8, 97, 99, 116, 105, 118, 97, 116, 101, 1, 6, 4, 1, 29, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 119, 117, 114, 98, 111, 45, 111, 117, 116, 64, 48, 46, 49, 46, 48, 5, 18, 4, 1, 38, 100, 101, 108, 97, 110, 111, 58, 119, 105, 116, 45, 117, 105, 47, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 64, 48, 46, 49, 46, 48, 4, 0, 11, 24, 1, 0, 18, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 3, 8, 0, 0, 245, 9, 12, 112, 97, 99, 107, 97, 103, 101, 45, 100, 111, 99, 115, 0, 123, 34, 119, 111, 114, 108, 100, 115, 34, 58, 123, 34, 100, 101, 108, 97, 110, 111, 99, 114, 101, 100, 115, 45, 119, 105, 116, 45, 117, 105, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 65, 110, 32, 101, 120, 97, 109, 112, 108, 101, 32, 119, 111, 114, 108, 100, 32, 102, 111, 114, 32, 116, 104, 101, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 32, 116, 111, 32, 116, 97, 114, 103, 101, 116, 46, 34, 125, 125, 44, 34, 105, 110, 116, 101, 114, 102, 97, 99, 101, 115, 34, 58, 123, 34, 99, 111, 110, 116, 101, 120, 116, 45, 116, 121, 112, 101, 115, 34, 58, 123, 34, 116, 121, 112, 101, 115, 34, 58, 123, 34, 112, 97, 103, 101, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 84, 104, 101, 32, 116, 121, 112, 101, 32, 111, 102, 32, 116, 104, 101, 32, 97, 112, 112, 34, 125, 44, 34, 101, 118, 101, 114, 121, 116, 104, 105, 110, 103, 34, 58, 123, 34, 105, 116, 101, 109, 115, 34, 58, 123, 34, 108, 111, 97, 100, 34, 58, 34, 105, 115, 115, 117, 101, 58, 32, 111, 112, 116, 105, 111, 110, 60, 105, 115, 115, 117, 101, 114, 62, 44, 92, 110, 84, 104, 101, 32, 98, 97, 115, 101, 54, 52, 85, 82, 76, 115, 97, 102, 101, 32, 117, 110, 112, 97, 100, 100, 101, 100, 32, 101, 110, 99, 111, 100, 101, 100, 32, 74, 83, 79, 78, 32, 115, 116, 114, 105, 110, 103, 32, 111, 102, 32, 116, 104, 101, 32, 108, 111, 97, 100, 97, 98, 108, 101, 32, 100, 97, 116, 97, 32, 40, 111, 102, 102, 101, 114, 32, 111, 114, 32, 112, 114, 111, 111, 102, 41, 34, 125, 125, 44, 34, 99, 111, 110, 116, 101, 120, 116, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 84, 104, 101, 32, 116, 121, 112, 101, 32, 111, 102, 32, 99, 111, 110, 116, 101, 120, 116, 32, 112, 114, 111, 118, 105, 100, 101, 100, 34, 44, 34, 105, 116, 101, 109, 115, 34, 58, 123, 34, 97, 100, 100, 97, 116, 116, 114, 105, 98, 117, 116, 101, 34, 58, 34, 105, 115, 115, 117, 105, 110, 103, 40, 105, 115, 115, 117, 101, 114, 41, 44, 92, 110, 65, 100, 100, 115, 32, 97, 32, 110, 101, 119, 32, 97, 116, 116, 114, 105, 98, 117, 116, 101, 32, 116, 111, 32, 97, 110, 32, 101, 120, 105, 115, 116, 105, 110, 103, 32, 69, 110, 116, 114, 121, 32, 111, 102, 32, 116, 104, 101, 32, 67, 114, 101, 100, 101, 110, 116, 105, 97, 108, 34, 44, 34, 110, 101, 119, 101, 110, 116, 114, 121, 34, 58, 34, 65, 100, 100, 115, 32, 97, 32, 78, 101, 119, 32, 69, 110, 116, 114, 121, 32, 116, 111, 32, 116, 104, 101, 32, 67, 114, 101, 100, 101, 110, 116, 105, 97, 108, 34, 44, 34, 103, 101, 110, 101, 114, 97, 116, 101, 111, 102, 102, 101, 114, 34, 58, 34, 65, 116, 116, 101, 109, 112, 116, 32, 116, 111, 32, 103, 101, 110, 101, 114, 97, 116, 101, 32, 97, 110, 32, 111, 102, 102, 101, 114, 34, 44, 34, 103, 101, 110, 101, 114, 97, 116, 101, 112, 114, 111, 111, 102, 34, 58, 34, 65, 116, 116, 101, 109, 112, 116, 32, 116, 111, 32, 103, 101, 110, 101, 114, 97, 116, 101, 32, 97, 32, 112, 114, 111, 111, 102, 34, 44, 34, 112, 117, 98, 108, 105, 115, 104, 112, 114, 111, 111, 102, 34, 58, 34, 101, 109, 105, 116, 32, 97, 32, 112, 117, 98, 108, 105, 115, 104, 32, 101, 118, 101, 110, 116, 32, 119, 105, 116, 104, 32, 116, 104, 101, 32, 112, 114, 111, 111, 102, 32, 100, 97, 116, 97, 34, 125, 125, 125, 125, 44, 34, 119, 117, 114, 98, 111, 45, 116, 121, 112, 101, 115, 34, 58, 123, 34, 116, 121, 112, 101, 115, 34, 58, 123, 34, 108, 105, 115, 116, 101, 110, 45, 100, 101, 116, 97, 105, 108, 115, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 68, 101, 116, 97, 105, 108, 115, 32, 114, 101, 113, 117, 105, 114, 101, 100, 32, 105, 110, 32, 111, 114, 100, 101, 114, 32, 116, 111, 32, 97, 100, 100, 32, 97, 110, 32, 101, 118, 101, 110, 116, 32, 108, 105, 115, 116, 101, 110, 101, 114, 32, 116, 111, 32, 97, 110, 32, 101, 108, 101, 109, 101, 110, 116, 34, 125, 125, 125, 44, 34, 119, 117, 114, 98, 111, 45, 105, 110, 34, 58, 123, 34, 100, 111, 99, 115, 34, 58, 34, 65, 110, 32, 105, 110, 116, 101, 114, 102, 97, 99, 101, 32, 116, 104, 97, 116, 32, 112, 114, 111, 118, 105, 100, 101, 115, 32, 97, 110, 32, 101, 118, 101, 110, 116, 32, 108, 105, 115, 116, 101, 110, 101, 114, 32, 116, 111, 32, 109, 97, 107, 101, 32, 116, 104, 101, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 32, 105, 110, 116, 101, 114, 97, 99, 116, 105, 118, 101, 46, 34, 44, 34, 102, 117, 110, 99, 115, 34, 58, 123, 34, 97, 100, 100, 101, 118, 101, 110, 116, 108, 105, 115, 116, 101, 110, 101, 114, 34, 58, 34, 65, 100, 100, 32, 97, 110, 32, 101, 118, 101, 110, 116, 32, 108, 105, 115, 116, 101, 110, 101, 114, 32, 116, 111, 32, 116, 104, 101, 32, 103, 105, 118, 101, 110, 32, 101, 108, 101, 109, 101, 110, 116, 34, 44, 34, 101, 109, 105, 116, 34, 58, 34, 69, 109, 105, 116, 32, 101, 118, 101, 110, 116, 115, 32, 102, 114, 111, 109, 32, 116, 104, 105, 115, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 46, 32, 77, 101, 115, 115, 97, 103, 101, 115, 32, 115, 104, 111, 117, 108, 100, 32, 98, 101, 32, 115, 101, 114, 105, 97, 108, 105, 122, 101, 100, 32, 74, 83, 79, 78, 32, 115, 116, 114, 105, 110, 103, 115, 32, 111, 102, 32, 69, 118, 101, 110, 116, 32, 116, 121, 112, 101, 46, 34, 125, 125, 44, 34, 119, 117, 114, 98, 111, 45, 111, 117, 116, 34, 58, 123, 34, 102, 117, 110, 99, 115, 34, 58, 123, 34, 114, 101, 110, 100, 101, 114, 34, 58, 34, 114, 101, 110, 100, 101, 114, 115, 32, 116, 104, 101, 32, 105, 110, 105, 116, 105, 97, 108, 32, 87, 101, 98, 32, 99, 111, 109, 112, 111, 110, 101, 110, 116, 32, 119, 105, 116, 104, 32, 116, 104, 101, 32, 103, 105, 118, 101, 110, 32, 100, 97, 116, 97, 92, 110, 97, 110, 100, 32, 116, 104, 101, 32, 116, 97, 114, 103, 101, 116, 32, 116, 101, 109, 112, 108, 97, 116, 101, 32, 116, 111, 32, 117, 115, 101, 32, 97, 115, 32, 116, 111, 112, 32, 108, 101, 118, 101, 108, 32, 101, 110, 116, 114, 121, 32, 112, 111, 105, 110, 116, 34, 44, 34, 97, 99, 116, 105, 118, 97, 116, 101, 34, 58, 34, 108, 105, 115, 116, 101, 110, 32, 111, 110, 32, 97, 108, 108, 32, 111, 114, 32, 103, 105, 118, 101, 110, 32, 115, 101, 108, 101, 99, 116, 111, 114, 115, 34, 125, 125, 125, 125, 0, 70, 9, 112, 114, 111, 100, 117, 99, 101, 114, 115, 1, 12, 112, 114, 111, 99, 101, 115, 115, 101, 100, 45, 98, 121, 2, 13, 119, 105, 116, 45, 99, 111, 109, 112, 111, 110, 101, 110, 116, 6, 48, 46, 49, 56, 46, 50, 16, 119, 105, 116, 45, 98, 105, 110, 100, 103, 101, 110, 45, 114, 117, 115, 116, 6, 48, 46, 49, 54, 46, 48];
+  
+  #[inline(never)]
+  #[doc(hidden)]
+  #[cfg(target_arch = "wasm32")]
+  pub fn __link_section() {}
+  

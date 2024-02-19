@@ -1,10 +1,12 @@
 //! This module handles the temporary state that is created and mutated by the User Interface.
 //! From this module's [StructObject], we can either Create a Credential, Offer a Credential, Accept a Credential, Prove a Credential, or Verify a Credential.
 
+use self::util::{try_cbor, try_from_cbor};
+
 use super::*;
 use crate::attributes::AttributeKOV;
 use delano_events::Provables;
-use delanocreds::{CBORCodec, Credential, Nonce};
+use delanocreds::{CredentialCompressed, Nonce};
 
 /// The Credential Struct
 #[derive(Debug, Clone)]
@@ -25,11 +27,11 @@ impl Default for CredentialStruct {
 }
 
 impl CredentialStruct {
-    /// Reads the LAST_STATE and returns Self
-    pub(crate) fn from_latest() -> Self {
-        let last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
-        last.state.builder
-    }
+    // /// Reads the LAST_STATE and returns Self
+    // pub(crate) fn from_latest() -> Self {
+    //     let last = { LAST_STATE.lock().unwrap().clone().unwrap_or_default() };
+    //     last.state.builder
+    // }
 
     /// Extends the last Entry Vector of attributes by 1.
     pub(crate) fn push_attribute(mut self) -> Self {
@@ -89,17 +91,24 @@ impl CredentialStruct {
     }
 
     /// Create (issue) credential using this struct's attributes
-    pub(crate) fn issue(&self) -> Result<Vec<u8>, String> {
+    pub(crate) fn issue(&self) -> Result<wallet::types::CredentialCompressed, String> {
         let attr_vec = self.entries[self.entries.len() - 1]
             .iter()
             .map(|a| a.into_bytes())
             .collect::<Vec<_>>();
 
-        wallet::actions::issue(&attr_vec, self.max_entries as u8, None)
+        Ok(wallet::actions::issue(
+            &attr_vec,
+            self.max_entries as u8,
+            None,
+        )?)
     }
 
     /// Offer this credential with no config
-    pub(crate) fn offer(&self, cred: Vec<u8>) -> Result<Vec<u8>, String> {
+    pub(crate) fn offer(
+        &self,
+        cred: &wallet::types::CredentialCompressed,
+    ) -> Result<wallet::types::CredentialCompressed, String> {
         wallet::actions::offer(
             &cred,
             &wallet::types::OfferConfig {
@@ -119,7 +128,10 @@ impl CredentialStruct {
     /// entry using the lest of the entries Vector for the extension.
     ///
     /// This yields an extended proof that can be used to prove attributes in the additional entry.
-    pub(crate) fn extend(&self, accepted: Vec<u8>) -> Result<Vec<u8>, String> {
+    pub(crate) fn extend(
+        &self,
+        accepted: wallet::types::CredentialCompressed,
+    ) -> Result<wallet::types::CredentialCompressed, String> {
         // we will extend the cred using self.entries n + 1, so if there is only 1 self.entries, return what was given to us
         if self.entries.len() < 2 {
             return Ok(accepted);
@@ -130,11 +142,15 @@ impl CredentialStruct {
             .iter()
             .map(|kov| delanocreds::Attribute::from(kov).to_bytes())
             .collect::<Vec<_>>();
-        wallet::actions::extend(&accepted, &last_entry)
+
+        Ok(wallet::actions::extend(&accepted, &last_entry)?)
     }
 
     /// generate Proof Package
-    pub(crate) fn proof_package(&self, cred: &[u8]) -> Result<crate::api::Loaded, String> {
+    pub(crate) fn proof_package(
+        &self,
+        cred: &wallet::types::CredentialCompressed,
+    ) -> Result<crate::api::Loaded, String> {
         // To go from the current credential to a proof, we need to:
         // 1) Extend the current credential with the additional entry
         // 2) generate the proof with the extended credential
@@ -168,7 +184,7 @@ impl CredentialStruct {
             .unzip();
 
         let provables = wallet::types::Provables {
-            credential: cred.to_vec(),
+            credential: cred.clone(),
             entries,
             selected: selected_attrs,
             nonce: nonce_bytes,
@@ -176,11 +192,9 @@ impl CredentialStruct {
 
         let wallet::types::Proven { proof, selected } = wallet::actions::prove(&provables)?;
 
-        let cred_struct = Credential::from_bytes(cred).map_err(|e| e.to_string())?;
-
         Ok(api::Loaded::Proof(Provables {
-            proof,
-            issuer_public: cred_struct.issuer_public.to_bytes().unwrap_or_default(),
+            proof: proof.into(),
+            issuer_public: cred.issuer_public.clone().into(),
             selected,
             selected_preimages: preimages,
         }))
@@ -233,7 +247,7 @@ impl From<&api::Loaded> for CredentialStruct {
     fn from(ctx: &api::Loaded) -> Self {
         match ctx {
             api::Loaded::Offer { cred, hints } => {
-                match Credential::from_bytes(&cred) {
+                match try_from_cbor::<CredentialCompressed>(&cred) {
                     Ok(credential) => {
                         // extract update key from cred
                         let update_key = credential.update_key;
