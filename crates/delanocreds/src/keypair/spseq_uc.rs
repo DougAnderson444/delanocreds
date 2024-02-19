@@ -1,13 +1,9 @@
+use self::error::Error;
+
 use super::*;
 use crate::ec::curve::polynomial_from_roots;
 use crate::ec::{G1Projective, Scalar};
 use crate::keypair::Signature;
-use base64::{engine::general_purpose, Engine as _};
-use bls12_381_plus::group::GroupEncoding;
-use bls12_381_plus::G1Compressed;
-use serde_with::base64::{Base64, UrlSafe};
-use serde_with::formats::Unpadded;
-use serde_with::serde_as;
 
 /// Update Key alias
 pub type UpdateKey = Option<Vec<Vec<G1Projective>>>;
@@ -37,8 +33,7 @@ impl std::fmt::Display for UpdateError {
 /// for the next level in the delegation hierarchy. If no further delegations are allowed, then no
 /// update key is provided.
 /// - `vk` [`VK`] is the verification key used in the signature
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Credential {
     pub sigma: Signature,
     pub update_key: UpdateKey, // Called DelegatableKey (dk for k prime) in the paper
@@ -47,35 +42,18 @@ pub struct Credential {
     pub issuer_public: IssuerPublic,
 }
 
-impl Credential {
-    /// Compress then Serialize the [Credential] into base64 encoded CBOR bytes,
-    pub fn to_url_safe(&self) -> Result<String, error::Error> {
-        let bytes = self.to_bytes()?;
-        Ok(general_purpose::URL_SAFE_NO_PAD.encode(&bytes))
-    }
-
-    /// Deserialize the [Credential] from URL String CBOR Vec<u8> into a Credential
-    pub fn from_url_safe(s: &str) -> Result<Self, error::Error> {
-        let bytes = general_purpose::URL_SAFE_NO_PAD.decode(s)?;
-        Self::from_bytes(&bytes[..])
-    }
-}
-
-impl CBORCodec for Credential {}
-
-/// [CredentialCompressed] is a compressed version of [Credential]. Each element is compressed into their smallest byte equivalents and serializable as base64URL safe encoding.
-#[serde_as]
+/// [CredentialCompressed] is a compressed version of [Credential]. Each element is compressed into their smallest byte equivalents and serializable.
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CredentialCompressed {
-    sigma: SignatureCompressed,
-    #[serde_as(as = "Option<Vec<Vec<Base64<UrlSafe, Unpadded>>>>")]
-    update_key: Option<Vec<Vec<G1Compressed>>>,
-    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
-    commitment_vector: Vec<G1Compressed>,
-    #[serde_as(as = "Vec<Base64<UrlSafe, Unpadded>>")]
-    opening_vector: Vec<OpeningInfo>,
-    issuer_public: IssuerPublicCompressed,
+    pub sigma: SignatureCompressed,
+    pub update_key: Option<Vec<Vec<Vec<u8>>>>,
+    pub commitment_vector: Vec<Vec<u8>>,
+    pub opening_vector: Vec<Vec<u8>>,
+    pub issuer_public: IssuerPublicCompressed,
 }
+
+impl CBORCodec for CredentialCompressed {}
 
 /// Try to convert from [CredentialCompressed] to [Credential]
 impl TryFrom<CredentialCompressed> for Credential {
@@ -90,36 +68,52 @@ impl TryFrom<CredentialCompressed> for Credential {
                     usign_decompressed[k] = usign[k]
                         .iter()
                         .map(|item| {
-                            let g1_maybe = G1Projective::from_bytes(item);
+                            // into G1Projective
+                            let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+                            bytes.copy_from_slice(item);
+                            let g1_maybe = G1Affine::from_compressed(&bytes);
+
                             if g1_maybe.is_none().into() {
-                                return Err("Invalid G1 point".to_string());
+                                return Err(Error::InvalidG1Point);
                             }
                             Ok(g1_maybe.expect("it'll be fine, it passed the check"))
                         })
-                        .map(|item| item.unwrap())
-                        .collect();
+                        .map(|item| item.unwrap().into())
+                        .collect::<Vec<G1Projective>>();
                 }
                 Some(usign_decompressed)
             }
             None => None,
         };
+
         let commitment_vector = value
             .commitment_vector
             .iter()
             .map(|item| {
-                let g1_maybe = G1Projective::from_bytes(item);
+                let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+                bytes.copy_from_slice(item);
+                let g1_maybe = G1Affine::from_compressed(&bytes);
+
                 if g1_maybe.is_none().into() {
-                    return Err("Invalid G1 point".to_string());
+                    // Error::InvalidG1
+                    return Err(Error::InvalidG1Point);
                 }
                 Ok(g1_maybe.expect("it'll be fine, it passed the check"))
             })
             // unwrap the Ok into inner for each
-            .map(|item| item.unwrap())
+            .map(|item| item.unwrap().into())
             .collect::<Vec<G1Projective>>();
+
         let opening_vector = value
             .opening_vector
             .into_iter()
-            .map(|item| item.into_scalar())
+            .map(|item| {
+                // Convert to OpeningInfo then scalar
+                let mut bytes = [0u8; 32];
+                bytes.copy_from_slice(&item);
+                let opening_info = OpeningInfo { inner: bytes };
+                opening_info.into_scalar()
+            })
             .collect::<Vec<Scalar>>();
 
         let issuer_public = IssuerPublic::try_from(value.issuer_public)?;
@@ -134,16 +128,63 @@ impl TryFrom<CredentialCompressed> for Credential {
     }
 }
 
-/// Convert from &[Credential] to [CredentialCompressed]
+/// Convert from [Credential] to [CredentialCompressed]
 impl From<&Credential> for CredentialCompressed {
     fn from(cred: &Credential) -> Self {
         let sigma = SignatureCompressed::from(cred.sigma.clone());
+        let issuer_public = IssuerPublicCompressed::from(cred.issuer_public.clone());
+
         let update_key = match &cred.update_key {
             Some(usign) => {
                 let mut usign_compressed = Vec::new();
                 usign_compressed.resize(usign.len(), Vec::new());
                 for k in 0..usign.len() {
-                    usign_compressed[k] = usign[k].iter().map(|item| item.to_bytes()).collect();
+                    usign_compressed[k] = usign[k]
+                        .iter()
+                        .map(|item| item.to_compressed().to_vec())
+                        .collect();
+                }
+                Some(usign_compressed)
+            }
+            None => None,
+        };
+
+        let commitment_vector = cred
+            .commitment_vector
+            .iter()
+            .map(|item| item.to_compressed().to_vec())
+            .collect();
+
+        let opening_vector = cred
+            .opening_vector
+            .clone()
+            .into_iter()
+            .map(|item| OpeningInfo::new(item).inner.to_vec())
+            .collect::<Vec<Vec<u8>>>();
+
+        CredentialCompressed {
+            sigma,
+            update_key,
+            commitment_vector,
+            opening_vector,
+            issuer_public,
+        }
+    }
+}
+
+/// Convert from [Credential] to [CredentialCompressed]
+impl From<Credential> for CredentialCompressed {
+    fn from(cred: Credential) -> Self {
+        let sigma = SignatureCompressed::from(cred.sigma);
+        let update_key = match cred.update_key {
+            Some(usign) => {
+                let mut usign_compressed = Vec::new();
+                usign_compressed.resize(usign.len(), Vec::new());
+                for k in 0..usign.len() {
+                    usign_compressed[k] = usign[k]
+                        .iter()
+                        .map(|item| item.to_compressed().to_vec())
+                        .collect();
                 }
                 Some(usign_compressed)
             }
@@ -152,16 +193,16 @@ impl From<&Credential> for CredentialCompressed {
         let commitment_vector = cred
             .commitment_vector
             .iter()
-            .map(|item| item.to_bytes())
+            .map(|item| item.to_compressed().to_vec())
             .collect();
         let opening_vector = cred
             .opening_vector
             .clone()
             .into_iter()
-            .map(OpeningInfo::new)
-            .collect::<Vec<OpeningInfo>>();
+            .map(|item| OpeningInfo::new(item).inner.to_vec())
+            .collect::<Vec<Vec<u8>>>();
 
-        let issuer_public: IssuerPublicCompressed = cred.issuer_public.clone().into();
+        let issuer_public: IssuerPublicCompressed = cred.issuer_public.into();
 
         CredentialCompressed {
             sigma,
@@ -359,7 +400,7 @@ pub fn change_rel(
             let z_tilde = z + gama_l;
 
             let sigma_tilde = Signature {
-                z: z_tilde,
+                z: z_tilde.into(),
                 y_g1,
                 y_hat,
                 t,
@@ -384,38 +425,53 @@ pub fn change_rel(
     }
 }
 
+pub mod fixtures {
+    use super::*;
+    use crate::{keypair::Signature, Credential};
+    use bls12_381_plus::elliptic_curve::Field;
+    use bls12_381_plus::group::Group;
+    use bls12_381_plus::{G1Projective, G2Projective, Scalar};
+
+    /// Make test credential
+    pub fn make_test_credential() -> Credential {
+        let sigma = Signature {
+            z: G1Projective::random(&mut rand::thread_rng()).into(),
+            y_g1: G1Projective::random(&mut rand::thread_rng()).into(),
+            y_hat: G2Projective::random(&mut rand::thread_rng()).into(),
+            t: G1Projective::random(&mut rand::thread_rng()).into(),
+        };
+        let update_key = Some(vec![vec![G1Projective::random(&mut rand::thread_rng())]]);
+        let commitment_vector = vec![G1Projective::random(&mut rand::thread_rng())];
+        let opening_vector = vec![Scalar::random(&mut rand::thread_rng())];
+        let issuer_public = IssuerPublic {
+            vk: vec![VK::G1(G1Projective::random(&mut rand::thread_rng()))],
+            parameters: ParamSetCommitment {
+                pp_commit_g1: vec![G1Projective::random(&mut rand::thread_rng())],
+                pp_commit_g2: vec![G2Projective::random(&mut rand::thread_rng())],
+            },
+        };
+        Credential {
+            sigma,
+            update_key,
+            commitment_vector,
+            opening_vector,
+            issuer_public,
+        }
+    }
+}
+
 //TEsts
 #[cfg(test)]
 mod test {
 
     use super::*;
+    use fixtures::make_test_credential;
 
     #[test]
-    fn test_to_url_safe_roundtrip() {
-        let cred = Credential {
-            sigma: Signature {
-                z: G1Projective::random(&mut rand::thread_rng()),
-                y_g1: G1Projective::random(&mut rand::thread_rng()),
-                y_hat: G2Projective::random(&mut rand::thread_rng()),
-                t: G1Projective::random(&mut rand::thread_rng()),
-            },
-            update_key: Some(vec![vec![G1Projective::random(&mut rand::thread_rng())]]),
-            commitment_vector: vec![G1Projective::random(&mut rand::thread_rng())],
-            opening_vector: vec![Scalar::random(&mut rand::thread_rng())],
-            issuer_public: IssuerPublic {
-                vk: vec![VK::G1(G1Projective::random(&mut rand::thread_rng()))],
-                parameters: ParamSetCommitment {
-                    pp_commit_g1: vec![G1Projective::random(&mut rand::thread_rng())],
-                    pp_commit_g2: vec![G2Projective::random(&mut rand::thread_rng())],
-                },
-            },
-        };
-
-        let url_safe = cred.to_url_safe().expect("to_url_safe to succeed");
-
-        eprintln!("url_safe: {:?}", url_safe);
-
-        let cred2 = Credential::from_url_safe(&url_safe).unwrap();
-        assert_eq!(cred, cred2);
+    fn test_credential_compressed_uncompress_roundtrip() {
+        let cred = make_test_credential();
+        let cred_compressed = CredentialCompressed::from(&cred);
+        let cred_uncompressed = Credential::try_from(cred_compressed).unwrap();
+        assert_eq!(cred, cred_uncompressed);
     }
 }
