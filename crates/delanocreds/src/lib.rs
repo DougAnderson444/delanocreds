@@ -1,13 +1,16 @@
+#![feature(cfg_eval)]
 #![doc = include_str!("../README.md")]
 
 mod attributes;
 mod config;
 mod ec;
 mod entry;
+mod utils;
+
 pub mod error;
-mod keypair;
-mod set_commits;
-mod zkp;
+pub mod keypair;
+pub mod set_commits;
+pub mod zkp;
 
 use anyhow::Result;
 pub use attributes::Attribute;

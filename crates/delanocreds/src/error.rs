@@ -37,14 +37,19 @@ pub enum Error {
     #[error("Tried to apply CBOR coded, but failed {0}")]
     CBORError(String),
 
-    /// From base64::DecodeError
-    #[error("From base64::DecodeError")]
-    Base64DecodeError(#[from] base64::DecodeError),
-
     #[error("The given Nonce bytes were not convertable to Scalar")]
     NonceConversionError,
+
+    #[error("The given Scalar bytes were not convertable to Scalar")]
+    ScalarConversionError,
 
     /// from serde_json::Error
     #[error("Error converting Credential")]
     CredentialConversionError(#[from] serde_json::Error),
+
+    #[error("Invalid G1 point")]
+    InvalidG1Point,
+
+    #[error("Invalid G2 point")]
+    InvalidG2Point,
 }
