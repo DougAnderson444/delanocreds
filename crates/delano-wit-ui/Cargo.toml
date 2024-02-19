@@ -7,6 +7,7 @@ edition = "2021"
 wurbo = { version = "0.1.9" }
 base64ct = { version = "1.6.0", features = ["alloc"] }
 chrono = "0.4.33"
+ciborium = "0.2.2"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = { version = "1.0.107" }
 convert_case = "0.6.0"
@@ -29,7 +30,7 @@ package = "delano:wit-ui"
 # It's not documented, but you can use `package.metadata.component.bindings` to
 # set additional derive attributes for the generated bindings:
 [package.metadata.component.bindings]
-# derives = ["serde::Serialize", "serde::Deserialize"]
+derives = ["serde::Serialize", "serde::Deserialize"]
 
 [package.metadata.component.dependencies]
 
