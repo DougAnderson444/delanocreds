@@ -38,7 +38,7 @@ pub trait PayloadEncoding {
     }
 
     /// Decode the string then deserialize into this Type
-    fn decode_deserialize(&self, val: &str) -> Result<Self, String>
+    fn decode_deserialize(val: &str) -> Result<Self, String>
     where
         Self: Sized + for<'a> Deserialize<'a>,
     {
