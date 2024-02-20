@@ -146,3 +146,10 @@ pub struct Provables<T> {
     /// interface to it anyway ¯\_(ツ)_/¯
     pub selected_preimages: Vec<Vec<T>>,
 }
+
+/// The serializable key to subscribe to. In other words, the PubSub topic.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscribeTopic {
+    /// CID as base32 string
+    pub key: String,
+}
