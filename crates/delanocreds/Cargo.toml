@@ -8,8 +8,8 @@ version = "0.2.0"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-bls12_381_plus = { workspace = true } 
-delano-keys = { workspace = true }
+bls12_381_plus = { version = "0.8.13", git="https://github.com/mikelodder7/bls12_381_plus.git", rev = "91a399e9a5f326816f13a0feab898ff40a7a1599", features = ["expose-fields", "alloc"] }
+delano-keys = { path = "../delano-keys" }
 anyhow = "1.0.70"
 cid = "0.10.1"
 secrecy = "0.8.0"
