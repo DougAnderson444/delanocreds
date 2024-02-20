@@ -1,7 +1,7 @@
 //! This module handles the temporary state that is created and mutated by the User Interface.
 //! From this module's [StructObject], we can either Create a Credential, Offer a Credential, Accept a Credential, Prove a Credential, or Verify a Credential.
 
-use self::util::{try_cbor, try_from_cbor};
+use self::util::try_from_cbor;
 
 use super::*;
 use crate::attributes::AttributeKOV;
