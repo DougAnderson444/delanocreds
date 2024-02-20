@@ -1,9 +1,12 @@
 #![doc = include_str!("../README.md")]
 
+pub mod utils;
+
 use delano_keys::publish::PublishingKey;
 use delanocreds::keypair::{CredProofCompressed, IssuerPublicCompressed};
 use serde::{Deserialize, Serialize};
 use serde_json;
+use utils::PayloadEncoding;
 
 // Test the README.md code snippets
 #[cfg(doctest)]
@@ -29,6 +32,8 @@ pub struct PublishMessage {
     pub key: String,
     pub value: Vec<u8>,
 }
+
+impl PayloadEncoding for PublishMessage {}
 
 impl<T> From<Publishables<T>> for PublishMessage
 where
@@ -150,6 +155,19 @@ pub struct Provables<T> {
 /// The serializable key to subscribe to. In other words, the PubSub topic.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscribeTopic {
-    /// CID as base32 string
     pub key: String,
 }
+
+/// From<impl ToString> for SubscribeTopic
+impl<T> From<T> for SubscribeTopic
+where
+    T: ToString,
+{
+    fn from(key: T) -> Self {
+        Self {
+            key: key.to_string(),
+        }
+    }
+}
+
+impl PayloadEncoding for SubscribeTopic {}
