@@ -254,7 +254,7 @@ impl State {
             provables.clone(),
         );
 
-        let publish_message = PublishMessage::from(publishables);
+        let publish_message = PublishMessage::from(&publishables);
 
         // serde_json and base64 encode the publishables
         // We do this instead of string because JavaScript doesn't handle string from Uint8Array well.
