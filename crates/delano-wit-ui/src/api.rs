@@ -162,11 +162,8 @@ impl State {
                 let issuer_vk = issuer_key
                     .vk
                     .iter()
-                    .map(|vk| match vk {
-                        types::VkCompressed::G1(g1) => VKCompressed::try_from(g1),
-                        types::VkCompressed::G2(g2) => VKCompressed::try_from(g2),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .map(|vk| vk.into())
+                    .collect::<Vec<VKCompressed>>();
 
                 let publish_key = PublishingKey::new(
                     &delano_keys::publish::OfferedPreimages::<AttributeKOV>(
@@ -240,10 +237,9 @@ impl State {
             println!("No proof to publish");
             return self;
         };
-        let Ok(issuer_key) = wallet::actions::issuer_public() else {
-            println!("Issuer public key failed");
-            return self;
-        };
+        // Get the Issuer's public key from the provided provables
+        let vk = provables.issuer_public.vk.clone();
+
         // Emit key-value pair.
         // The key is a delano-keys::PublishingKey using only the first Entry of attributes in the
         // offered credential (entry zero).
@@ -251,7 +247,7 @@ impl State {
         let publishables = delano_events::Publishables::new(
             PublishingKey::new(
                 &OfferedPreimages::<AttributeKOV>(&self.builder.entries[0]),
-                &IssuerKey(&issuer_key.vk.iter().map(|vk| vk.into()).collect::<Vec<_>>()),
+                &IssuerKey(&vk),
             ),
             provables.clone(),
         );
