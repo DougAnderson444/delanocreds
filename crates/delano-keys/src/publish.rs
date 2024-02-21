@@ -21,7 +21,7 @@ use crate::vk::VKCompressed;
 ///                    .cid();
 /// assert_eq!(key.to_string().starts_with("baf"), true);
 /// ```
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct PublishingKey<'a, T> {
     preimages: &'a OfferedPreimages<'a, T>,
     /// The Issuer's Verification Key
@@ -31,11 +31,11 @@ pub struct PublishingKey<'a, T> {
 /// Newtype wrapper to ensure client puts the correct type into the PublishingKey
 /// These are the preimage attributes that were given with the invite offer.
 /// The Offer preimages are only the values for the first Entry, so we only need a Vec<T>
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct OfferedPreimages<'a, T>(pub &'a Vec<T>);
 
 /// The Issuer's Compressed Verification Key (VK), wrapped in a Newtype to ensure client puts the correct type into the PublishingKey
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct IssuerKey<'a>(pub &'a Vec<VKCompressed>);
 
 impl<'a, T> PublishingKey<'a, T>
