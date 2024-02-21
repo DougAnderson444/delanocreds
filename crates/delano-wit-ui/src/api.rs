@@ -169,7 +169,9 @@ impl State {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let publish_key = PublishingKey::new(
-                    &delano_keys::publish::OfferedPreimages(&self.builder.entries),
+                    &delano_keys::publish::OfferedPreimages::<AttributeKOV>(
+                        &self.builder.entries[0],
+                    ),
                     &delano_keys::publish::IssuerKey(&issuer_vk),
                 )
                 .cid();
@@ -248,7 +250,7 @@ impl State {
         // The value is proof with provables
         let publishables = delano_events::Publishables::new(
             PublishingKey::new(
-                &OfferedPreimages(&self.builder.entries[0]),
+                &OfferedPreimages::<AttributeKOV>(&self.builder.entries[0]),
                 &IssuerKey(&issuer_key.vk.iter().map(|vk| vk.into()).collect::<Vec<_>>()),
             ),
             provables.clone(),
