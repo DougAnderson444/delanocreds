@@ -118,6 +118,7 @@ impl State {
 
     /// Generate offer from this State is there is nothing loaded.
     pub(crate) fn offer(&mut self) -> Result<Option<String>, String> {
+        println!("Creating Offer");
         match self.loaded {
             Loaded::None => {
                 // use self.credential
@@ -188,29 +189,21 @@ impl State {
 
                 self.history.push(history);
 
-                tracing::debug!("1/5 Offer: {:?}", offered);
-
                 // Also, subscribe to this publish_key by emitting SubscribeToKey
                 let subscribe_msg = SubscribeTopic::from(publish_key);
 
-                tracing::debug!("2/5 Subscribe: {:?}", subscribe_msg);
-
                 // Use the type's built-in serialization and encoding
                 let base64_publishables = subscribe_msg.serialize_encode()?;
-
-                tracing::debug!("3/5 Publishables: {:?}", base64_publishables);
 
                 // Wrap in Context, so the Wurbo Router can route it.
                 let message_data = Context::Message(base64_publishables.to_string());
                 // Serialize as JSON so `jco` can parse it in the JavaScript glue code.
                 let message = serde_json::to_string(&message_data).unwrap_or_default();
 
-                tracing::debug!("4/5 Message: {:?}", message);
-
                 // Emit the message
                 wurbo_in::emit(&message);
 
-                tracing::debug!("5/5 Emitted.");
+                println!("Subscribe Event Emitted.");
 
                 Ok(Some(offered))
             }

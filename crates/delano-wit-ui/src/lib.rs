@@ -115,8 +115,10 @@ impl From<&context_types::Context> for StructContext {
             }
             // Generate an Offer with the current data
             context_types::Context::Generateoffer => {
-                StructContext::from(api::State::from_latest().with_offer())
-                    .with_target(OUTPUT_HTML.to_string())
+                let r = StructContext::from(api::State::from_latest().with_offer())
+                    .with_target(OUTPUT_HTML.to_string());
+                println!("Rendering post-Offer HTML");
+                r
             }
             // Generate a Proof with the current data
             context_types::Context::Generateproof => {
