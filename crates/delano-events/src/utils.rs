@@ -47,3 +47,52 @@ pub trait PayloadEncoding {
         try_from_cbor(&decoded)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct TestStructOne {
+        pub name: String,
+        pub age: u8,
+    }
+
+    impl PayloadEncoding for TestStructOne {}
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct TestStructTwo {
+        pub name: String,
+        pub age: u8,
+    }
+
+    impl PayloadEncoding for TestStructTwo {}
+
+    #[derive(Debug, Deserialize)]
+    #[serde(untagged)]
+    enum Events {
+        One(TestStructOne),
+        Two(TestStructTwo),
+    }
+
+    impl PayloadEncoding for Events {}
+
+    #[test]
+    fn test_wrapped_serde_encode_roundtrip() {
+        let test = TestStructOne {
+            name: "test".to_string(),
+            age: 42,
+        };
+
+        let encoded = test.serialize_encode().unwrap();
+
+        // match on decode_deserialize, should pass through untagged enum and get TestStructOne
+        let result = match PayloadEncoding::decode_deserialize(&encoded).unwrap() {
+            Events::One(item) => item,
+            Events::Two(_) => panic!("Should be TestStructOne"),
+        };
+
+        assert_eq!(test, result);
+    }
+}
