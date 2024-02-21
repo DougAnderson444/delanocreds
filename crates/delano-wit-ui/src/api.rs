@@ -118,7 +118,6 @@ impl State {
 
     /// Generate offer from this State is there is nothing loaded.
     pub(crate) fn offer(&mut self) -> Result<Option<String>, String> {
-        println!("Creating Offer");
         match self.loaded {
             Loaded::None => {
                 // use self.credential
@@ -202,8 +201,6 @@ impl State {
 
                 // Emit the message
                 wurbo_in::emit(&message);
-
-                println!("Subscribe Event Emitted.");
 
                 Ok(Some(offered))
             }

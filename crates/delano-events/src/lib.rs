@@ -11,7 +11,7 @@ use utils::PayloadEncoding;
 #[cfg(doctest)]
 pub struct ReadmeDoctests;
 
-/// The Context of the event.
+/// The Context of the event, `jco` compatible (<https://github.com/bytecodealliance/jco>)
 /// This event is deisgned to pass through `jco` WIT, which expects variants to be {tag: _, val: _} in lower kebab-case.
 /// Any messages serialized by serde converts Vec to an Array, however `jco` expects TypedArrays.
 /// To avoid this issue, we serialize the Type bytes as base64 string to avoid missing TypedArray issue.
