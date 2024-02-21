@@ -5,7 +5,6 @@ pub mod utils;
 use delano_keys::publish::PublishingKey;
 use delanocreds::keypair::{CredProofCompressed, IssuerPublicCompressed};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use utils::PayloadEncoding;
 
 // Test the README.md code snippets
@@ -35,18 +34,6 @@ pub struct PublishMessage {
 
 impl PayloadEncoding for PublishMessage {}
 
-impl<T> From<Publishables<T>> for PublishMessage
-where
-    T: serde::Serialize,
-{
-    fn from(publishables: Publishables<T>) -> Self {
-        Self {
-            key: publishables.key(),
-            value: serde_json::to_vec(&publishables.value()).unwrap_or_default(),
-        }
-    }
-}
-
 impl<T> From<&Publishables<T>> for PublishMessage
 where
     T: serde::Serialize,
@@ -54,22 +41,9 @@ where
     fn from(publishables: &Publishables<T>) -> Self {
         Self {
             key: publishables.key(),
-            value: serde_json::to_vec(&publishables.value()).unwrap_or_default(),
+            // CBOR ecode the value
+            value: utils::try_cbor(&publishables.value()).unwrap_or_default(),
         }
-    }
-}
-
-impl<T> TryFrom<PublishMessage> for Publishables<T>
-where
-    T: for<'de> serde::Deserialize<'de>,
-{
-    type Error = serde_json::Error;
-
-    fn try_from(publish_message: PublishMessage) -> Result<Self, Self::Error> {
-        Ok(Self {
-            key: publish_message.key,
-            value: serde_json::from_slice(&publish_message.value)?,
-        })
     }
 }
 
@@ -77,12 +51,12 @@ impl<T> TryFrom<&PublishMessage> for Publishables<T>
 where
     T: for<'de> serde::Deserialize<'de>,
 {
-    type Error = serde_json::Error;
+    type Error = String;
 
     fn try_from(publish_message: &PublishMessage) -> Result<Self, Self::Error> {
         Ok(Self {
             key: publish_message.key.clone(),
-            value: serde_json::from_slice(&publish_message.value)?,
+            value: utils::try_from_cbor(&publish_message.value)?,
         })
     }
 }
