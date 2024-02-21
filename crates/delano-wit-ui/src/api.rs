@@ -187,19 +187,7 @@ impl State {
 
                 self.history.push(history);
 
-                // Also, subscribe to this publish_key by emitting SubscribeToKey
-                let subscribe_msg = SubscribeTopic::from(publish_key);
-
-                // Use the type's built-in serialization and encoding
-                let base64_publishables = subscribe_msg.serialize_encode()?;
-
-                // Wrap in Context, so the Wurbo Router can route it.
-                let message_data = Context::Message(base64_publishables.to_string());
-                // Serialize as JSON so `jco` can parse it in the JavaScript glue code.
-                let message = serde_json::to_string(&message_data).unwrap_or_default();
-
-                // Emit the message
-                wurbo_in::emit(&message);
+                subscribe_to_topic(publish_key);
 
                 Ok(Some(offered))
             }
@@ -237,7 +225,6 @@ impl State {
             println!("No proof to publish");
             return self;
         };
-        // Get the Issuer's public key from the provided provables
         let vk = provables.issuer_public.vk.clone();
 
         // Emit key-value pair.
@@ -251,6 +238,9 @@ impl State {
             ),
             provables.clone(),
         );
+
+        // First, subscribe to the key
+        subscribe_to_topic(publishables.key());
 
         let publish_message = PublishMessage::from(&publishables);
 
@@ -266,6 +256,22 @@ impl State {
         wurbo_in::emit(&message);
         self
     }
+}
+
+/// Helper function that subscribes to a key
+fn subscribe_to_topic(key: impl ToString) {
+    let subscribe_msg = SubscribeTopic::from(key);
+
+    // Use the type's built-in serialization and encoding
+    let base64_publishables = subscribe_msg.serialize_encode().unwrap_or_default();
+
+    // Wrap in Context, so the Wurbo Router can route it.
+    let message_data = Context::Message(base64_publishables.to_string());
+    // Serialize as JSON so `jco` can parse it in the JavaScript glue code.
+    let message = serde_json::to_string(&message_data).unwrap_or_default();
+
+    // Emit the message
+    wurbo_in::emit(&message);
 }
 
 impl StructObject for State {
