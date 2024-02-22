@@ -22,11 +22,21 @@ pub struct ReadmeDoctests;
 #[serde(tag = "tag", content = "val")]
 #[non_exhaustive]
 pub enum Context {
-    Message(String),
+    Event(Events),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(tag = "tag", content = "val")]
+#[non_exhaustive]
+pub enum Events {
+    Publish(PublishMessage),
+    Subscribe(SubscribeTopic),
 }
 
 /// The serialized publish message, which is a key string and value bytes serialized
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct PublishMessage {
     pub key: String,
     pub value: Vec<u8>,
@@ -128,6 +138,7 @@ pub struct Provables<T> {
 
 /// The serializable key to subscribe to. In other words, the PubSub topic.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct SubscribeTopic {
     pub key: String,
 }

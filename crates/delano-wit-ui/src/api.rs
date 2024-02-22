@@ -15,7 +15,7 @@ use super::*;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::prelude::*;
-use delano_events::{utils::PayloadEncoding, Context, Provables, PublishMessage, SubscribeTopic};
+use delano_events::{Context, Events, Provables, SubscribeTopic};
 use delano_keys::{
     publish::{IssuerKey, OfferedPreimages, PublishingKey},
     vk::VKCompressed,
@@ -242,16 +242,7 @@ impl State {
         // First, subscribe to the key
         subscribe_to_topic(publishables.key());
 
-        let publish_message = PublishMessage::from(&publishables);
-
-        // serde_json and base64 encode the publishables
-        // We do this instead of string because JavaScript doesn't handle string from Uint8Array well.
-        let Ok(base64_publishables) = publish_message.serialize_encode() else {
-            println!("Error serializing and encoding publishables");
-            return self;
-        };
-
-        let message_data = Context::Message(base64_publishables);
+        let message_data = Context::Event(Events::Publish(publishables.build()));
         let message = serde_json::to_string(&message_data).unwrap_or_default();
         wurbo_in::emit(&message);
         self
@@ -260,17 +251,8 @@ impl State {
 
 /// Helper function that subscribes to a key
 fn subscribe_to_topic(key: impl ToString) {
-    let subscribe_msg = SubscribeTopic::from(key);
-
-    // Use the type's built-in serialization and encoding
-    let base64_publishables = subscribe_msg.serialize_encode().unwrap_or_default();
-
-    // Wrap in Context, so the Wurbo Router can route it.
-    let message_data = Context::Message(base64_publishables.to_string());
-    // Serialize as JSON so `jco` can parse it in the JavaScript glue code.
+    let message_data = Context::Event(Events::Subscribe(SubscribeTopic::from(key)));
     let message = serde_json::to_string(&message_data).unwrap_or_default();
-
-    // Emit the message
     wurbo_in::emit(&message);
 }
 
