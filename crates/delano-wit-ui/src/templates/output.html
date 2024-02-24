@@ -108,7 +108,7 @@
           {% endfor %}
         </div>
         <!-- if hist.latest|length > 0, recursively loop over arrays and show leaf string -->
-        {% if hist.latest|length > 0 %}
+        {% if hist.latest is defined and hist.latest|length > 0 %}
         <div class="flex-1 p-2 break-all">
           <div class="flex flex-col w-full items-center">
             {% for entry in hist.latest %}
