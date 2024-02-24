@@ -268,24 +268,33 @@ impl State {
         // with the published value.
         for h in self.history.iter_mut() {
             if h.publish_key == published.key() {
-                // turn vec<vec<T>> into vec<vec<AttributeKOV.to_string()>>
-                h.latest = Value::from(
-                    published
-                        .value()
-                        .selected_preimages
-                        .iter()
-                        .map(|entry| {
-                            entry
-                                .iter()
-                                .map(|attr| {
-                                    AttributeKOV::try_from(attr.clone())
-                                        .unwrap_or_default()
-                                        .to_string()
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .collect::<Vec<_>>(),
-                );
+                // First, verify the proof
+                let provables = published.value();
+                let proof = Loaded::Proof(provables.clone());
+
+                // if proof.verify is Ok(true), then update the History.latest with the published value
+                if proof.verify().unwrap_or_default() {
+                    // turn vec<vec<T>> into vec<vec<AttributeKOV.to_string()>>
+                    h.latest = Value::from(
+                        published
+                            .value()
+                            .selected_preimages
+                            .iter()
+                            .map(|entry| {
+                                entry
+                                    .iter()
+                                    .map(|attr| {
+                                        AttributeKOV::try_from(attr.clone())
+                                            .unwrap_or_default()
+                                            .to_string()
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>(),
+                    );
+                } else {
+                    println!("Proof failed to verify");
+                }
             }
         }
 
