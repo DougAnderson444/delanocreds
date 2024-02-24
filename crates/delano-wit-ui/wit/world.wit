@@ -38,6 +38,12 @@ interface context-types {
     value: string,
   }
 
+  record message {
+    peer: string,
+    topic: string,
+    data: list<u8>,
+  }
+
   /// The type of context provided
   variant context {
     all-content(everything),
@@ -54,6 +60,8 @@ interface context-types {
     generateproof,
     // emit a publish event with the proof data
     publishproof,
+    // Message recieved from the Network?
+    networkevent(message)
   }
 }
 
