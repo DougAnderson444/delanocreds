@@ -81,13 +81,13 @@
   <div class="flex-1 pt-4 pb-1 text-lg">Past Invites:</div>
   <div class="bg-amber-50 rounded m-2 shadow-lg">
     <div class="flex flex-col w-full items-center break-all">
-      {% for invite in state.history|reverse %}
-      <!-- Show flexbox of invite.attributes.{key, op, value} and a link to state.history.offer string as button -->
+      {% for hist in state.history|reverse %}
+      <!-- Show flexbox of hist.attributes.{key, op, value} and a link to state.history.offer string as button -->
       <div
         class="flex flex-row w-full items-center {{loop.cycle('bg-amber-500/10', 'bg-amber-50/10')}}"
       >
         <div class="flex-1 p-2">
-          {% for entry in invite.attributes %}
+          {% for entry in hist.attributes %}
           <div class="">
             {% for attr in entry %}
             <div class="flex flex-row w-full items-center">
@@ -102,14 +102,28 @@
             {% endfor %}
             <!-- tiemstamp, small mono font-->
             <div class="text-xs text-gray-500 font-mono">
-              {{invite.timestamp}}
+              {{hist.timestamp}}
             </div>
           </div>
           {% endfor %}
         </div>
+        <!-- if hist.latest|length > 0, recursively loop over arrays and show leaf string -->
+        {% if hist.latest|length > 0 %}
+        <div class="flex-1 p-2 break-all">
+          <div class="flex flex-col w-full items-center">
+            {% for entry in hist.latest %}
+            <div class="flex flex-row w-full items-center">
+              {% for attr in entry %}
+              <div class="p-2">{{attr}}</div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
         <div class="flex-0 p-2 break-all">
           <a
-            href="/#{{invite.offer}}"
+            href="/#{{hist.offer}}"
             target="_blank"
             class="underline text-blue-500"
           >
@@ -120,6 +134,7 @@
             </button>
           </a>
         </div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>

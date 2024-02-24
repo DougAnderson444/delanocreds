@@ -17,7 +17,7 @@ use wurbo::jinja::{Entry, Index, Rest, Templates};
 use wurbo::prelude_bindgen;
 
 use bindings::delano::wallet;
-use bindings::delano::wit_ui::context_types::{self, Context};
+use bindings::delano::wit_ui::context_types::{self, Context, Message};
 use bindings::delano::wit_ui::wurbo_in;
 use bindings::exports::delano::wit_ui::wurbo_out::Guest as WurboGuest;
 
@@ -126,6 +126,10 @@ impl From<&context_types::Context> for StructContext {
             context_types::Context::Publishproof => {
                 // emit publish event
                 StructContext::from(api::State::from_latest().publish_proof())
+                    .with_target(OUTPUT_HTML.to_string())
+            }
+            context_types::Context::Networkevent(message) => {
+                StructContext::from(api::State::from_latest().process_message(message))
                     .with_target(OUTPUT_HTML.to_string())
             }
         }

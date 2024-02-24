@@ -15,7 +15,7 @@ use super::*;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::prelude::*;
-use delano_events::{Context, Events, Provables, SubscribeTopic};
+use delano_events::{Context, Events, Provables, Publishables, SubscribeTopic};
 use delano_keys::{
     publish::{IssuerKey, OfferedPreimages, PublishingKey},
     vk::VKCompressed,
@@ -39,11 +39,13 @@ pub(crate) struct History {
     /// The [delano_keys::VK] used to sign the offer
     pub(crate) issuer_vk: Vec<VKCompressed>,
     /// Publishing Key
-    pub(crate) publish_key: Vec<u8>,
+    pub(crate) publish_key: String,
     /// The offer bytes as urlsafe base64
     offer: String,
     /// Timestamp
     timestamp: String,
+    /// Latest data from the network messages
+    latest: Value,
 }
 
 /// State is the data that was [Loaded] and the [CredentialStruct] that we build using that loaded
@@ -183,6 +185,7 @@ impl State {
                     publish_key: publish_key.into(),
                     offer: offered.clone(), // TODO: Why would this need to be serialized and encoded??
                     timestamp: Utc::now().to_rfc3339(),
+                    latest: Default::default(),
                 };
 
                 self.history.push(history);
@@ -245,6 +248,47 @@ impl State {
         let message_data = Context::Event(Events::Publish(publishables.build()));
         let message = serde_json::to_string(&message_data).unwrap_or_default();
         wurbo_in::emit(&message);
+        self
+    }
+
+    /// Processes the imconing message and updates the [History] accordingly.
+    pub(crate) fn process_message(mut self, message: &Message) -> Self {
+        // deserialize the message bytes into delano_events::Provables<T>
+        let Ok(published): Result<Publishables<AttributeKOV>, _> =
+            (&delano_events::PublishMessage {
+                key: message.topic.clone(),
+                value: message.data.clone(),
+            })
+                .try_into()
+        else {
+            return self;
+        };
+
+        // if the publish.key matches any of the History.publish_key, then update the History.latest
+        // with the published value.
+        for h in self.history.iter_mut() {
+            if h.publish_key == published.key() {
+                // turn vec<vec<T>> into vec<vec<AttributeKOV.to_string()>>
+                h.latest = Value::from(
+                    published
+                        .value()
+                        .selected_preimages
+                        .iter()
+                        .map(|entry| {
+                            entry
+                                .iter()
+                                .map(|attr| {
+                                    AttributeKOV::try_from(attr.clone())
+                                        .unwrap_or_default()
+                                        .to_string()
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+
         self
     }
 }
