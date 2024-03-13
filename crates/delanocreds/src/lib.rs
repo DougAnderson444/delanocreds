@@ -348,11 +348,6 @@ mod lib_api_tests {
     use lazy_static::lazy_static;
 
     use super::*;
-    use crate::{
-        attributes::Attribute,
-        entry::{Entry, MaxEntries},
-        keypair::Nym,
-    };
 
     // static NONCE: Nonce = Nonce(Scalar::from(42u64));
     lazy_static! {

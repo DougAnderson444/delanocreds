@@ -158,8 +158,6 @@ pub fn derive(pk_g1: &G1, pk_g2: &G2, length: u8) -> Vec<vk::VK> {
 #[cfg(test)]
 mod basic_test {
 
-    use secrecy::zeroize::Zeroizing;
-
     use super::*;
 
     #[test]

@@ -87,7 +87,6 @@ mod tests {
     // use bls12_381_plus::elliptic_curve::ops::MulByGenerator;
     use bls12_381_plus::elliptic_curve::Field;
     use bls12_381_plus::group::{Curve, Group};
-    use bls12_381_plus::{G1Projective, G2Projective, Scalar};
     use rand::rngs::ThreadRng;
 
     #[test]

@@ -2,7 +2,7 @@ use self::error::Error;
 
 use super::*;
 use crate::ec::curve::polynomial_from_roots;
-use crate::ec::{G1Projective, Scalar};
+use crate::ec::G1Projective;
 use crate::keypair::Signature;
 
 /// Update Key alias
@@ -427,10 +427,6 @@ pub fn change_rel(
 
 pub mod fixtures {
     use super::*;
-    use crate::{keypair::Signature, Credential};
-    use bls12_381_plus::elliptic_curve::Field;
-    use bls12_381_plus::group::Group;
-    use bls12_381_plus::{G1Projective, G2Projective, Scalar};
 
     /// Make test credential
     pub fn make_test_credential() -> Credential {

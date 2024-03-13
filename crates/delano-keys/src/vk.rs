@@ -222,7 +222,6 @@ mod vk_tests {
     use blastkids::Group;
 
     use super::*;
-    use std::convert::TryInto;
 
     #[test]
     fn test_vk_compressed() {

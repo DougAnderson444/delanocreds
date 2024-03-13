@@ -586,7 +586,6 @@ impl Pedersen {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bls12_381_plus::group::Curve;
 
     #[test]
     #[cfg(feature = "zkp")]

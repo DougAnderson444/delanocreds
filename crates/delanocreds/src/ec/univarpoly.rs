@@ -5,7 +5,6 @@
 use super::Scalar;
 use bls12_381_plus::ff::Field;
 use rand::rngs::ThreadRng;
-use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::*;
 use std::{
     ops::{Index, IndexMut, Mul},
