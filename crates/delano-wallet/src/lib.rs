@@ -76,6 +76,8 @@ fn assert_issuer() -> Result<(), Error> {
 
 struct Component;
 
+bindings::export!(Component with_types_in bindings);
+
 impl Guest for Component {
     /// Return proof of [Nym] given the Nonce
     fn get_nym_proof(nonce: Vec<u8>) -> Result<wallet::types::NymProofCompressed, String> {

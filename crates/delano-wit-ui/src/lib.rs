@@ -25,6 +25,8 @@ use std::ops::Deref;
 
 struct Component;
 
+bindings::export!(Component with_types_in bindings);
+
 const INDEX_HTML: &str = "index.html";
 const CREATE_HTML: &str = "create.html";
 const OUTPUT_HTML: &str = "output.html";

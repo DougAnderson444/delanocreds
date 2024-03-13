@@ -2,9 +2,6 @@ use super::*;
 
 use delanocreds::CBORCodec;
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
-
-use crate::credential::CredentialStruct;
 
 /// Constant representing the Equal operator
 pub const EQUAL: &str = "=";

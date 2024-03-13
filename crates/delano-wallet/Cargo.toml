@@ -10,11 +10,13 @@ lazy_static = "1.4.0"
 delanocreds = { path ="../delanocreds" }
 delano-keys = { workspace = true  }
 thiserror = "1.0"
-wit-bindgen = { version = "0.16.0", default-features = false, features = ["realloc"] }
+# wit-bindgen = { version = "0.19.1", default-features = false, features = ["realloc"] }
+bitflags = "2.4.2"
+wit-bindgen-rt = "0.22.0"
 
 [dev-dependencies]
-wasmtime = { version = "17", features = ['component-model'] }
-wasmtime-wasi = "17.0.0"
+wasmtime = { version = "18", features = ['component-model'] }
+wasmtime-wasi = "18.0.1"
 thiserror = "1.0"
 
 [lib]
@@ -27,6 +29,7 @@ package = "delano:wallet"
 # set additional derive attributes for the generated bindings:
 [package.metadata.component.bindings]
 derives = ["PartialEq"]
+format = false
 
 [package.metadata.component.dependencies]
 

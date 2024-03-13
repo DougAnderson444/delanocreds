@@ -30,16 +30,10 @@ struct Context {
     wasi: WasiCtx,
 }
 impl WasiView for MyCtx {
-    fn table(&self) -> &ResourceTable {
-        &self.wasi_ctx.table
-    }
-    fn table_mut(&mut self) -> &mut ResourceTable {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.wasi_ctx.table
     }
-    fn ctx(&self) -> &WasiCtx {
-        &self.wasi_ctx.wasi
-    }
-    fn ctx_mut(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi_ctx.wasi
     }
 }
