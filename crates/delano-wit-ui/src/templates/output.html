@@ -90,7 +90,7 @@
           {% for entry in hist.attributes %}
           <div class="">
             {% for attr in entry %}
-            <div class="flex flex-row w-full items-center">
+            <div class="flex flex-row w-full items-left">
               <div class="p-2">{{attr.key}}</div>
               {% if attr.op != "=" %}
               <div class="p-1 bg-blue-500 text-white font-semibold">
@@ -112,11 +112,15 @@
         <div class="flex-1 p-2 break-all">
           <div class="flex flex-col w-full items-center">
             {% for entry in hist.latest %}
-            <div class="flex flex-row w-full items-center">
+            <!-- skip the first item, as it's the issued values which we already have-->
+            {% if loop.index0 > 0 %}
+            <div class="flex flex-col w-full items-left">
               {% for attr in entry %}
               <div class="p-2">{{attr}}</div>
               {% endfor %}
             </div>
+            {% endif %}
+            <!---->
             {% endfor %}
           </div>
         </div>
