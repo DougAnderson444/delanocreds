@@ -67,9 +67,7 @@ impl std::convert::TryFrom<VKCompressed> for VK {
                     return Err("Invalid G1 point".to_string());
                 }
 
-                Ok(VK::G1(
-                    g1_maybe.expect("it'll be fine, it passed the check").into(),
-                ))
+                Ok(VK::G1(g1_maybe.unwrap().into()))
             }
             VKCompressed::G2(g2) => {
                 let mut g2_bytes = [0u8; G2Affine::COMPRESSED_BYTES];
@@ -80,9 +78,7 @@ impl std::convert::TryFrom<VKCompressed> for VK {
                     return Err("Invalid G2 point".to_string());
                 }
 
-                Ok(VK::G2(
-                    g2.expect("it'll be fine, it passed the check").into(),
-                ))
+                Ok(VK::G2(g2.unwrap().into()))
             }
         }
     }
@@ -104,9 +100,7 @@ impl std::convert::TryFrom<Vec<u8>> for VK {
                     return Err("Invalid G1 point".to_string());
                 }
 
-                Ok(VK::G1(
-                    g1_maybe.expect("it'll be fine, it passed the check").into(),
-                ))
+                Ok(VK::G1(g1_maybe.unwrap().into()))
             }
             96 => {
                 let mut g2_bytes = [0u8; G2Affine::COMPRESSED_BYTES];
@@ -117,9 +111,7 @@ impl std::convert::TryFrom<Vec<u8>> for VK {
                     return Err("Invalid G2 point".to_string());
                 }
 
-                Ok(VK::G2(
-                    g2.expect("it'll be fine, it passed the check").into(),
-                ))
+                Ok(VK::G2(g2.unwrap().into()))
             }
             _ => Err("Invalid Verification Key (VK) length".to_string()),
         }
@@ -140,12 +132,7 @@ impl TryFrom<&Vec<u8>> for VKCompressed {
                     return Err("Invalid G1 point".to_string());
                 }
 
-                Ok(VKCompressed::G1(
-                    g1_maybe
-                        .expect("it'll be fine, it passed the check")
-                        .to_bytes()
-                        .into(),
-                ))
+                Ok(VKCompressed::G1(g1_maybe.unwrap().to_bytes().into()))
             }
             96 => {
                 let mut g2_bytes = [0u8; 96];
@@ -156,11 +143,7 @@ impl TryFrom<&Vec<u8>> for VKCompressed {
                     return Err("Invalid G2 point".to_string());
                 }
 
-                Ok(VKCompressed::G2(
-                    g2.expect("it'll be fine, it passed the check")
-                        .to_bytes()
-                        .into(),
-                ))
+                Ok(VKCompressed::G2(g2.unwrap().to_bytes().into()))
             }
             _ => Err("Invalid Verification Key (VK) length".to_string()),
         }
@@ -190,12 +173,7 @@ impl From<Vec<u8>> for VKCompressed {
                     panic!("Invalid G1 point");
                 }
 
-                VKCompressed::G1(
-                    g1_maybe
-                        .expect("it'll be fine, it passed the check")
-                        .to_bytes()
-                        .into(),
-                )
+                VKCompressed::G1(g1_maybe.unwrap().to_bytes().into())
             }
             96 => {
                 let mut g2_bytes = [0u8; 96];
@@ -206,11 +184,7 @@ impl From<Vec<u8>> for VKCompressed {
                     panic!("Invalid G2 point");
                 }
 
-                VKCompressed::G2(
-                    g2.expect("it'll be fine, it passed the check")
-                        .to_bytes()
-                        .into(),
-                )
+                VKCompressed::G2(g2.unwrap().to_bytes().into())
             }
             _ => panic!("Invalid VK length"),
         }
