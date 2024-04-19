@@ -40,6 +40,7 @@ const RAW: u64 = 0x55;
 const DIGEST_LEN: usize = 32;
 const SHA2_256: u64 = 0x12;
 
+/// Attribute is wrapper around a [Cid] of the bytes of the attribute
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Attribute(cid::Cid);
 
