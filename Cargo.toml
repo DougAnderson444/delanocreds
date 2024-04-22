@@ -22,7 +22,3 @@ overflow-checks = false
 panic = 'abort'          # Abort on panic
 rpath = false
 strip = true             # Automatically strip symbols from the binary.
-
-[patch.crates-io]
-# patch until release, see: https://github.com/bytecodealliance/wit-bindgen/issues/890
-wit-bindgen-rt = { git = "https://github.com/bytecodealliance/wit-bindgen.git", rev = "9c913f6" }

@@ -17,8 +17,8 @@ delano-events = { workspace = true }
 # wit-bindgen = { version = "0.19.1", default-features = false, features = ["realloc"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-bitflags = "2.4.2"
-wit-bindgen-rt = "0.22.0"
+bitflags = "2.5.0"
+wit-bindgen-rt = "0.24.0"
 
 [dev-dependencies]
 wasmtime = { version = "18", features = ['component-model'] }
