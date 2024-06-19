@@ -10,9 +10,7 @@ lazy_static = "1.4.0"
 delanocreds = { path ="../delanocreds" }
 delano-keys = { workspace = true  }
 thiserror = "1.0"
-# wit-bindgen = { version = "0.19.1", default-features = false, features = ["realloc"] }
-bitflags = "2.5.0"
-wit-bindgen-rt = "0.24.0"
+wit-bindgen-rt = { version = "0.26.0", features = ["bitflags"] }
 
 [dev-dependencies]
 wasmtime = { version = "18", features = ['component-model'] }
