@@ -1,5 +1,5 @@
 //! This module handles the temporary state that is created and mutated by the User Interface.
-//! From this module's [StructObject], we can either Create a Credential, Offer a Credential, Accept a Credential, Prove a Credential, or Verify a Credential.
+//! From this module's [Object], we can either Create a Credential, Offer a Credential, Accept a Credential, Prove a Credential, or Verify a Credential.
 
 use self::util::try_from_cbor;
 
@@ -201,9 +201,9 @@ impl CredentialStruct {
     }
 }
 
-impl StructObject for CredentialStruct {
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
+impl Object for CredentialStruct {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
             // assigns a random id attribute to the button element, upon which we can apply
             "id" => Some(Value::from(rand_id())),
             "entries" => Some(Value::from(self.entries.clone())),
@@ -223,22 +223,11 @@ impl StructObject for CredentialStruct {
             _ => None,
         }
     }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&[
-            "id",
-            "entries",
-            "max_entries",
-            "context",
-            "credential",
-            "offer",
-        ])
-    }
 }
 
 impl From<CredentialStruct> for wurbo::prelude::Value {
     fn from(context: CredentialStruct) -> Self {
-        Self::from_struct_object(context)
+        Self::from_object(context)
     }
 }
 

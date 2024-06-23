@@ -40,16 +40,12 @@ impl Operator {
     }
 }
 
-impl StructObject for Operator {
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
+impl Object for Operator {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
             "value" => Some(Value::from(self.value())),
             _ => None,
         }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["value"])
     }
 }
 
@@ -74,7 +70,7 @@ impl TryFrom<String> for Operator {
 
 impl From<Operator> for wurbo::prelude::Value {
     fn from(operator: Operator) -> Self {
-        Self::from_struct_object(operator)
+        Self::from_object(operator)
     }
 }
 
@@ -152,19 +148,15 @@ impl AttributeKOV {
     }
 }
 
-impl StructObject for AttributeKOV {
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
+impl Object for AttributeKOV {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
             "key" => Some(Value::from(self.key.deref().clone())),
-            "op" => Some(Value::from(self.op.get_field("value").unwrap())),
+            "op" => Some(Value::from(self.op.value())),
             "value" => Some(Value::from(self.value.deref().clone())),
             "selected" => Some(Value::from(self.selected)),
             _ => None,
         }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["key", "op", "value", "selected"])
     }
 }
 
@@ -189,7 +181,7 @@ impl From<CredentialStruct> for Vec<Vec<AttributeKOV>> {
 
 impl From<AttributeKOV> for wurbo::prelude::Value {
     fn from(attribute: AttributeKOV) -> Self {
-        Self::from_struct_object(attribute)
+        Self::from_object(attribute)
     }
 }
 
@@ -230,17 +222,13 @@ impl Hint {
     }
 }
 
-impl StructObject for Hint {
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
+impl Object for Hint {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
             "key" => Some(Value::from(self.key.deref().clone())),
             "op" => Some(Value::from(self.op.clone())),
             _ => None,
         }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["key", "op"])
     }
 }
 
@@ -281,6 +269,6 @@ impl From<Hint> for AttributeKOV {
 
 impl From<Hint> for wurbo::prelude::Value {
     fn from(hint: Hint) -> Self {
-        Self::from_struct_object(hint)
+        Self::from_object(hint)
     }
 }

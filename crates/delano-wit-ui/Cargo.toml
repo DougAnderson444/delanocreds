@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wurbo = { version = "0.1.9" }
+wurbo = { version = "0.4.1" }
 base64ct = { version = "1.6.0", features = ["alloc"] }
 chrono = "0.4.33"
 ciborium = "0.2.2"

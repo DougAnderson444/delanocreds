@@ -22,6 +22,7 @@ use bindings::delano::wit_ui::wurbo_in;
 use bindings::exports::delano::wit_ui::wurbo_out::Guest as WurboGuest;
 
 use std::ops::Deref;
+use std::sync::Arc;
 
 struct Component;
 
@@ -56,7 +57,7 @@ fn get_templates() -> Templates {
 // Macro builds the Component struct and implements the Guest trait for us, saving copy-and-paste
 prelude_bindgen! {WurboGuest, Component, StructContext, Context, LAST_STATE}
 
-/// This is a wrapper around [Context] that implements StructObject on the wrapper.
+/// This is a wrapper around [Context] that implements Object on the wrapper.
 /// Enables the conversion of Context to StructContext so we can render with minijinja.
 #[derive(Debug, Clone, Default)]
 struct StructContext {
@@ -74,19 +75,15 @@ impl StructContext {
     }
 }
 
-impl StructObject for StructContext {
+impl Object for StructContext {
     /// Remember to add match arms for any new fields.
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
-            "app" => Some(Value::from_struct_object(self.app.clone())),
-            "state" => Some(Value::from_struct_object(self.state.clone())),
-            "output" => Some(Value::from_struct_object(self.output.clone())),
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
+            "app" => Some(Value::from_object(self.app.clone())),
+            "state" => Some(Value::from_object(self.state.clone())),
+            "output" => Some(Value::from_object(self.output.clone())),
             _ => None,
         }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["app", "state", "output"])
     }
 }
 

@@ -309,12 +309,12 @@ fn subscribe_to_topic(key: impl ToString) {
     wurbo_in::emit(&message);
 }
 
-impl StructObject for State {
+impl Object for State {
     /// Remember to add match arms for any new fields.
-    fn get_field(&self, name: &str) -> Option<Value> {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         // TODO: Show issues/errors as error variant?
         // if offer or proof have messages, show them?
-        match name {
+        match key.as_str()? {
             "id" => Some(Value::from(rand_id())),
             "loaded" => Some(Value::from(self.loaded.clone())),
             "credential" => Some(Value::from(self.builder.clone())),
@@ -329,13 +329,9 @@ impl StructObject for State {
                 },
                 None => Some(Value::from("Click to generate a proof.")),
             },
-            "history" => Some(Value::from_serializable(&self.history.clone())),
+            "history" => Some(Value::from_serialize(&self.history.clone())),
             _ => None,
         }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["id", "loaded", "credential", "offer", "proof"])
     }
 }
 
@@ -442,12 +438,11 @@ impl Loaded {
     }
 }
 
-impl StructObject for Loaded {
-    /// Remember to add match arms for any new fields.
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
+impl Object for Loaded {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
             "id" => Some(Value::from(rand_id())),
-            "context" => match self {
+            "context" => match **self {
                 // Offer is the only Loaded context that can be edited
                 Self::Offer { .. } => {
                     // We do this so we get the exact name of the context, any changes
@@ -464,13 +459,13 @@ impl StructObject for Loaded {
                 }
                 _ => None,
             },
-            "hints" => match self {
-                Self::Offer { hints, .. } => Some(Value::from(hints.clone())),
+            "hints" => match **self {
+                Self::Offer { ref hints, .. } => Some(Value::from(hints.clone())),
                 _ => None,
             },
-            "preimages" => match self {
+            "preimages" => match **self {
                 Self::Proof(Provables::<AttributeKOV> {
-                    selected_preimages: preimages,
+                    selected_preimages: ref preimages,
                     ..
                 }) => {
                     let de_preimages: Vec<Vec<AttributeKOV>> = preimages
@@ -494,15 +489,11 @@ impl StructObject for Loaded {
             _ => None,
         }
     }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["context", "hints", "preimages", "verified"])
-    }
 }
 
 impl From<Loaded> for wurbo::prelude::Value {
     fn from(loaded: Loaded) -> Self {
-        Value::from_struct_object(loaded)
+        Value::from_object(loaded)
     }
 }
 

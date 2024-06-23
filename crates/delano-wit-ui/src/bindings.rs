@@ -3721,6 +3721,65 @@ pub mod exports {
                     super::super::super::super::delano::wit_ui::context_types::Context;
                 #[doc(hidden)]
                 #[allow(non_snake_case)]
+                pub unsafe fn _export_customize_cabi<T: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                ) -> *mut u8 {
+                    #[cfg(target_arch = "wasm32")]
+                    _rt::run_ctors_once();
+                    let base6 = arg0;
+                    let len6 = arg1;
+                    let mut result6 = _rt::Vec::with_capacity(len6);
+                    for i in 0..len6 {
+                        let base = base6.add(i * 16);
+                        let e6 = {
+                            let l0 = *base.add(0).cast::<*mut u8>();
+                            let l1 = *base.add(4).cast::<usize>();
+                            let len2 = l1;
+                            let bytes2 = _rt::Vec::from_raw_parts(l0.cast(), len2, len2);
+                            let l3 = *base.add(8).cast::<*mut u8>();
+                            let l4 = *base.add(12).cast::<usize>();
+                            let len5 = l4;
+                            let bytes5 = _rt::Vec::from_raw_parts(l3.cast(), len5, len5);
+
+                            (_rt::string_lift(bytes2), _rt::string_lift(bytes5))
+                        };
+                        result6.push(e6);
+                    }
+                    _rt::cabi_dealloc(base6, len6 * 16, 4);
+                    let result7 = T::customize(result6);
+                    let ptr8 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
+                    match result7 {
+                        Ok(_) => {
+                            *ptr8.add(0).cast::<u8>() = (0i32) as u8;
+                        }
+                        Err(e) => {
+                            *ptr8.add(0).cast::<u8>() = (1i32) as u8;
+                            let vec9 = (e.into_bytes()).into_boxed_slice();
+                            let ptr9 = vec9.as_ptr().cast::<u8>();
+                            let len9 = vec9.len();
+                            ::core::mem::forget(vec9);
+                            *ptr8.add(8).cast::<usize>() = len9;
+                            *ptr8.add(4).cast::<*mut u8>() = ptr9.cast_mut();
+                        }
+                    };
+                    ptr8
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_customize<T: Guest>(arg0: *mut u8) {
+                    let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                    match l0 {
+                        0 => (),
+                        _ => {
+                            let l1 = *arg0.add(4).cast::<*mut u8>();
+                            let l2 = *arg0.add(8).cast::<usize>();
+                            _rt::cabi_dealloc(l1, l2, 1);
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
                 pub unsafe fn _export_render_cabi<T: Guest>(
                     arg0: i32,
                     arg1: *mut u8,
@@ -3740,41 +3799,41 @@ pub mod exports {
                     let v9 = match arg0 {
                         0 => {
                             let e9 = super::super::super::super::delano::wit_ui::context_types::Everything{
-                page: match arg1 as i32 {
-                  0 => None,
-                  1 => {
-                    let e = {
-                      let len0 = arg3 as usize;
-                      let bytes0 = _rt::Vec::from_raw_parts(arg2.cast(), len0, len0);
-                      let len1 = arg5 as usize;
-                      let bytes1 = _rt::Vec::from_raw_parts(arg4.cast(), len1, len1);
-                      let len2 = arg7;
-                      let bytes2 = _rt::Vec::from_raw_parts(arg6.cast(), len2, len2);
+              page: match arg1 as i32 {
+                0 => None,
+                1 => {
+                  let e = {
+                    let len0 = arg3 as usize;
+                    let bytes0 = _rt::Vec::from_raw_parts(arg2.cast(), len0, len0);
+                    let len1 = arg5 as usize;
+                    let bytes1 = _rt::Vec::from_raw_parts(arg4.cast(), len1, len1);
+                    let len2 = arg7;
+                    let bytes2 = _rt::Vec::from_raw_parts(arg6.cast(), len2, len2);
 
-                      super::super::super::super::delano::wit_ui::context_types::Page{
-                        name: _rt::string_lift(bytes0),
-                        version: _rt::string_lift(bytes1),
-                        description: _rt::string_lift(bytes2),
-                      }
-                    };
-                    Some(e)
-                  }
-                  _ => _rt::invalid_enum_discriminant(),
-                },
-                load: match arg8 {
-                  0 => None,
-                  1 => {
-                    let e = {
-                      let len3 = arg10;
-                      let bytes3 = _rt::Vec::from_raw_parts(arg9.cast(), len3, len3);
+                    super::super::super::super::delano::wit_ui::context_types::Page{
+                      name: _rt::string_lift(bytes0),
+                      version: _rt::string_lift(bytes1),
+                      description: _rt::string_lift(bytes2),
+                    }
+                  };
+                  Some(e)
+                }
+                _ => _rt::invalid_enum_discriminant(),
+              },
+              load: match arg8 {
+                0 => None,
+                1 => {
+                  let e = {
+                    let len3 = arg10;
+                    let bytes3 = _rt::Vec::from_raw_parts(arg9.cast(), len3, len3);
 
-                      _rt::string_lift(bytes3)
-                    };
-                    Some(e)
-                  }
-                  _ => _rt::invalid_enum_discriminant(),
-                },
-              };
+                    _rt::string_lift(bytes3)
+                  };
+                  Some(e)
+                }
+                _ => _rt::invalid_enum_discriminant(),
+              },
+            };
                             V9::AllContent(e9)
                         }
                         1 => V9::Addattribute,
@@ -3805,12 +3864,12 @@ pub mod exports {
                                 let bytes5 = _rt::Vec::from_raw_parts(arg4.cast(), len5, len5);
 
                                 super::super::super::super::delano::wit_ui::context_types::Kvctx{
-                  ctx: super::super::super::super::delano::wit_ui::context_types::Entry{
-                    idx: arg1 as i32 as u32,
-                    val: v4,
-                  },
-                  value: _rt::string_lift(bytes5),
-                }
+                ctx: super::super::super::super::delano::wit_ui::context_types::Entry{
+                  idx: arg1 as i32 as u32,
+                  val: v4,
+                },
+                value: _rt::string_lift(bytes5),
+              }
                             };
                             V9::Editattribute(e9)
                         }
@@ -3919,6 +3978,10 @@ pub mod exports {
                     });
                 }
                 pub trait Guest {
+                    /// Optionally customize the configuration of the templates used to render the component
+                    fn customize(
+                        templates: _rt::Vec<(_rt::String, _rt::String)>,
+                    ) -> Result<(), _rt::String>;
                     /// renders the initial Web component with the given data
                     /// and the target template to use as top level entry point
                     fn render(ctx: Context) -> Result<_rt::String, _rt::String>;
@@ -3928,22 +3991,30 @@ pub mod exports {
                 #[doc(hidden)]
 
                 macro_rules! __export_delano_wit_ui_wurbo_out_0_1_0_cabi{
-        ($ty:ident with_types_in $($path_to_types:tt)*) => (const _: () = {
+      ($ty:ident with_types_in $($path_to_types:tt)*) => (const _: () = {
 
-          #[export_name = "delano:wit-ui/wurbo-out@0.1.0#render"]
-          unsafe extern "C" fn export_render(arg0: i32,arg1: *mut u8,arg2: *mut u8,arg3: *mut u8,arg4: *mut u8,arg5: *mut u8,arg6: *mut u8,arg7: usize,arg8: i32,arg9: *mut u8,arg10: usize,) -> *mut u8 {
-            $($path_to_types)*::_export_render_cabi::<$ty>(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
-          }
-          #[export_name = "cabi_post_delano:wit-ui/wurbo-out@0.1.0#render"]
-          unsafe extern "C" fn _post_return_render(arg0: *mut u8,) {
-            $($path_to_types)*::__post_return_render::<$ty>(arg0)
-          }
-          #[export_name = "delano:wit-ui/wurbo-out@0.1.0#activate"]
-          unsafe extern "C" fn export_activate(arg0: i32,arg1: *mut u8,arg2: usize,) {
-            $($path_to_types)*::_export_activate_cabi::<$ty>(arg0, arg1, arg2)
-          }
-        };);
-      }
+        #[export_name = "delano:wit-ui/wurbo-out@0.1.0#customize"]
+        unsafe extern "C" fn export_customize(arg0: *mut u8,arg1: usize,) -> *mut u8 {
+          $($path_to_types)*::_export_customize_cabi::<$ty>(arg0, arg1)
+        }
+        #[export_name = "cabi_post_delano:wit-ui/wurbo-out@0.1.0#customize"]
+        unsafe extern "C" fn _post_return_customize(arg0: *mut u8,) {
+          $($path_to_types)*::__post_return_customize::<$ty>(arg0)
+        }
+        #[export_name = "delano:wit-ui/wurbo-out@0.1.0#render"]
+        unsafe extern "C" fn export_render(arg0: i32,arg1: *mut u8,arg2: *mut u8,arg3: *mut u8,arg4: *mut u8,arg5: *mut u8,arg6: *mut u8,arg7: usize,arg8: i32,arg9: *mut u8,arg10: usize,) -> *mut u8 {
+          $($path_to_types)*::_export_render_cabi::<$ty>(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
+        }
+        #[export_name = "cabi_post_delano:wit-ui/wurbo-out@0.1.0#render"]
+        unsafe extern "C" fn _post_return_render(arg0: *mut u8,) {
+          $($path_to_types)*::__post_return_render::<$ty>(arg0)
+        }
+        #[export_name = "delano:wit-ui/wurbo-out@0.1.0#activate"]
+        unsafe extern "C" fn export_activate(arg0: i32,arg1: *mut u8,arg2: usize,) {
+          $($path_to_types)*::_export_activate_cabi::<$ty>(arg0, arg1, arg2)
+        }
+      };);
+    }
                 #[doc(hidden)]
                 pub(crate) use __export_delano_wit_ui_wurbo_out_0_1_0_cabi;
                 #[repr(align(4))]
@@ -4098,8 +4169,8 @@ pub(crate) use __export_delanocreds_wit_ui_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[link_section = "component-type:wit-bindgen:0.25.0:delanocreds-wit-ui:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 2794] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xe1\x14\x01A\x02\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 2837] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x8c\x15\x01A\x02\x01\
 A\x19\x01B5\x01p}\x04\0\x09attribute\x03\0\0\x01p\x01\x04\0\x05entry\x03\0\x02\x01\
 p}\x04\0\x05nonce\x03\0\x04\x01p}\x04\0\x05proof\x03\0\x06\x01p\x03\x04\0\x08sel\
 ected\x03\0\x08\x01p\x03\x01p\x01\x01r\x02\x07entries\x0a\x06remove\x0b\x04\0\x0b\
@@ -4155,12 +4226,14 @@ ers\x05topics\x04data\x0e\x04\0\x07message\x03\0\x0f\x01q\x09\x0ball-content\x01
 \x05\0\x0caddattribute\0\0\x08newentry\0\0\x0deditattribute\x01\x0d\0\x0eeditmax\
 entries\x01}\0\x0dgenerateoffer\0\0\x0dgenerateproof\0\0\x0cpublishproof\0\0\x0c\
 networkevent\x01\x10\0\x04\0\x07context\x03\0\x11\x03\x01!delano:wit-ui/context-\
-types@0.1.0\x05\x10\x02\x03\0\x04\x07context\x01B\x09\x02\x03\x02\x01\x11\x04\0\x07\
-context\x03\0\0\x01j\x01s\x01s\x01@\x01\x03ctx\x01\0\x02\x04\0\x06render\x01\x03\
-\x01ps\x01k\x04\x01@\x01\x09selectors\x05\x01\0\x04\0\x08activate\x01\x06\x04\x01\
-\x1ddelano:wit-ui/wurbo-out@0.1.0\x05\x12\x04\x01&delano:wit-ui/delanocreds-wit-\
-ui@0.1.0\x04\0\x0b\x18\x01\0\x12delanocreds-wit-ui\x03\0\0\0G\x09producers\x01\x0c\
-processed-by\x02\x0dwit-component\x070.208.1\x10wit-bindgen-rust\x060.25.0";
+types@0.1.0\x05\x10\x02\x03\0\x04\x07context\x01B\x0e\x02\x03\x02\x01\x11\x04\0\x07\
+context\x03\0\0\x01o\x02ss\x01p\x02\x01j\0\x01s\x01@\x01\x09templates\x03\0\x04\x04\
+\0\x09customize\x01\x05\x01j\x01s\x01s\x01@\x01\x03ctx\x01\0\x06\x04\0\x06render\
+\x01\x07\x01ps\x01k\x08\x01@\x01\x09selectors\x09\x01\0\x04\0\x08activate\x01\x0a\
+\x04\x01\x1ddelano:wit-ui/wurbo-out@0.1.0\x05\x12\x04\x01&delano:wit-ui/delanocr\
+eds-wit-ui@0.1.0\x04\0\x0b\x18\x01\0\x12delanocreds-wit-ui\x03\0\0\0G\x09produce\
+rs\x01\x0cprocessed-by\x02\x0dwit-component\x070.208.1\x10wit-bindgen-rust\x060.\
+25.0";
 
 #[inline(never)]
 #[doc(hidden)]

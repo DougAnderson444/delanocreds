@@ -11,18 +11,25 @@ static ATTRIBUTES_HTML_ID: OnceLock<String> = OnceLock::new();
 #[derive(Debug, Clone, Default)]
 pub(crate) struct StructPage(Option<context_types::Page>);
 
-impl StructObject for StructPage {
-    fn get_field(&self, name: &str) -> Option<Value> {
-        match name {
+impl Object for StructPage {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
             "id" => Some(Value::from(rand_id())),
             "name" => Some(Value::from(
-                self.as_ref().map(|v| v.name.clone()).unwrap_or_default(),
+                self.as_ref()
+                    .as_ref()
+                    .map(|v| v.name.clone())
+                    .unwrap_or_default(),
             )),
             "version" => Some(Value::from(
-                self.as_ref().map(|v| v.version.clone()).unwrap_or_default(),
+                self.as_ref()
+                    .as_ref()
+                    .map(|v| v.version.clone())
+                    .unwrap_or_default(),
             )),
             "description" => Some(Value::from(
                 self.as_ref()
+                    .as_ref()
                     .map(|v| v.description.clone())
                     .unwrap_or_default(),
             )),
@@ -34,10 +41,6 @@ impl StructObject for StructPage {
             )),
             _ => None,
         }
-    }
-    /// So that debug will show the values
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["id", "name", "version", "description"])
     }
 }
 
