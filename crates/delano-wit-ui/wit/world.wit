@@ -12,7 +12,7 @@ interface context-types {
   record everything {
     page: option<page>,
     // issue: option<issuer>,
-    /// The base64URLsafe unpadded encoded JSON string of the loadable data (offer or proof)
+    /// The JSON string of the loadable data (offer or proof)
     load: option<string>,
   }
 

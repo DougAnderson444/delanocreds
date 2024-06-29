@@ -13,7 +13,6 @@ use self::{
 
 use super::*;
 
-use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::prelude::*;
 use delano_events::{Context, Events, Provables, Publishables, SubscribeTopic};
 use delano_keys::{
@@ -148,6 +147,12 @@ impl State {
                     cred: try_cbor(&offer)?,
                     hints,
                 };
+
+                // serde_json serialize and emit offer
+                let serialized = serde_json::to_string(&offer)
+                    .map_err(|e| format!("Serialize offer failed: {}", e))?;
+
+                wurbo_in::emit(&serialized);
 
                 // We also want to track this offer in the history
                 // So we can 1) Look up the key for values, and
@@ -336,13 +341,11 @@ impl Object for State {
 }
 
 impl From<String> for State {
-    fn from(base64: String) -> Self {
-        // Default of Loaded is None
-        let decoded = Base64UrlUnpadded::decode_vec(&base64).unwrap_or_default();
-        let loaded = serde_json::from_slice(&decoded).unwrap_or_default();
+    fn from(data: String) -> Self {
+        let loaded: Loaded = serde_json::from_str(&data).unwrap_or_default();
         Self {
             history: Default::default(),
-            loaded: serde_json::from_slice(&decoded).unwrap_or_default(),
+            loaded: loaded.clone(),
             builder: CredentialStruct::from(&loaded),
             offer: Default::default(),
             proof: Default::default(),
