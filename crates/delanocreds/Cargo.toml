@@ -2,7 +2,7 @@
 edition = "2021"
 license = "MIT"
 name = "delanocreds"
-version.workspace = true
+version = "0.2.0"
 
 [lib]
 crate-type = ["cdylib", "lib"]
