@@ -143,12 +143,9 @@ pub struct SubscribeTopic {
     pub key: String,
 }
 
-/// From<impl ToString> for SubscribeTopic
-impl<T> From<T> for SubscribeTopic
-where
-    T: ToString,
-{
-    fn from(key: T) -> Self {
+impl SubscribeTopic {
+    /// Creates a new SubscribeTopic from a string
+    pub fn new(key: impl ToString) -> Self {
         Self {
             key: key.to_string(),
         }

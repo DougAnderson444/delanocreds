@@ -41,12 +41,6 @@ impl Default for Nonce {
     }
 }
 
-impl From<Scalar> for Nonce {
-    fn from(scalar: Scalar) -> Self {
-        Self(scalar)
-    }
-}
-
 /// Attempts to convert from [u8; 32] directly into a Nonce
 impl TryFrom<[u8; 32]> for Nonce {
     type Error = Error;
@@ -106,12 +100,6 @@ impl Deref for Nonce {
 impl PartialEq<bls12_381_plus::Scalar> for &Nonce {
     fn eq(&self, other: &bls12_381_plus::Scalar) -> bool {
         self.0 == Scalar::from(*other)
-    }
-}
-
-impl From<Nonce> for Scalar {
-    fn from(nonce: Nonce) -> Self {
-        nonce.0.into()
     }
 }
 
@@ -529,9 +517,7 @@ impl std::convert::TryFrom<PedersenOpenCompressed> for PedersenOpen {
             })
             .transpose()?;
         Ok(Self {
-            open_randomness: Nonce::from(try_into_scalar(
-                pedersen_open_compressed.open_randomness,
-            )?),
+            open_randomness: Nonce(try_into_scalar(pedersen_open_compressed.open_randomness)?),
             announce_randomness: try_into_scalar(pedersen_open_compressed.announce_randomness)?,
             announce_element,
         })
@@ -699,7 +685,7 @@ mod tests {
         // test to/from Vec<u8>
         let nonce = Nonce::new(b);
         let bytes: Vec<u8> = nonce.clone().into();
-        let nonce2 = Nonce::from(try_into_scalar(bytes).unwrap());
+        let nonce2 = Nonce(try_into_scalar(bytes).unwrap());
         assert_eq!(nonce, nonce2);
     }
 

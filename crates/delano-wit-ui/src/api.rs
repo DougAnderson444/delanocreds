@@ -309,7 +309,7 @@ impl State {
 
 /// Helper function that subscribes to a key
 fn subscribe_to_topic(key: impl ToString) {
-    let message_data = Context::Event(Events::Subscribe(SubscribeTopic::from(key)));
+    let message_data = Context::Event(Events::Subscribe(SubscribeTopic::new(key)));
     let message = serde_json::to_string(&message_data).unwrap_or_default();
     wurbo_in::emit(&message);
 }

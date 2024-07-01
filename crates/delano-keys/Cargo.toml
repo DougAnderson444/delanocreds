@@ -7,8 +7,8 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-blastkids = { git = "https://github.com/DougAnderson444/blastkids.git", version ="0.1.6" }
-bls12_381_plus = { version = "0.8.13", git= "https://github.com/mikelodder7/bls12_381_plus.git", rev = "91a399e9a5f326816f13a0feab898ff40a7a1599", features = ["expose-fields", "alloc"] }
+blastkids = { version ="0.2.0" }
+bls12_381_plus = { workspace = true, features = ["expose-fields", "alloc"] }
 cid = { version = "0.10.1", optional = true }
 secrecy = "0.8.0"
 serde = { version = "1.0.130", features = ["derive"], optional = true }

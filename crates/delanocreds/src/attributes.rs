@@ -27,9 +27,7 @@
 //!
 //! // select from the attributes
 //! `let selected_attrs = attributes.select(vec![vec![], vec![0, 1], vec![0, 1]]);`
-use crate::ec::Scalar;
 use crate::error::Error;
-use bls12_381_plus::elliptic_curve::bigint;
 use cid::multibase;
 use cid::multihash;
 use cid::multihash::{Code, MultihashDigest};
@@ -175,13 +173,6 @@ impl From<Attribute> for multihash::Multihash {
     fn from(attribute: Attribute) -> Self {
         multihash::Multihash::from_bytes(attribute.0.hash().digest())
             .expect("correct length of digest for this multihash")
-    }
-}
-
-impl From<Attribute> for Scalar {
-    fn from(attribute: Attribute) -> Self {
-        let bytes = attribute.0.hash().digest();
-        bigint::U256::from_be_slice(bytes).into()
     }
 }
 
