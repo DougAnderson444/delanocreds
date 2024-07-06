@@ -1,7 +1,12 @@
 [package]
 name = "delano-keys"
 version = "0.1.1"
+authors = ["Doug Anderson <doug@peerpiper.io>"]
+description = "A library for working with Delano keys"
+license = "MIT"
 edition = "2021"
+homepage = "https://github.com/DougAnderson444/delanocreds"
+repository = "https://github.com/DougAnderson444/delanocreds"
 
 [lib]
 crate-type = ["cdylib", "lib"]
