@@ -5,7 +5,7 @@ mod attributes;
 mod config;
 mod ec;
 mod entry;
-mod utils;
+pub mod utils;
 
 pub mod error;
 pub mod keypair;
@@ -104,7 +104,10 @@ impl<'a> CredentialBuilder<'a> {
 ///
 /// - `our_nym` is the [keypair::Nym] of the holder of the [Credential]
 /// - `credential` is the [Credential] to offer
-/// - `unprovable_attributes` is a Vec of [Attribute]s that the holder will not prove
+/// - `unprovable_attributes` is a Vec of [Attribute]s that the holder will not prove. The Builder
+/// will remove any [Entry] containing the [Attribute]s on this list. If you want the delegatee to
+/// be able to prove any of the other the [Attribute]s in the redacted [Entry], you must add them
+/// separately as another Entry to the [Credential] as an additional [Entry] instead.
 /// - `current_entries` is a Vec of [Entry]s currently associated with the [Credential]
 /// - `additional_entry` is an optional [Entry] to add to the [Credential] Offer
 ///

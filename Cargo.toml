@@ -10,7 +10,7 @@ repository = "https://github.com/DougAnderson444/delanocreds"
 
 [workspace.dependencies]
 delanocreds = { version = "0.2.0", path = "crates/delanocreds" }
-delano-keys = { version = "0.2.0", path = "crates/delano-keys" }
+delano-keys = { version = "0.1.1", path = "crates/delano-keys" }
 delano-wit-ui = { version = "0.2.0", path = "crates/delano-wit-ui" }
 delano-events = { version = "0.2.0", path = "crates/delano-events" }
 bls12_381_plus = { version = "0.8.16", features = ["expose-fields", "alloc"] }

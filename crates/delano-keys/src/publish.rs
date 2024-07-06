@@ -1,10 +1,12 @@
 //! The Protocol for creating a Key from AttributeKOV and Issuer Key
 //! Hash the serialized value of the Key struct which holds the AttributeKOV and Issuer Key
-use cid::multibase;
-use cid::multihash::{Code, MultihashDigest};
-use cid::Cid;
-
 use crate::vk::VKCompressed;
+use cid::multibase;
+use cid::multihash;
+use cid::CidGeneric;
+use sha2::{Digest, Sha256};
+
+const SHA2_256: u64 = 0x12;
 
 /// A Builder of the Key used for publishing. During the build process,
 /// the Key is hashed to a CID, which can be published to a network for discovery with it's corresponding value.
@@ -64,12 +66,13 @@ where
         }
     }
 
-    // Hashes the Serialized value of Self
-    pub fn cid(&self) -> Cid {
+    /// Hashes the Serialized value of Self into a [CidGeneric]
+    pub fn cid(&self) -> CidGeneric<32> {
         const RAW: u64 = 0x55;
         let bytes = serde_json::to_vec(&self).unwrap_or_default();
-        let hash = Code::Sha2_256.digest(&bytes);
-        Cid::new_v1(RAW, hash)
+        let hash = Sha256::digest(&bytes);
+        let mhash = multihash::Multihash::wrap(SHA2_256, &hash).unwrap();
+        CidGeneric::new_v1(RAW, mhash)
     }
 
     /// Returns the string representation of the Attribute CID
@@ -96,6 +99,9 @@ mod tests {
         ];
         let cid = PublishingKey::new(&OfferedPreimages(&entry), &IssuerKey(&issuer_key)).cid();
 
-        assert_eq!(cid.to_string().starts_with("baf"), true);
+        assert_eq!(
+            cid.to_string(),
+            "bafkreigtv7srjv6ymhh2ljxy7uteru2heti6vxf6xhcmdpgb3pzaek77uy"
+        );
     }
 }

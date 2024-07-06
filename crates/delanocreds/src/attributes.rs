@@ -30,8 +30,9 @@
 use crate::error::Error;
 use cid::multibase;
 use cid::multihash;
-use cid::multihash::{Code, MultihashDigest};
-use cid::Cid;
+use cid::multihash::Multihash;
+use cid::CidGeneric;
+use sha2::{Digest, Sha256};
 use std::{fmt::Display, ops::Deref};
 
 const RAW: u64 = 0x55;
@@ -40,7 +41,8 @@ const SHA2_256: u64 = 0x12;
 
 /// Attribute is wrapper around a [Cid] of the bytes of the attribute
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct Attribute(cid::Cid);
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Attribute(cid::CidGeneric<DIGEST_LEN>);
 
 impl Attribute {
     /// Create a new Attribute from a string
@@ -49,7 +51,7 @@ impl Attribute {
     }
 
     /// Returns the Multihash of the Attribute
-    pub fn hash(&self) -> &multihash::Multihash {
+    pub fn hash(&self) -> &multihash::Multihash<DIGEST_LEN> {
         self.0.hash()
     }
 
@@ -59,7 +61,7 @@ impl Attribute {
     }
 
     /// Returns teh CID of the Attribute
-    pub fn cid(&self) -> &cid::Cid {
+    pub fn cid(&self) -> &cid::CidGeneric<DIGEST_LEN> {
         &self.0
     }
 
@@ -80,7 +82,7 @@ impl Attribute {
     /// use std::convert::TryFrom;
     /// let attribute = Attribute::try_from(cid)?;
     /// ```
-    pub fn from_cid(cid: &cid::Cid) -> Option<Self> {
+    pub fn from_cid(cid: &cid::CidGeneric<DIGEST_LEN>) -> Option<Self> {
         if cid.codec() == RAW
             && cid.hash().code() == SHA2_256
             && cid.hash().digest().len() == DIGEST_LEN
@@ -100,17 +102,18 @@ impl Display for Attribute {
 }
 
 /// Converts any type that can be converted to a byte slice into a Content Identifier (CID)
-/// using the SHAKE256 hash function with length 48.
 pub fn attribute(bytes: impl AsRef<[u8]>) -> Attribute {
-    let mhash = Code::Sha2_256.digest(bytes.as_ref());
-    Attribute(Cid::new_v1(RAW, mhash))
+    let input_digest = Sha256::digest(bytes.as_ref());
+    let mhash = Multihash::<DIGEST_LEN>::wrap(SHA2_256, &input_digest).unwrap();
+    let cid = CidGeneric::<DIGEST_LEN>::new_v1(RAW, mhash);
+    Attribute(cid)
 }
 
 // implement TryFrom Cid to Attribute
-impl TryFrom<&cid::Cid> for Attribute {
+impl TryFrom<&cid::CidGeneric<DIGEST_LEN>> for Attribute {
     type Error = &'static str;
 
-    fn try_from(cid: &cid::Cid) -> Result<Self, Self::Error> {
+    fn try_from(cid: &cid::CidGeneric<DIGEST_LEN>) -> Result<Self, Self::Error> {
         if cid.codec() == RAW
             && cid.hash().code() == SHA2_256
             && cid.hash().digest().len() == DIGEST_LEN
@@ -127,13 +130,13 @@ impl TryFrom<Vec<u8>> for Attribute {
     type Error = Error;
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let cid = Cid::try_from(bytes)?;
+        let cid = CidGeneric::try_from(bytes)?;
         Ok(Attribute(cid))
     }
 }
 
 impl Deref for Attribute {
-    type Target = cid::Cid;
+    type Target = cid::CidGeneric<DIGEST_LEN>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -151,7 +154,7 @@ impl From<&str> for Attribute {
     }
 }
 
-impl From<Attribute> for cid::Cid {
+impl From<Attribute> for cid::CidGeneric<DIGEST_LEN> {
     fn from(attribute: Attribute) -> Self {
         attribute.0
     }
@@ -169,7 +172,7 @@ impl From<Attribute> for String {
     }
 }
 
-impl From<Attribute> for multihash::Multihash {
+impl From<Attribute> for multihash::Multihash<DIGEST_LEN> {
     fn from(attribute: Attribute) -> Self {
         multihash::Multihash::from_bytes(attribute.0.hash().digest())
             .expect("correct length of digest for this multihash")
@@ -180,10 +183,12 @@ impl From<Attribute> for multihash::Multihash {
 mod test {
     use super::*;
 
+    // to run this test only with no capture: cargo test test_create_attribute -- --nocapture
     #[test]
     fn test_create_attribute() {
         let some_test_attr = "read";
         let read_attr = Attribute::new(some_test_attr); // using the new method
+        println!("read_attr: {:?}", read_attr);
         let create_attr = Attribute::from(some_test_attr); // using the from method
         let update_attr = attribute(some_test_attr); // using the attribute convenience method
 

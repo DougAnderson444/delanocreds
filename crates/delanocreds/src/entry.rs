@@ -20,6 +20,7 @@ use std::ops::Deref;
 
 /// Entry is a vector of Attributes
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Entry(pub Vec<Attribute>);
 
 impl Entry {
