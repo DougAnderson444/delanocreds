@@ -19,6 +19,9 @@ use crate::keypair::NymProof;
 use crate::utils::try_decompress_g1;
 use crate::utils::try_into_scalar;
 
+/// Alias for Challenge Scalar
+pub type Challenge = Scalar;
+
 /// A Scalar Nonce, number used once. It can be serialized and deserialized to and from bytes
 /// as it does not have a compressed form.
 #[derive(PartialEq, Eq, Debug, Clone)]
