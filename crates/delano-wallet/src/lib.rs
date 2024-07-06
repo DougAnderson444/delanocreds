@@ -5,7 +5,8 @@
 mod bindings;
 mod conversions;
 mod error;
-mod utils;
+
+use delanocreds::utils;
 
 use bindings::delano::wallet;
 use bindings::delano::wallet::types::{Attribute, OfferConfig, Provables};
@@ -198,9 +199,9 @@ impl Guest for Component {
             );
         }
 
-        for entry in redact {
+        for r in redact {
             offer_builder.without_attribute(
-                delanocreds::Attribute::try_from(entry)
+                delanocreds::Attribute::try_from(r)
                     .map_err(|e| format!("Redacting failed {}", e.to_string()))?,
             );
         }

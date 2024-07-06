@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::Nonce;
 use bls12_381_plus::{G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
 
 pub(crate) fn try_into_scalar(value: Vec<u8>) -> Result<Scalar, Error> {
@@ -78,6 +79,30 @@ pub fn try_into_g2(value: Vec<Vec<u8>>) -> Result<Vec<G2Projective>, Error> {
         })
         .map(|item| Ok(G2Projective::from(item?)))
         .collect::<Result<Vec<G2Projective>, Error>>()?)
+}
+
+// Processes nonce bytes according to whether a Nonce is provided
+// If nonce is 32 bytes, convert it directly into a Scalar
+// otherwise, hash it into a 32 byte digest, then convert it into a Scalar
+pub fn maybe_nonce(nonce: Option<&[u8]>) -> Result<Option<Nonce>, String> {
+    match nonce {
+        Some(n) => nonce_by_len(n).map(Some),
+        None => Ok(None),
+    }
+}
+
+// Processes nonce bytes according to length
+// If nonce is 32 bytes, convert it directly into a Scalar
+// otherwise, hash it into a 32 byte digest, then convert it into a Scalar
+pub fn nonce_by_len(nonce: &[u8]) -> Result<Nonce, String> {
+    if nonce.len() == 32 {
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(nonce);
+        Ok(Nonce::try_from(bytes)
+            .map_err(|e| format!("Nonce conversion error try from bytes: {:?}", e))?)
+    } else {
+        Ok(Nonce::new(nonce))
+    }
 }
 
 #[cfg(test)]
