@@ -3,6 +3,7 @@ name = "delano-wallet-core"
 edition = "2021"
 version = "0.1.0"
 license = "MIT"
+documentation = "https://docs.rs/delano-wallet-core"
 authors.workspace = true
 description.workspace = true
 repository.workspace = true
