@@ -9,7 +9,7 @@ description = "Delanocreds, Delegatable Anonymous Credentials in pure Rust"
 repository = "https://github.com/DougAnderson444/delanocreds"
 
 [workspace.dependencies]
-delanocreds = { version = "0.2.0", path = "crates/delanocreds" }
+delanocreds = { version = "^0.2", path = "crates/delanocreds" }
 delano-keys = { version = "0.1.1", path = "crates/delano-keys" }
 delano-wit-ui = { version = "0.2.0", path = "crates/delano-wit-ui" }
 delano-events = { version = "0.2.0", path = "crates/delano-events" }
