@@ -91,6 +91,7 @@ pub fn entry_to_scalar(input: &Entry) -> Vec<Scalar> {
 ///
 /// Defaults to [DEFAULT_MAX_ENTRIES] (6)
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MaxEntries(pub usize);
 
 impl From<usize> for MaxEntries {
