@@ -20,7 +20,7 @@ pub struct DelanoWallet {
 }
 
 /// Optionally pass in NymProof and.or None when issuing credentials
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IssueOptions {
     pub nym_proof: NymProofCompressed,
     pub nonce: Option<Vec<u8>>,
