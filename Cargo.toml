@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.2.0"
-authors = ["Doug Anderson"]
+authors = ["Doug Anderson <doug@peerpiper.io>"]
 description = "Delanocreds, Delegatable Anonymous Credentials in pure Rust"
 repository = "https://github.com/DougAnderson444/delanocreds"
 

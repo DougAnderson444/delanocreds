@@ -2,14 +2,10 @@
 #![doc = include_str!("../README.md")]
 
 use delano_keys::kdf::{ExposeSecret, Manager};
-use delano_keys::{
-    kdf::Scalar,
-    //    vk::VKCompressed
-};
 use delanocreds::keypair::{CredProofCompressed, IssuerPublicCompressed, NymProofCompressed};
 use delanocreds::{
     verify_proof, CredProof, Credential, Entry, Initial, Issuer, IssuerPublic, MaxCardinality,
-    MaxEntries, Nonce, Nym, NymProof, Secret,
+    MaxEntries, Nonce, Nym, NymProof,
 };
 
 use delanocreds::utils;
@@ -19,7 +15,6 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Delano Wallet
 pub struct DelanoWallet {
-    expanded: Secret<Vec<Scalar>>,
     nym: Nym<Initial>,
     issuer: Issuer,
 }
@@ -44,6 +39,8 @@ pub struct Selectables {
     pub remove: Vec<Attribute>,
 }
 
+/// Configure the Offer: Optionally pass in [Selectables] and/or an additional [Entry].
+/// Optionally set the maximum number of entries that can be added to the credential.
 #[derive(Serialize, Deserialize)]
 pub struct OfferConfig {
     pub selected: Option<Selectables>,
@@ -52,7 +49,7 @@ pub struct OfferConfig {
     pub max_entries: Option<u8>,
 }
 
-/// Values needed to be passed to the `prove` function
+/// Values needed to be passed to the `prove` function.
 #[derive(Serialize, Deserialize)]
 pub struct Provables {
     pub credential: CredentialCompressed,
@@ -61,12 +58,14 @@ pub struct Provables {
     pub nonce: Vec<u8>,
 }
 
+/// Values needed to be passed to the `verify` function.
 #[derive(Serialize, Deserialize)]
 pub struct Proven {
     pub proof: CredProofCompressed,
     pub selected: Vec<Entry>,
 }
 
+/// Values needed to be passed to the `verify` function.
 #[derive(Serialize, Deserialize)]
 pub struct Verifiables {
     pub proof: CredProofCompressed,
@@ -91,15 +90,11 @@ impl DelanoWallet {
             MaxCardinality::default(),
         );
 
-        Self {
-            expanded,
-            nym,
-            issuer,
-        }
+        Self { nym, issuer }
     }
 
     /// Return proof of [Nym] given the Nonce
-    pub fn get_nym_proof(&self, nonce: Vec<u8>) -> NymProofCompressed {
+    pub fn nym_proof(&self, nonce: Vec<u8>) -> NymProofCompressed {
         let nonce = utils::nonce_by_len(&nonce).unwrap_or_default();
         NymProofCompressed::from(self.nym.nym_proof(&nonce))
     }
