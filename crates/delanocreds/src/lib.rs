@@ -108,7 +108,9 @@ impl<'a> CredentialBuilder<'a> {
 /// will remove any [Entry] containing the [Attribute]s on this list. If you want the delegatee to
 /// be able to prove any of the other the [Attribute]s in the redacted [Entry], you must add them
 /// separately as another Entry to the [Credential] as an additional [Entry] instead.
-/// - `current_entries` is a Vec of [Entry]s currently associated with the [Credential]
+/// - `current_entries` is a Vec of [Entry]s currently associated with the [Credential] that
+/// contain [Attribute]s that will be redacted, if any. If none will be redacted, this can be
+/// empty.
 /// - `additional_entry` is an optional [Entry] to add to the [Credential] Offer
 ///
 /// Given a [Credential], holder can:
