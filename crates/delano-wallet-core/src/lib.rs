@@ -20,30 +20,31 @@ pub struct DelanoWallet {
 }
 
 /// Optionally pass in NymProof and.or None when issuing credentials
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IssueOptions {
     pub nym_proof: NymProofCompressed,
     pub nonce: Option<Vec<u8>>,
 }
 
-/// Specifies what [Entry]s to include, and which [Attribute]s to exclude from the cred.
+/// Specifies  which [Attribute]s to exclude from the cred, and their associated [Entry]s.
+/// Can be None if no [Attribute]s are to be excluded.
 ///
 /// # Note on Removing Attributes:
 ///
 /// The [Credential] Offer Builder will remove the entire [Entry] containing an [Attribute] to
 /// be removed. If you want to keep other [Attribute]s contained in that [Entry], you'll need
 /// to add those [Attribute]s as an additional [Entry] using [OfferConfig].
-#[derive(Serialize, Deserialize)]
-pub struct Selectables {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Redactables {
     pub entries: Vec<Entry>,
     pub remove: Vec<Attribute>,
 }
 
 /// Configure the Offer: Optionally pass in [Selectables] and/or an additional [Entry].
 /// Optionally set the maximum number of entries that can be added to the credential.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OfferConfig {
-    pub selected: Option<Selectables>,
+    pub redact: Option<Redactables>,
     pub additional_entry: Option<Entry>,
     /// Optionally reduces the number of entries that can be added to the credential.
     pub max_entries: Option<u8>,
@@ -137,7 +138,7 @@ impl DelanoWallet {
         Ok(cred_compressed.into())
     }
 
-    // / Create an [CredentialCompressed] offer for the given [OfferConfig].
+    /// Create an [CredentialCompressed] offer for the given [OfferConfig].
     pub fn offer(
         &self,
         cred: CredentialCompressed,
@@ -145,7 +146,7 @@ impl DelanoWallet {
     ) -> Result<CredentialCompressed, String> {
         let cred = Credential::try_from(cred).map_err(|e| e.to_string())?;
 
-        let (entries, redact) = match config.selected {
+        let (entries, redact) = match config.redact {
             Some(includables) => {
                 let entries = includables.entries;
                 let redact = includables.remove;
