@@ -22,6 +22,7 @@ struct Context {
     table: ResourceTable,
     wasi: WasiCtx,
 }
+
 impl WasiView for MyCtx {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.wasi_ctx.table
