@@ -183,7 +183,7 @@ mod basic_test {
         // vk should match the expanded Keys
         assert_eq!(
             vk,
-            vec![vk::VK::G1(pk_g1), vk::VK::G2(pk_g2_0), vk::VK::G2(pk_g2_1),]
+            vec![vk::VK::G1(pk_g1), vk::VK::G2(pk_g2_0), vk::VK::G2(pk_g2_1)]
         );
 
         assert_eq!(
@@ -191,7 +191,7 @@ mod basic_test {
             vec![
                 vk::VK::G1(account.pk_g1),
                 vk::VK::G2(blastkids::kdf::ckd_pk_normal::<G2>(&account.pk_g2, 0)),
-                vk::VK::G2(blastkids::kdf::ckd_pk_normal::<G2>(&account.pk_g2, 1)),
+                vk::VK::G2(blastkids::kdf::ckd_pk_normal::<G2>(&account.pk_g2, 1))
             ]
         );
     }
