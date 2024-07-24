@@ -2,7 +2,7 @@
 edition = "2021"
 license = "MIT"
 name = "delanocreds"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Doug Anderson <doug@peerpiper.io>"]
 description = "Delegatable Anonymous Credentials (Delano Creds) in pure Rust."
 homepage = "https://github.com/DougAnderson444/delanocreds"
