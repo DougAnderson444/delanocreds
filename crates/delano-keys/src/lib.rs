@@ -11,6 +11,8 @@ pub mod kdf;
 #[cfg(feature = "publish")]
 pub mod publish;
 
+pub mod error;
+
 // Test the README.md code snippets
 #[cfg(doctest)]
 pub struct ReadmeDoctests;
