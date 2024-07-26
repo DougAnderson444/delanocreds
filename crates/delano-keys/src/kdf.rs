@@ -146,6 +146,21 @@ impl Account {
     }
 
     /// Generates a signature for this account's [G1Projective] public key.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use delano_keys::kdf::{Manager, Zeroizing, verify};
+    ///
+    /// let seed = Zeroizing::new([69u8; 32]);
+    /// let manager: Manager = Manager::from_seed(seed);
+    /// let account = manager.account(1);
+    /// let message = b"hello world";
+    /// let signature = account.sign(message);
+    /// // verify the signature
+    /// let verified = verify(&account.pk_g1, message, &signature).unwrap();
+    /// assert!(verified);
+    /// ```
     pub fn sign(&self, message: &[u8]) -> [u8; G2Affine::COMPRESSED_BYTES] {
         let sk_normal_0 = Zeroizing::new(kdf::ckd_sk_normal::<G2Projective>(
             self.sk.expose_secret(),
