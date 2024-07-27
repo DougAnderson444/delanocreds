@@ -1,11 +1,12 @@
 //! Delanocreds wallet code
 #![doc = include_str!("../README.md")]
 
+use delano_keys::kdf::{verify, Account};
 use delano_keys::kdf::{ExposeSecret, Manager};
 use delanocreds::keypair::{CredProofCompressed, IssuerPublicCompressed, NymProofCompressed};
 use delanocreds::{
-    verify_proof, CredProof, Credential, Entry, Initial, Issuer, IssuerPublic, MaxCardinality,
-    MaxEntries, Nonce, Nym, NymProof,
+    CredProof, Credential, Entry, Initial, Issuer, IssuerPublic, MaxCardinality, MaxEntries, Nonce,
+    Nym, NymProof,
 };
 
 use delanocreds::utils;
@@ -17,6 +18,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 pub struct DelanoWallet {
     nym: Nym<Initial>,
     issuer: Issuer,
+    account: Account,
 }
 
 /// Optionally pass in NymProof and.or None when issuing credentials
@@ -75,6 +77,33 @@ pub struct Verifiables {
     pub selected: Vec<Entry>,
 }
 
+/// Verifies the signature against the given message and public key in G1
+pub fn verify_signature(
+    signature: Vec<u8>,
+    message: Vec<u8>,
+    public_key: Vec<u8>,
+) -> Result<bool, String> {
+    let pk = utils::try_decompress_g1(public_key).map_err(|e| e.to_string())?;
+    verify(&pk, &message, &signature).map_err(|e| e.to_string())
+}
+
+/// Verify the given [CredProofCompressed] in the given [Verifiables]
+pub fn verify_proof(verifiables: Verifiables) -> Result<bool, String> {
+    let issuer_public =
+        IssuerPublic::try_from(verifiables.issuer_public).map_err(|e| e.to_string())?;
+    let proof = CredProof::try_from(verifiables.proof).map_err(|e| e.to_string())?;
+
+    let nonce = utils::maybe_nonce(verifiables.nonce.as_deref())?;
+
+    let selected_entries = verifiables.selected;
+
+    Ok(delanocreds::verify_proof(
+        &issuer_public,
+        &proof,
+        &selected_entries,
+        nonce.as_ref(),
+    ))
+}
 impl DelanoWallet {
     /// Creates a new wallet from the given seed
     pub fn new(seed: impl AsRef<[u8]> + Zeroize + ZeroizeOnDrop) -> Self {
@@ -91,7 +120,16 @@ impl DelanoWallet {
             MaxCardinality::default(),
         );
 
-        Self { nym, issuer }
+        Self {
+            nym,
+            issuer,
+            account,
+        }
+    }
+
+    /// Signs a given message with the Account's keypair (in G1)
+    pub fn sign(&self, message: Vec<u8>) -> Vec<u8> {
+        self.account.sign(&message).to_vec()
     }
 
     /// Return proof of [Nym] given the Nonce
@@ -235,23 +273,5 @@ impl DelanoWallet {
             proof: proof_compressed,
             selected: selected_entries,
         })
-    }
-
-    /// Verify the given [Verifiables]
-    pub fn verify(&self, verifiables: Verifiables) -> Result<bool, String> {
-        let issuer_public =
-            IssuerPublic::try_from(verifiables.issuer_public).map_err(|e| e.to_string())?;
-        let proof = CredProof::try_from(verifiables.proof).map_err(|e| e.to_string())?;
-
-        let nonce = utils::maybe_nonce(verifiables.nonce.as_deref())?;
-
-        let selected_entries = verifiables.selected;
-
-        Ok(verify_proof(
-            &issuer_public,
-            &proof,
-            &selected_entries,
-            nonce.as_ref(),
-        ))
     }
 }
