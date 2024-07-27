@@ -20,7 +20,7 @@ pub(crate) fn try_into_scalar(value: Vec<u8>) -> Result<Scalar, Error> {
 }
 
 /// Try Decompress G1
-pub(crate) fn try_decompress_g1(value: Vec<u8>) -> Result<G1Affine, Error> {
+pub fn try_decompress_g1(value: Vec<u8>) -> Result<G1Affine, Error> {
     let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
     bytes.copy_from_slice(&value);
     let maybe_g1 = G1Affine::from_compressed(&bytes);
@@ -33,7 +33,7 @@ pub(crate) fn try_decompress_g1(value: Vec<u8>) -> Result<G1Affine, Error> {
 }
 
 /// Try Decompress G2
-pub(crate) fn try_decompress_g2(value: Vec<u8>) -> Result<G2Affine, Error> {
+pub fn try_decompress_g2(value: Vec<u8>) -> Result<G2Affine, Error> {
     let mut bytes = [0u8; G2Affine::COMPRESSED_BYTES];
     bytes.copy_from_slice(&value);
     let maybe_g2 = G2Affine::from_compressed(&bytes);
