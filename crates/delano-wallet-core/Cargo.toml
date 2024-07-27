@@ -1,7 +1,7 @@
 [package]
 name = "delano-wallet-core"
 edition = "2021"
-version = "0.1.2"
+version = "0.1.3"
 license = "MIT"
 documentation = "https://docs.rs/delano-wallet-core"
 authors.workspace = true
