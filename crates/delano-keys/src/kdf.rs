@@ -227,6 +227,19 @@ pub fn derive(pk_g1: &G1Projective, pk_g2: &G2Projective, length: u8) -> Vec<vk:
     vk
 }
 
+/// Try Decompress G1 from byte Vector
+pub fn try_decompress_g1(value: Vec<u8>) -> Result<G1Affine, Error> {
+    let mut bytes = [0u8; G1Affine::COMPRESSED_BYTES];
+    bytes.copy_from_slice(&value);
+    let maybe_g1 = G1Affine::from_compressed(&bytes);
+
+    if maybe_g1.is_none().into() {
+        return Err(Error::InvalidG1Point);
+    } else {
+        Ok(maybe_g1.unwrap())
+    }
+}
+
 /// Try Decompress G2
 pub(crate) fn try_decompress_g2(value: Vec<u8>) -> Result<G2Affine, Error> {
     let mut bytes = [0u8; G2Affine::COMPRESSED_BYTES];
