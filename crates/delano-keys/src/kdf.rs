@@ -96,19 +96,20 @@ impl Manager {
         // first derive a hardened key for the account
         let sk: Secret<Scalar> =
             Secret::new(kdf::ckd_sk_hardened(self.master_sk.expose_secret(), index));
-        // since the account public key is hardened and cannot expose the master seed/secret
+        // since the account secret key is hardened and cannot expose the master seed/secret
         // Derive the first normal secret key in advance
         // so we can get our Deterministic Public Keys for this account
         // for any length / size
-        let sk_normal_0 = Zeroizing::new(kdf::ckd_sk_normal::<G2Projective>(sk.expose_secret(), 0));
-        let pk_normal_g1 = G1Projective::mul_by_generator(&sk_normal_0);
-        let pk_hardened_g2 = G2Projective::mul_by_generator(sk.expose_secret());
+        let sk_hardened_0 =
+            Zeroizing::new(kdf::ckd_sk_normal::<G2Projective>(sk.expose_secret(), 0));
+        let pk_g1 = G1Projective::mul_by_generator(&sk_hardened_0);
+        let pk_g2 = G2Projective::mul_by_generator(sk.expose_secret());
 
         Account {
             index,
             sk,
-            pk_g1: pk_normal_g1,
-            pk_g2: pk_hardened_g2,
+            pk_g1,
+            pk_g2,
         }
     }
 }
@@ -134,7 +135,9 @@ impl Account {
         }
     }
 
-    /// Getter for [G1Affine] public key
+    /// Getter for [bls12_381_plus::g1::G1Affine] public key.
+    ///
+    /// This is typically the key used for signing and verification as it is shorter.
     pub fn pk_g1(&self) -> G1Affine {
         self.pk_g1.to_affine()
     }
