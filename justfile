@@ -4,3 +4,6 @@ build:
 
 preview: build
   cd examples/svelte-wit-ui && npm run build && npm run preview -- --open
+
+test:
+  cargo test --workspace
