@@ -5,11 +5,13 @@ use blastkids::kdf;
 
 use bls12_381_plus::elliptic_curve::hash2curve::ExpandMsgXmd;
 // re-exports
+pub use bls12_381_plus::group::Curve;
 pub use bls12_381_plus::group::{Group, GroupEncoding};
+use bls12_381_plus::G1Affine;
 pub use bls12_381_plus::G1Projective;
+use bls12_381_plus::G2Affine;
 pub use bls12_381_plus::G2Projective;
 pub use bls12_381_plus::Scalar;
-use bls12_381_plus::{group::Curve, G2Affine};
 pub use secrecy::zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 pub use secrecy::{ExposeSecret, Secret};
 
@@ -132,6 +134,16 @@ impl Account {
         }
     }
 
+    /// Getter for [G1Affine] public key
+    pub fn pk_g1(&self) -> G1Affine {
+        self.pk_g1.to_affine()
+    }
+
+    /// Getter for [G2Affine] public key
+    pub fn pk_g2(&self) -> G2Affine {
+        self.pk_g2.to_affine()
+    }
+
     /// Expand an Account given a length, using the Account's secret key to derive the additional keys.
     ///
     /// Function is deterministic, and always exapands to the same keys at each index.
@@ -158,7 +170,7 @@ impl Account {
     /// let message = b"hello world";
     /// let signature = account.sign(message);
     /// // verify the signature
-    /// let verified = verify(&account.pk_g1, message, &signature).unwrap();
+    /// let verified = verify(&account.pk_g1(), message, &signature).unwrap();
     /// assert!(verified);
     /// ```
     pub fn sign(&self, message: &[u8]) -> [u8; G2Affine::COMPRESSED_BYTES] {
@@ -177,17 +189,16 @@ impl Account {
 }
 
 /// Verify a signed message ([G2Compressed]) against a [G1] public key.
-pub fn verify(pk: &G1Projective, message: &[u8], signature: &[u8]) -> Result<bool, Error> {
+pub fn verify(pk: &G1Affine, message: &[u8], signature: &[u8]) -> Result<bool, Error> {
     // let err msg say that signature was not a valid G2 point
     let sig_g2 = try_decompress_g2(signature.to_vec())?;
-    let pk_affine = pk.to_affine();
 
     // Hash the msg to G2Affine
     let hashed_msg_g2 = G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(message, DST).to_affine();
     let g1_generator = G1Projective::generator().to_affine();
 
     // Verify the signature by checking the pairing(G1_pubkey, G2_hashed_msg) == pairing(G1_generator, G2_signature)
-    let result = bls12_381_plus::pairing(&pk_affine, &hashed_msg_g2)
+    let result = bls12_381_plus::pairing(&pk, &hashed_msg_g2)
         == bls12_381_plus::pairing(&g1_generator, &sig_g2);
 
     Ok(result)
@@ -288,7 +299,7 @@ mod basic_test {
             let message = b"hello world";
             let signature = account.sign(message);
 
-            let verified = verify(&account.pk_g1, message, &signature).unwrap();
+            let verified = verify(&account.pk_g1.to_affine(), message, &signature).unwrap();
             assert!(verified);
         }
     }
@@ -304,7 +315,7 @@ mod basic_test {
         let message = b"hello world";
         let signature = account.sign(message);
 
-        let verified = verify(&account.pk_g1, b"hello world!", &signature).unwrap();
+        let verified = verify(&account.pk_g1.to_affine(), b"hello world!", &signature).unwrap();
         assert!(!verified);
     }
 }
