@@ -396,7 +396,7 @@ impl Issuer {
             return Err(IssuerError::TooLongEntries);
         }
 
-        // Generate commitments for all messagse sets of the messages vector as set commitments
+        // Generate commitments for all message sets of the messages vector as set commitments
         let (commitment_vector, opening_vector): (Vec<G1Projective>, Vec<Scalar>) = messages_vector
             .iter()
             .map(|mess| CrossSetCommitment::commit_set(&self.public.parameters, mess))
