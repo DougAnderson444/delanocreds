@@ -78,9 +78,13 @@ pub struct Verifiables {
 }
 
 /// Verifies the signature against the given message and public key in G1
+///
+/// The public key is the compressed public key in G1, and the signature
+/// is the G2 signature.
 pub fn verify_signature(
     signature: Vec<u8>,
     message: Vec<u8>,
+    // The compressed public key in G1
     public_key: Vec<u8>,
 ) -> Result<bool, String> {
     let pk = utils::try_decompress_g1(public_key).map_err(|e| e.to_string())?;
@@ -130,6 +134,12 @@ impl DelanoWallet {
     /// Signs a given message with the Account's keypair (in G1)
     pub fn sign(&self, message: Vec<u8>) -> Vec<u8> {
         self.account.sign(&message).to_vec()
+    }
+
+    /// Returns the Public Key used for signatures.
+    /// This is the public key in G1 for BLS12-381.
+    pub fn public_key(&self) -> Vec<u8> {
+        self.account.pk_g1().to_compressed().to_vec()
     }
 
     /// Return proof of [Nym] given the Nonce
