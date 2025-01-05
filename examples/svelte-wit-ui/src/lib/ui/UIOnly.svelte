@@ -5,7 +5,7 @@
 	import { page } from '$app/stores';
 
 	// Import wasm component bytes as a url
-	import wasmURL from '../../../../../target/wasm32-wasi/release/delano_wit_ui.wasm?url';
+	import wasmURL from '../../../../../target/wasm32-wasip1/release/delano_wit_ui.wasm?url';
 	import { buildWalletActions } from './importables.js';
 
 	/**
