@@ -697,7 +697,7 @@ impl<Stage> Nym<Stage> {
         &'a self,
         cred: &'a Credential,
         entries: &[Entry],
-    ) -> super::OfferBuilder<Stage> {
+    ) -> super::OfferBuilder<'a, Stage> {
         super::OfferBuilder::new(self, cred, entries)
     }
 
@@ -711,7 +711,7 @@ impl<Stage> Nym<Stage> {
         &'a self,
         cred: &'a Credential,
         entries: &'a [Entry],
-    ) -> super::ProofBuilder<Stage> {
+    ) -> super::ProofBuilder<'a, Stage> {
         super::ProofBuilder::new(self, cred, entries)
     }
 
