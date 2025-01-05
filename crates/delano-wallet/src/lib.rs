@@ -1,3 +1,4 @@
+#![allow(static_mut_refs)] // the bindings crate uses static mut refs
 #![feature(once_cell_try)]
 
 // cargo_component_bindings::generate!();

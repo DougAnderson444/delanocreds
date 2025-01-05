@@ -1,3 +1,5 @@
+#![allow(static_mut_refs)] // the bindings crate uses static mut refs
+
 mod bindings;
 
 mod api;
