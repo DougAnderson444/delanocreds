@@ -24,6 +24,46 @@ impl VK {
     }
 }
 
+/// VKCompact is a [VK] but just the [G1Compressed] and the first [G2Compressed]
+#[derive(Debug, Clone, PartialEq)]
+pub struct VKCompact {
+    pub g1: [u8; G1Affine::COMPRESSED_BYTES],
+    pub g2: [u8; G2Affine::COMPRESSED_BYTES],
+}
+
+impl VKCompact {
+    /// Creates a new [VKCompact] from [G1Affine] and [G2Affine]
+    pub fn new(g1: G1Affine, g2: G2Affine) -> Self {
+        Self {
+            g1: g1.to_compressed(),
+            g2: g2.to_compressed(),
+        }
+    }
+}
+
+/// Trys to convert a Vec<[VK]> to a [VKCompact] by taking the first G1 and the first G2
+impl TryFrom<Vec<VK>> for VKCompact {
+    type Error = String;
+
+    fn try_from(vk: Vec<VK>) -> Result<Self, Self::Error> {
+        if vk.is_empty() {
+            return Err("Empty VK".to_string());
+        }
+
+        let g1 = match &vk[0] {
+            VK::G1(g1) => g1.to_compressed(),
+            VK::G2(_) => return Err("First element is not G1".to_string()),
+        };
+
+        let g2 = match &vk[1] {
+            VK::G2(g2) => g2.to_compressed(),
+            VK::G1(_) => return Err("Second element is not G2".to_string()),
+        };
+
+        Ok(Self { g1, g2 })
+    }
+}
+
 /// A Verification Key [VK] in compressed form as [VKCompressed]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
